@@ -129,7 +129,7 @@ export function SettingsPage() {
               onClick={() => setTheme(value)}
               className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md border transition-colors ${
                 theme === value
-                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-400'
                   : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
               }`}
             >

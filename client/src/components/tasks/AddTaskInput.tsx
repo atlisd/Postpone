@@ -21,7 +21,7 @@ export function AddTaskInput({ onAdd }: AddTaskInputProps) {
       onSubmit={handleSubmit}
       className={`flex items-center gap-3 px-4 py-3 border-b transition-colors ${
         focused
-          ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+          ? 'bg-blue-50/50 dark:bg-gray-800/50 border-blue-200 dark:border-gray-600'
           : 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30'
       }`}
     >

@@ -81,7 +81,7 @@ export function RecurrencePicker({ currentRrule, onSet, onRemove }: RecurrencePi
           onClick={() => setOpen(!open)}
           className={`flex items-center gap-2 text-sm px-2 py-1 rounded border transition-colors ${
             currentRrule
-              ? 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
+              ? 'border-blue-300 dark:border-gray-500 text-blue-600 dark:text-gray-100 bg-blue-50 dark:bg-gray-700/50'
               : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
@@ -108,7 +108,7 @@ export function RecurrencePicker({ currentRrule, onSet, onRemove }: RecurrencePi
                   key={preset.rrule}
                   onClick={() => handlePreset(preset.rrule)}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                    currentRrule === preset.rrule ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                    currentRrule === preset.rrule ? 'text-blue-600 dark:text-gray-100 font-medium' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   {preset.label}

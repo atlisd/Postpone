@@ -133,7 +133,7 @@ export function HouseholdPage() {
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Invite Code</h3>
         <div className="flex items-center gap-3">
-          <code className="text-2xl font-mono font-bold tracking-widest text-blue-600 dark:text-blue-400 select-all">
+          <code className="text-2xl font-mono font-bold tracking-widest text-blue-600 dark:text-gray-200 select-all">
             {household.inviteCode}
           </code>
           <button onClick={handleCopyCode} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Copy">
@@ -160,7 +160,7 @@ export function HouseholdPage() {
                 <span className="text-sm font-medium text-gray-900 dark:text-white">{member.displayName}</span>
                 <span className="text-xs text-gray-500 ml-2">{member.email}</span>
                 {member.role === 'owner' && (
-                  <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                  <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-gray-700 text-blue-600 dark:text-gray-200">
                     Owner
                   </span>
                 )}
