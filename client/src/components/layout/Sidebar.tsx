@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSignalR } from '../../hooks/useSignalR';
 import { listProjects, createProject, deleteProject } from '../../api/projects';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import type { ProjectResponse } from '../../types/api';
@@ -38,20 +40,23 @@ const smartLists = [
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [contextMenu, setContextMenu] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const data = await listProjects();
       setProjects(data);
     } catch {
       // silent
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useSignalR(fetchProjects);
 
   const handleCreateProject = async (data: { name: string; color: string; householdId?: string }) => {
     try {
@@ -69,6 +74,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       await deleteProject(id);
       setContextMenu(null);
       await fetchProjects();
+      if (location.pathname.includes(`/app/projects/${id}`)) {
+        navigate('/app/today', { replace: true });
+      }
     } catch {
       toast.error('Failed to delete project');
     }
@@ -151,27 +159,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   <FolderOpen size={16} style={{ color: project.color }} />
                   <span className="flex-1 truncate">{project.name}</span>
                   {project.householdId && <Users size={12} className="text-gray-400 flex-shrink-0" />}
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-400 group-hover:invisible">
                     {project.taskCount - project.completedTaskCount}
                   </span>
                 </NavLink>
                 <button
-                  onClick={(e) => { e.preventDefault(); setContextMenu(contextMenu === project.id ? null : project.id); }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setContextMenu(contextMenu?.projectId === project.id ? null : { projectId: project.id, rect });
+                  }}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <MoreHorizontal size={14} />
                 </button>
-                {contextMenu === project.id && (
-                  <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 py-1 min-w-[120px]">
-                    <button
-                      onClick={() => handleDeleteProject(project.id, project.name)}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
-                      <Trash2 size={14} />
-                      Delete
-                    </button>
-                  </div>
-                )}
               </div>
             ))
           )}
@@ -202,6 +203,28 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
       </aside>
+
+      {contextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
+            style={{ top: contextMenu.rect.bottom + 4, left: contextMenu.rect.left }}
+          >
+            <button
+              onClick={() => {
+                const project = projects.find(p => p.id === contextMenu.projectId);
+                if (project) handleDeleteProject(project.id, project.name);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
 
       {showCreateModal && (
         <ProjectFormModal
