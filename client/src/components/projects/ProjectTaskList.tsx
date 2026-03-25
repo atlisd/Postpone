@@ -44,7 +44,6 @@ export function ProjectTaskList() {
   useSignalR(fetchData);
 
   useEffect(() => {
-    setLoading(true);
     setSelectedTask(null);
     fetchData();
   }, [projectId, showCompleted]);
@@ -96,7 +95,7 @@ export function ProjectTaskList() {
 
         {/* Task list */}
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {loading && tasks.length === 0 ? (
             <TaskListSkeleton />
           ) : tasks.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">

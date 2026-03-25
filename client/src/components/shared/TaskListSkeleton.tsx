@@ -1,6 +1,6 @@
 export function TaskListSkeleton({ count = 5 }: { count?: number }) {
   return (
-    <div className="animate-pulse">
+    <div className="animate-pulse opacity-0 animate-[fade-in_0s_ease-in_150ms_forwards]">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}

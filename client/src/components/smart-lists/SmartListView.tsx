@@ -39,7 +39,6 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   useSignalR(fetchData);
 
   useEffect(() => {
-    setLoading(true);
     setSelectedTask(null);
     fetchData();
   }, [type]);
@@ -92,7 +91,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {loading && tasks.length === 0 ? (
             <TaskListSkeleton />
           ) : tasks.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">
