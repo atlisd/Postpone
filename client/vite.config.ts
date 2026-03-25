@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Tasker',
-        short_name: 'Tasker',
+        name: 'Postpone',
+        short_name: 'Postpone',
         description: 'A general purpose task manager',
         theme_color: '#3b82f6',
         background_color: '#ffffff',

@@ -1,8 +1,8 @@
-# Tasker
+# Postpone
 
 A self-hosted general purpose task manager. Built with .NET 10, React 19, and PostgreSQL.
 
-Tasker lets family members manage their own private task lists while selectively sharing projects with their household. Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate through households with invite codes.
+Postpone lets family members manage their own private task lists while selectively sharing projects with their household. Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate through households with invite codes.
 
 ## Features
 
@@ -27,7 +27,7 @@ Tasker lets family members manage their own private task lists while selectively
 ### User Management
 - **Admin-Created Accounts** — no public registration; the admin creates all users
 - **JWT Authentication** — access tokens (15 min) + rotating refresh tokens (30 days) with theft detection
-- **Forced Password Change** — new users must change their initial password on first login
+- **First-Run Setup** — on first launch, create your admin account directly in the browser
 
 ### Notifications
 - **Pushover Integration** — receive push notifications for tasks due today (sent at 8-9 AM local time) and overdue tasks
@@ -65,7 +65,7 @@ Tasker lets family members manage their own private task lists while selectively
 
 ```bash
 # Clone the repository
-git clone <repo-url> && cd Tasker
+git clone <repo-url> && cd Postpone
 
 # Configure environment
 cp .env.example .env
@@ -80,16 +80,9 @@ The app will be available at:
 - **API**: http://localhost:5001
 - **Health Check**: http://localhost:5001/health
 
-### Default Admin Credentials
+### First-Run Setup
 
-On first startup, an admin user is seeded from environment variables:
-
-| Field | Default |
-|-------|---------|
-| Email | `admin@tasker.local` |
-| Password | `admin123` |
-
-You will be prompted to change the password on first login. After logging in, go to **Admin** in the sidebar to create accounts for family members.
+On first startup with an empty database, you'll be greeted with a setup page to create your admin account. After logging in, go to **Admin** in the sidebar to create accounts for family members.
 
 ### Local Development
 
@@ -124,9 +117,6 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | `DB_PASSWORD` | PostgreSQL password | `changeme` |
 | `JWT_SECRET` | JWT signing key (min 32 chars) | dev default |
 | `PUSHOVER_API_TOKEN` | Pushover application API token | _(empty, notifications disabled)_ |
-| `ADMIN_EMAIL` | Initial admin email | `admin@tasker.local` |
-| `ADMIN_PASSWORD` | Initial admin password | `admin123` |
-| `ADMIN_DISPLAY_NAME` | Initial admin display name | `Admin` |
 
 ## Architecture
 
@@ -156,6 +146,8 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 ### Auth
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/auth/setup-status` | Check if first-run setup is needed |
+| POST | `/api/auth/setup` | Create initial admin account |
 | POST | `/api/auth/login` | Login (rate limited) |
 | POST | `/api/auth/refresh` | Refresh tokens (rate limited) |
 | POST | `/api/auth/logout` | Revoke refresh token |
@@ -262,7 +254,7 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 
 ## Database
 
-Tasker uses PostgreSQL 17 with EF Core migrations. Migrations run automatically on startup.
+Postpone uses PostgreSQL 17 with EF Core migrations. Migrations run automatically on startup.
 
 To create a new migration during development:
 

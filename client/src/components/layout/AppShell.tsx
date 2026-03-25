@@ -19,7 +19,7 @@ export function AppShell() {
           >
             <Menu size={24} />
           </button>
-          <h1 className="ml-3 text-lg font-semibold text-gray-900 dark:text-white">Tasker</h1>
+          <h1 className="ml-3 text-lg font-semibold text-gray-900 dark:text-white">Postpone</h1>
         </header>
 
         <div className="flex-1 overflow-y-auto">

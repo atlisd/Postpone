@@ -54,7 +54,7 @@ export function SetupPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome to Tasker</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Welcome to Postpone</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">Create your admin account to get started</p>
         </div>
 
