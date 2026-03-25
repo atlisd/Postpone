@@ -1,0 +1,46 @@
+# ===== .NET =====
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+
+# Published output
+publish/
+out/
+
+# EF Core migrations bundle
+efbundle
+
+# Secrets
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
+# ===== Node / Frontend =====
+client/node_modules/
+client/dist/
+client/.vite/
+
+# PWA generated files (checked in via build)
+client/public/sw.js
+client/public/workbox-*.js
+
+# ===== Environment =====
+.env
+.env.local
+.env.*.local
+
+# ===== Docker =====
+docker-compose.override.yml
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Editor =====
+.idea/
+*.swp
+*.swo

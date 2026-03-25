@@ -1,0 +1,55 @@
+name: tasker
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tasker
+      POSTGRES_USER: tasker
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasker"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./src/Tasker.Api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Database=tasker;Username=tasker;Password=${DB_PASSWORD:-changeme}"
+      Jwt__Secret: ${JWT_SECRET:-default_dev_secret_change_in_production_32chars}
+      Jwt__Issuer: tasker-api
+      Jwt__Audience: tasker-client
+      Admin__Email: ${ADMIN_EMAIL:-admin@tasker.local}
+      Admin__Password: ${ADMIN_PASSWORD:-admin123}
+      Admin__DisplayName: ${ADMIN_DISPLAY_NAME:-Admin}
+      Pushover__ApiToken: ${PUSHOVER_API_TOKEN:-}
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "5001:8080"
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        VITE_DEBUG: "true"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:
