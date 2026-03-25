@@ -10,15 +10,17 @@ interface CalendarDayCellProps {
   isCurrentMonth: boolean;
   isToday: boolean;
   onSelectTask: (task: TaskResponse) => void;
+  onAddTask?: (dateKey: string) => void;
 }
 
-export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday, onSelectTask }: CalendarDayCellProps) {
+export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday, onSelectTask, onAddTask }: CalendarDayCellProps) {
   const { ref } = useDroppable({ id: dateKey });
 
   return (
     <div
       ref={ref}
-      className={`border-b border-r border-gray-100 dark:border-gray-800 p-1 min-h-[80px] md:min-h-[100px] transition-colors ${
+      onClick={() => onAddTask?.(dateKey)}
+      className={`border-b border-r border-gray-100 dark:border-gray-800 p-1 min-h-[80px] md:min-h-[100px] transition-colors cursor-pointer ${
         !isCurrentMonth ? 'bg-gray-50/50 dark:bg-gray-900/50' : ''
       }`}
     >
@@ -33,11 +35,12 @@ export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday,
       </div>
       <div className="space-y-0.5 overflow-y-auto max-h-[60px] md:max-h-[80px]">
         {tasks.map(task => (
-          <CalendarTaskChip
-            key={task.id}
-            task={task}
-            onSelect={() => onSelectTask(task)}
-          />
+          <div key={task.id} onClick={e => e.stopPropagation()}>
+            <CalendarTaskChip
+              task={task}
+              onSelect={() => onSelectTask(task)}
+            />
+          </div>
         ))}
       </div>
     </div>

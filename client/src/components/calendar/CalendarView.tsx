@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, format, addMonths, subMonths, isSameMonth, isToday,
+  eachDayOfInterval, format, addMonths, subMonths, isSameMonth, isToday, parseISO,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { getCalendarTasks } from '../../api/calendar';
-import { updateTaskDueDate } from '../../api/tasks';
-import type { TaskResponse } from '../../types/api';
+import { updateTaskDueDate, createTask } from '../../api/tasks';
+import { listProjects } from '../../api/projects';
+import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { DragDropProvider } from '@dnd-kit/react';
@@ -17,6 +18,11 @@ export function CalendarView() {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const [addingToDate, setAddingToDate] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskProjectId, setNewTaskProjectId] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTasks = useCallback(async () => {
     const monthStart = startOfMonth(currentMonth);
@@ -41,6 +47,32 @@ export function CalendarView() {
     setLoading(true);
     fetchTasks();
   }, [fetchTasks]);
+
+  useEffect(() => {
+    listProjects().then(data => {
+      setProjects(data);
+      if (data.length > 0) setNewTaskProjectId(data[0].id);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (addingToDate) {
+      setTimeout(() => titleInputRef.current?.focus(), 50);
+    }
+  }, [addingToDate]);
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim() || !newTaskProjectId || !addingToDate) return;
+    try {
+      await createTask(newTaskProjectId, { title: newTaskTitle.trim(), dueDate: addingToDate });
+      setAddingToDate(null);
+      setNewTaskTitle('');
+      await fetchTasks();
+    } catch {
+      toast.error('Failed to create task');
+    }
+  };
 
   const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
     const { source, target } = event.operation;
@@ -135,6 +167,7 @@ export function CalendarView() {
                       isCurrentMonth={isSameMonth(day, currentMonth)}
                       isToday={isToday(day)}
                       onSelectTask={setSelectedTask}
+                      onAddTask={setAddingToDate}
                     />
                   );
                 })}
@@ -150,6 +183,49 @@ export function CalendarView() {
           onClose={() => setSelectedTask(null)}
           onUpdate={fetchTasks}
         />
+      )}
+
+      {addingToDate && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAddingToDate(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                Add task — {format(parseISO(addingToDate), 'MMM d, yyyy')}
+              </h3>
+              <button onClick={() => setAddingToDate(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleAddTask} className="space-y-3">
+              <input
+                ref={titleInputRef}
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                placeholder="Task title"
+                className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-blue-500 dark:focus:border-gray-400"
+              />
+              {projects.length > 1 && (
+                <select
+                  value={newTaskProjectId}
+                  onChange={e => setNewTaskProjectId(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none"
+                >
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setAddingToDate(null)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  Cancel
+                </button>
+                <button type="submit" disabled={!newTaskTitle.trim()} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-medium">
+                  Add
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
