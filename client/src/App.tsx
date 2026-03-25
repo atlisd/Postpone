@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { LoginPage } from './components/auth/LoginPage';
+import { SetupPage } from './components/auth/SetupPage';
 import { ChangePasswordPage } from './components/auth/ChangePasswordPage';
 import { AppShell } from './components/layout/AppShell';
 import { AdminUsersPage } from './components/auth/AdminUsersPage';
@@ -13,12 +14,15 @@ import { HouseholdListPage } from './components/households/HouseholdListPage';
 import { HouseholdPage } from './components/households/HouseholdPage';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
 
@@ -44,5 +48,6 @@ export default function App() {
         <Toaster position="top-right" richColors />
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }

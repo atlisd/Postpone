@@ -45,32 +45,11 @@ try
 
     var app = builder.Build();
 
-    // Apply migrations and seed admin user
+    // Apply migrations
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<TaskerDbContext>();
         await db.Database.MigrateAsync();
-
-        if (!await db.Users.AnyAsync())
-        {
-            var config = app.Configuration;
-            var adminEmail = config["Admin:Email"] ?? "admin@tasker.local";
-            var adminPassword = config["Admin:Password"] ?? "admin123";
-            var adminName = config["Admin:DisplayName"] ?? "Admin";
-
-            db.Users.Add(new User
-            {
-                Email = adminEmail,
-                EmailNormalized = adminEmail.ToUpperInvariant(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
-                DisplayName = adminName,
-                IsAdmin = true,
-                MustChangePassword = true
-            });
-            await db.SaveChangesAsync();
-
-            Log.Information("Admin user seeded: {Email}", adminEmail);
-        }
     }
 
     if (app.Environment.IsDevelopment())

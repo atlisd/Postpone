@@ -12,6 +12,10 @@ public record UpdateProfileRequest(string? DisplayName, string? Timezone, string
 
 public record SetPushoverKeyRequest(string? UserKey);
 
+public record SetupRequest(string Email, string Password, string DisplayName);
+
+public record SetupStatusResponse(bool NeedsSetup);
+
 public record UserProfileResponse(
     Guid Id,
     string Email,

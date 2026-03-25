@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme, type ThemeMode } from '../../contexts/ThemeContext';
 import { updateProfile, setPushoverKey, changePassword } from '../../api/auth';
-import { Settings, Bell, Lock } from 'lucide-react';
+import { Settings, Bell, Lock, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
+
+const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'auto', label: 'Auto', icon: Monitor },
+];
 
 export function SettingsPage() {
   const { user, refreshUser } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
@@ -103,6 +111,37 @@ export function SettingsPage() {
           {saving ? 'Saving...' : 'Save profile'}
         </button>
       </form>
+
+      <hr className="border-gray-200 dark:border-gray-700" />
+
+      {/* Appearance */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Monitor size={20} className="text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h2>
+        </div>
+
+        <div className="flex gap-2">
+          {themeOptions.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md border transition-colors ${
+                theme === value
+                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                  : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500">
+          {theme === 'auto' ? 'Theme follows your system preference.' : `Using ${theme} theme.`}
+        </p>
+      </div>
 
       <hr className="border-gray-200 dark:border-gray-700" />
 

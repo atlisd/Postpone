@@ -1,6 +1,14 @@
 import { api } from './client';
 import type { AuthResponse, UserProfile } from '../types/api';
 
+export async function getSetupStatus(): Promise<{ needsSetup: boolean }> {
+  return api.get('api/auth/setup-status').json();
+}
+
+export async function setup(email: string, password: string, displayName: string): Promise<void> {
+  await api.post('api/auth/setup', { json: { email, password, displayName } });
+}
+
 export async function login(email: string, password: string): Promise<AuthResponse> {
   return api.post('api/auth/login', { json: { email, password } }).json<AuthResponse>();
 }

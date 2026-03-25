@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Tasker.Api.Data;
 using Tasker.Api.Extensions;
 using Tasker.Api.Models.Dtos.Auth;
+using Tasker.Api.Models.Entities;
 using Tasker.Api.Services;
 
 namespace Tasker.Api.Controllers;
@@ -13,6 +14,38 @@ namespace Tasker.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(IAuthService authService, TaskerDbContext db) : ControllerBase
 {
+    [HttpGet("setup-status")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetSetupStatus()
+    {
+        var hasUsers = await db.Users.AnyAsync();
+        return Ok(new SetupStatusResponse(!hasUsers));
+    }
+
+    [HttpPost("setup")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> Setup([FromBody] SetupRequest request)
+    {
+        if (await db.Users.AnyAsync())
+            return Conflict(new { message = "Setup has already been completed" });
+
+        var user = new User
+        {
+            Email = request.Email,
+            EmailNormalized = request.Email.ToUpperInvariant(),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            DisplayName = request.DisplayName,
+            IsAdmin = true,
+            MustChangePassword = false
+        };
+
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Setup complete" });
+    }
+
     [HttpPost("login")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
