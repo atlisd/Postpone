@@ -74,10 +74,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     try {
       await deleteProject(id);
       setContextMenu(null);
-      await fetchProjects();
       if (location.pathname.includes(`/app/projects/${id}`)) {
         navigate('/app/today', { replace: true });
       }
+      await fetchProjects();
     } catch {
       toast.error('Failed to delete project');
     }
@@ -164,16 +164,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     {project.taskCount - project.completedTaskCount}
                   </span>
                 </NavLink>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setContextMenu(contextMenu?.projectId === project.id ? null : { projectId: project.id, rect });
-                  }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <MoreHorizontal size={14} />
-                </button>
+                {project.ownerId === user?.id && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setContextMenu(contextMenu?.projectId === project.id ? null : { projectId: project.id, rect });
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                )}
               </div>
             ))
           )}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useNavigate } from 'react-router';
 import { listTasks, createTask, completeTask, uncompleteTask } from '../../api/tasks';
 import { getProject } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
@@ -8,10 +8,12 @@ import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { AddTaskInput } from '../tasks/AddTaskInput';
 import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
+import { HTTPError } from 'ky';
 import { toast } from 'sonner';
 
 export function ProjectTaskList() {
   const { id: projectId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
@@ -34,7 +36,11 @@ export function ProjectTaskList() {
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof HTTPError && error.response.status === 404) {
+        navigate('/app/today', { replace: true });
+        return;
+      }
       toast.error('Failed to load tasks');
     } finally {
       setLoading(false);
