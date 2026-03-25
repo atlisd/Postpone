@@ -12,6 +12,8 @@ export const test = base.extend<{ authenticatedPage: ReturnType<typeof base['ext
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/app/, { timeout: 10000 });
     await use(page);
+    // Teardown: logout to clean up refresh tokens and prevent reuse detection
+    await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })).catch(() => {});
   },
 });
 

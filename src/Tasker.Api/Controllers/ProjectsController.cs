@@ -12,7 +12,7 @@ namespace Tasker.Api.Controllers;
 [ApiController]
 [Route("api/projects")]
 [Authorize]
-public class ProjectsController(TaskerDbContext db, IProjectAccessService access) : ControllerBase
+public class ProjectsController(TaskerDbContext db, IProjectAccessService access, ISyncService sync) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List()
@@ -66,6 +66,16 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         db.Projects.Add(project);
         await db.SaveChangesAsync();
 
+        // Notify household members about the new project
+        if (project.HouseholdId.HasValue)
+        {
+            var memberIds = await db.HouseholdMembers
+                .Where(hm => hm.HouseholdId == project.HouseholdId.Value)
+                .Select(hm => hm.UserId)
+                .ToListAsync();
+            await sync.NotifyUsers(memberIds, "ProjectCreated");
+        }
+
         var owner = await db.Users.FindAsync(userId);
         return Created($"/api/projects/{project.Id}", new ProjectResponse(
             project.Id, project.OwnerId, owner!.DisplayName, project.HouseholdId,
@@ -109,6 +119,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         await db.SaveChangesAsync();
 
+        await sync.ProjectUpdated(id);
+
         var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.RecurrenceParentId == null);
         var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null && t.RecurrenceParentId == null);
 
@@ -126,8 +138,20 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         if (project is null) return NotFound();
         if (project.OwnerId != userId) return Forbid();
 
+        var householdId = project.HouseholdId;
         db.Projects.Remove(project);
         await db.SaveChangesAsync();
+
+        // Notify household members about the deleted project
+        if (householdId.HasValue)
+        {
+            var memberIds = await db.HouseholdMembers
+                .Where(hm => hm.HouseholdId == householdId.Value)
+                .Select(hm => hm.UserId)
+                .ToListAsync();
+            await sync.NotifyUsers(memberIds, "ProjectDeleted");
+        }
+
         return NoContent();
     }
 

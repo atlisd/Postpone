@@ -29,4 +29,13 @@ public class SyncService(IHubContext<SyncHub> hub) : ISyncService
     {
         await hub.Clients.Group($"project:{projectId}").SendAsync("ProjectUpdated", new { projectId });
     }
+
+    public async Task NotifyUsers(IEnumerable<Guid> userIds, string eventName)
+    {
+        var groups = userIds.Select(id => $"user:{id}").ToList();
+        if (groups.Count > 0)
+        {
+            await hub.Clients.Groups(groups).SendAsync(eventName);
+        }
+    }
 }

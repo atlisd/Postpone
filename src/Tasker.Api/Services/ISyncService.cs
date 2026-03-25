@@ -7,4 +7,5 @@ public interface ISyncService
     Task TaskDeleted(Guid projectId, Guid taskId);
     Task SubtaskUpdated(Guid projectId, Guid taskId);
     Task ProjectUpdated(Guid projectId);
+    Task NotifyUsers(IEnumerable<Guid> userIds, string eventName);
 }
