@@ -49,7 +49,7 @@ public class HouseholdsController(TaskerDbContext db) : ControllerBase
 
         db.HouseholdMembers.Add(new HouseholdMember
         {
-            HouseholdId = household.Id,
+            Household = household,
             UserId = userId,
             Role = "owner",
             JoinedAt = DateTime.UtcNow,
