@@ -60,9 +60,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   const handleCreateProject = async (data: { name: string; color: string; householdId?: string }) => {
     try {
-      await createProject(data);
+      const project = await createProject(data);
       setShowCreateModal(false);
       await fetchProjects();
+      navigate(`/app/projects/${project.id}`);
     } catch {
       toast.error('Failed to create project');
     }
