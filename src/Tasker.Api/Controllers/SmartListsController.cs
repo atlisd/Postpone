@@ -20,8 +20,10 @@ public class SmartListsController(IProjectAccessService access) : ControllerBase
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null && t.DueDate == today)
-            .OrderByDescending(t => t.Priority)
+            .Where(t => t.CompletedAt == null && t.DueDate <= today)
+            .OrderBy(t => t.DueDate == today ? 1 : 0)
+            .ThenBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.DueDateTime)
             .ThenBy(t => t.CreatedAt)
             .Select(TaskResponse.Projection)

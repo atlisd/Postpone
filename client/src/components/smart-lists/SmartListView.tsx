@@ -4,6 +4,7 @@ import type { TaskResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { groupByDate } from '../../lib/dates';
+import { parseISO } from 'date-fns';
 import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
 import { toast } from 'sonner';
@@ -72,6 +73,20 @@ export function SmartListView({ type, title }: SmartListViewProps) {
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(task);
       }
+    } else if (type === 'today') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const overdue: TaskResponse[] = [];
+      const todayTasks: TaskResponse[] = [];
+      for (const task of tasks) {
+        if (task.dueDate && parseISO(task.dueDate) < todayStart) {
+          overdue.push(task);
+        } else {
+          todayTasks.push(task);
+        }
+      }
+      if (overdue.length) groups.set('Overdue', overdue);
+      if (todayTasks.length) groups.set('Today', todayTasks);
     } else {
       groups.set('', tasks);
     }
@@ -102,8 +117,8 @@ export function SmartListView({ type, title }: SmartListViewProps) {
             Array.from(groups.entries()).map(([groupName, groupTasks]) => (
               <div key={groupName}>
                 {groupName && (
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <div className={`px-4 py-2 border-b ${groupName === 'Overdue' ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800'}`}>
+                    <span className={`text-xs font-semibold uppercase tracking-wider ${groupName === 'Overdue' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
                       {groupName}
                     </span>
                   </div>
