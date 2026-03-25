@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { listTasks, createTask, completeTask, uncompleteTask } from '../../api/tasks';
 import { getProject } from '../../api/projects';
@@ -17,6 +17,8 @@ export function ProjectTaskList() {
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
+  const selectedTaskRef = useRef(selectedTask);
+  selectedTaskRef.current = selectedTask;
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -31,8 +33,8 @@ export function ProjectTaskList() {
       setTasks(t);
 
       // Refresh selected task if still open
-      if (selectedTask) {
-        const updated = t.find(task => task.id === selectedTask.id);
+      if (selectedTaskRef.current) {
+        const updated = t.find(task => task.id === selectedTaskRef.current!.id);
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }

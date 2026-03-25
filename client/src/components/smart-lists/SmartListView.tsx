@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSmartList, completeTask, uncompleteTask } from '../../api/tasks';
 import type { TaskResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
@@ -19,14 +19,16 @@ interface SmartListViewProps {
 export function SmartListView({ type, title }: SmartListViewProps) {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
+  const selectedTaskRef = useRef(selectedTask);
+  selectedTaskRef.current = selectedTask;
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
       const data = await getSmartList(type);
       setTasks(data);
-      if (selectedTask) {
-        const updated = data.find(t => t.id === selectedTask.id);
+      if (selectedTaskRef.current) {
+        const updated = data.find(t => t.id === selectedTaskRef.current!.id);
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }
