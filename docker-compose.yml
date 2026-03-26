@@ -8,6 +8,7 @@ services:
       POSTGRES_DB: tasker
       POSTGRES_USER: tasker
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      TZ: ${TZ:-UTC}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -35,6 +36,8 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:-admin123}
       Admin__DisplayName: ${ADMIN_DISPLAY_NAME:-Admin}
       Pushover__ApiToken: ${PUSHOVER_API_TOKEN:-}
+      TZ: ${TZ:-UTC}
+      DEFAULT_TIMEZONE: ${TZ:-UTC}
       ASPNETCORE_ENVIRONMENT: Production
     ports:
       - "5001:8080"

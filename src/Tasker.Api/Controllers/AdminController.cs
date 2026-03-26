@@ -37,6 +37,7 @@ public class AdminController(TaskerDbContext db) : ControllerBase
         if (exists)
             return Conflict(new { message = "A user with this email already exists" });
 
+        var defaultTimezone = Environment.GetEnvironmentVariable("DEFAULT_TIMEZONE") ?? "UTC";
         var user = new User
         {
             Email = request.Email.Trim(),
@@ -44,7 +45,8 @@ public class AdminController(TaskerDbContext db) : ControllerBase
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             DisplayName = request.DisplayName,
             MustChangePassword = true,
-            IsAdmin = false
+            IsAdmin = false,
+            Timezone = defaultTimezone
         };
 
         db.Users.Add(user);

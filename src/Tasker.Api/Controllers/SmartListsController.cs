@@ -11,13 +11,22 @@ namespace Tasker.Api.Controllers;
 [ApiController]
 [Route("api/smart-lists")]
 [Authorize]
-public class SmartListsController(IProjectAccessService access) : ControllerBase
+public class SmartListsController(IProjectAccessService access, TaskerDbContext db) : ControllerBase
 {
+    private async Task<DateOnly> GetUserTodayAsync(Guid userId)
+    {
+        var user = await db.Users.FindAsync(userId);
+        TimeZoneInfo tz = TimeZoneInfo.Utc;
+        if (user?.Timezone is not null)
+            try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); } catch { }
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+    }
+
     [HttpGet("today")]
     public async Task<IActionResult> Today()
     {
         var userId = User.GetUserId();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = await GetUserTodayAsync(userId);
 
         var tasks = await access.GetAccessibleTasks(userId)
             .Where(t => t.CompletedAt == null && t.DueDate <= today)
@@ -36,7 +45,7 @@ public class SmartListsController(IProjectAccessService access) : ControllerBase
     public async Task<IActionResult> Tomorrow()
     {
         var userId = User.GetUserId();
-        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var tomorrow = (await GetUserTodayAsync(userId)).AddDays(1);
 
         var tasks = await access.GetAccessibleTasks(userId)
             .Where(t => t.CompletedAt == null && t.DueDate == tomorrow)
@@ -53,7 +62,7 @@ public class SmartListsController(IProjectAccessService access) : ControllerBase
     public async Task<IActionResult> Next7Days()
     {
         var userId = User.GetUserId();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = await GetUserTodayAsync(userId);
         var endDate = today.AddDays(7);
 
         var tasks = await access.GetAccessibleTasks(userId)

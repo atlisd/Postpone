@@ -30,6 +30,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         if (await db.Users.AnyAsync())
             return Conflict(new { message = "Setup has already been completed" });
 
+        var defaultTimezone = Environment.GetEnvironmentVariable("DEFAULT_TIMEZONE") ?? "UTC";
         var user = new User
         {
             Email = request.Email,
@@ -37,7 +38,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             DisplayName = request.DisplayName,
             IsAdmin = true,
-            MustChangePassword = false
+            MustChangePassword = false,
+            Timezone = defaultTimezone
         };
 
         db.Users.Add(user);
