@@ -43,6 +43,16 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
+        db.Projects.Add(new Project
+        {
+            OwnerId = user.Id,
+            Name = "Inbox",
+            Color = "#6366f1",
+            Icon = "inbox",
+            IsInbox = true
+        });
+        await db.SaveChangesAsync();
+
         return Ok(new { message = "Setup complete" });
     }
 

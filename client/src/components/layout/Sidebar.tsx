@@ -164,7 +164,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     {project.taskCount - project.completedTaskCount}
                   </span>
                 </NavLink>
-                {project.ownerId === user?.id && (
+                {project.ownerId === user?.id && !project.isInbox && (
                   <button
                     onClick={(e) => {
                       e.preventDefault();

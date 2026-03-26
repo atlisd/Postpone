@@ -9,6 +9,7 @@ public class Project
     public string Color { get; set; } = "#4A90D9";
     public string? Icon { get; set; }
     public bool IsArchived { get; set; }
+    public bool IsInbox { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

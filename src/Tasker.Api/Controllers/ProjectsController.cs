@@ -23,6 +23,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         var projects = await db.Projects
             .Where(p => projectIds.Contains(p.Id))
             .Include(p => p.Owner)
+            .OrderByDescending(p => p.IsInbox)
+            .ThenBy(p => p.CreatedAt)
             .Select(p => new ProjectResponse(
                 p.Id,
                 p.OwnerId,
@@ -34,7 +36,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
                 p.IsArchived,
                 p.Tasks.Count(t => !t.IsDeleted && t.RecurrenceParentId == null),
                 p.Tasks.Count(t => !t.IsDeleted && t.CompletedAt != null && t.RecurrenceParentId == null),
-                p.CreatedAt))
+                p.CreatedAt,
+                p.IsInbox))
             .ToListAsync();
 
         return Ok(projects);
@@ -79,7 +82,7 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         var owner = await db.Users.FindAsync(userId);
         return Created($"/api/projects/{project.Id}", new ProjectResponse(
             project.Id, project.OwnerId, owner!.DisplayName, project.HouseholdId,
-            project.Name, project.Color, project.Icon, project.IsArchived, 0, 0, project.CreatedAt));
+            project.Name, project.Color, project.Icon, project.IsArchived, 0, 0, project.CreatedAt, project.IsInbox));
     }
 
     [HttpGet("{id:guid}")]
@@ -101,7 +104,7 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox));
     }
 
     [HttpPut("{id:guid}")]
@@ -111,6 +114,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         var project = await db.Projects.Include(p => p.Owner).FirstOrDefaultAsync(p => p.Id == id);
         if (project is null) return NotFound();
         if (project.OwnerId != userId) return Forbid();
+        if (project.IsInbox && request.IsArchived == true)
+            return BadRequest(new { message = "The Inbox project cannot be archived." });
 
         if (request.Name is not null) project.Name = request.Name;
         if (request.Color is not null) project.Color = request.Color;
@@ -127,7 +132,7 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox));
     }
 
     [HttpDelete("{id:guid}")]
@@ -137,6 +142,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         var project = await db.Projects.FindAsync(id);
         if (project is null) return NotFound();
         if (project.OwnerId != userId) return Forbid();
+        if (project.IsInbox)
+            return BadRequest(new { message = "The Inbox project cannot be deleted." });
 
         var householdId = project.HouseholdId;
         db.Projects.Remove(project);

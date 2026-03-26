@@ -17,4 +17,5 @@ public record ProjectResponse(
     bool IsArchived,
     int TaskCount,
     int CompletedTaskCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool IsInbox);
