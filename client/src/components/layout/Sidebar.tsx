@@ -48,6 +48,10 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+// Set in onDragStart, cleared after onDragEnd — prevents the post-drag click from
+// triggering NavLink navigation when the pointer releases over a project item.
+let dragOccurred = false;
+
 const smartLists = [
   { to: '/app/today', label: 'Today', icon: Sun },
   { to: '/app/tomorrow', label: 'Tomorrow', icon: Sunrise },
@@ -92,7 +96,7 @@ function SortableProjectItem({
       <NavLink
         to={`/app/projects/${project.id}`}
         className={navLinkClass}
-        onClick={onClose}
+        onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
       >
         <span
           {...attributes}
@@ -219,6 +223,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    // Clear the drag flag after a tick so it's still true when the post-drag click fires.
+    setTimeout(() => { dragOccurred = false; }, 0);
+
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -325,6 +332,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
+                onDragStart={() => { dragOccurred = true; }}
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
