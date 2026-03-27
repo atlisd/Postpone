@@ -125,13 +125,14 @@ export function SmartListView({ type, title }: SmartListViewProps) {
                     </span>
                   </div>
                 )}
-                {groupTasks.map(task => (
+                {groupTasks.map((task, index) => (
                   <TaskItem
                     key={task.id}
                     task={task}
                     onToggleComplete={handleToggleComplete}
                     onSelect={setSelectedTask}
                     showProject={showProject}
+                    index={index}
                   />
                 ))}
               </div>

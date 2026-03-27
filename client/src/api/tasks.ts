@@ -53,6 +53,10 @@ export async function updateTaskDueDate(id: string, dueDate: string | null): Pro
   return api.put(`api/tasks/${id}/due-date`, { json: { dueDate } }).json<TaskResponse>();
 }
 
+export async function reorderTasks(projectId: string, orderedIds: string[]): Promise<void> {
+  await api.post(`api/projects/${projectId}/tasks/reorder`, { json: { orderedIds } });
+}
+
 // Subtasks
 export async function createSubtask(taskId: string, title: string): Promise<SubtaskResponse> {
   return api.post(`api/tasks/${taskId}/subtasks`, { json: { title } }).json<SubtaskResponse>();

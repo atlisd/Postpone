@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { listTasks, createTask, completeTask, uncompleteTask } from '../../api/tasks';
+import { listTasks, createTask, completeTask, uncompleteTask, reorderTasks } from '../../api/tasks';
+import { useDragDropMonitor } from '@dnd-kit/react';
+import { isSortableOperation } from '@dnd-kit/react/sortable';
 import { getProject } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
@@ -21,14 +23,17 @@ export function ProjectTaskList() {
   selectedTaskRef.current = selectedTask;
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const fetchVersionRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
+    const version = ++fetchVersionRef.current;
     try {
       const [p, t] = await Promise.all([
         getProject(projectId),
         listTasks(projectId, showCompleted),
       ]);
+      if (fetchVersionRef.current !== version) return;
       setProject(p);
       setTasks(t);
 
@@ -50,6 +55,31 @@ export function ProjectTaskList() {
   }, [projectId, showCompleted]);
 
   useSignalR(fetchData);
+
+  useDragDropMonitor({
+    onDragEnd(event) {
+      const { operation } = event;
+      if (!isSortableOperation(operation)) return;
+      const { source, target } = operation;
+      if (!source || !target) return;
+      if (source.group !== target.group || source.group !== projectId) return;
+      const fromIndex = source.initialIndex;
+      const toIndex = source.index;
+      if (fromIndex === toIndex) return;
+
+      const reordered = [...tasks];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+
+      fetchVersionRef.current++;
+      setTasks(reordered);
+
+      reorderTasks(projectId!, reordered.map(t => t.id)).catch(() => {
+        toast.error('Failed to save order');
+        fetchData();
+      });
+    }
+  });
 
   useEffect(() => {
     setSelectedTask(null);
@@ -111,12 +141,14 @@ export function ProjectTaskList() {
               <p className="text-sm mt-1">Add your first task above</p>
             </div>
           ) : (
-            tasks.map(task => (
+            tasks.map((task, index) => (
               <TaskItem
                 key={task.id}
                 task={task}
                 onToggleComplete={handleToggleComplete}
                 onSelect={setSelectedTask}
+                index={index}
+                group={projectId}
               />
             ))
           )}

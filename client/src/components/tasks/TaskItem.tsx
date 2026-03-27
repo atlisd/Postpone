@@ -2,21 +2,23 @@ import { Check, Flag, Repeat, GripVertical } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
 import { formatDueDate, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
-import { useDraggable } from '@dnd-kit/react';
+import { useSortable } from '@dnd-kit/react/sortable';
 
 interface TaskItemProps {
   task: TaskResponse;
   onToggleComplete: (task: TaskResponse) => void;
   onSelect: (task: TaskResponse) => void;
   showProject?: boolean;
+  index: number;
+  group?: string;
 }
 
-export function TaskItem({ task, onToggleComplete, onSelect, showProject }: TaskItemProps) {
+export function TaskItem({ task, onToggleComplete, onSelect, showProject, index, group }: TaskItemProps) {
   const isCompleted = !!task.completedAt;
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
   const subtaskDone = task.subtasks.filter(s => s.isCompleted).length;
-  const { ref, isDragging } = useDraggable({ id: task.id });
+  const { ref, handleRef, isDragging } = useSortable({ id: task.id, index, group: group ?? task.id });
 
   return (
     <div
@@ -28,6 +30,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, showProject }: Task
     >
       {/* Drag handle */}
       <span
+        ref={handleRef}
         className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >

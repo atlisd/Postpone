@@ -59,6 +59,7 @@ export interface TaskResponse {
   recurrenceOriginDate: string | null;
   subtasks: SubtaskResponse[];
   tags: TagResponse[];
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }

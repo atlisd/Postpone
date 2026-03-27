@@ -43,6 +43,7 @@ public record TaskResponse(
     DateOnly? RecurrenceOriginDate,
     List<SubtaskResponse> Subtasks,
     List<TagResponse> Tags,
+    int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt)
 {
@@ -66,9 +67,12 @@ public record TaskResponse(
         t.RecurrenceOriginDate,
         t.Subtasks.OrderBy(s => s.SortOrder).Select(s => new SubtaskResponse(s.Id, s.Title, s.IsCompleted, s.SortOrder)).ToList(),
         t.TaskTags.Select(tt => new TagResponse(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
+        t.SortOrder,
         t.CreatedAt,
         t.UpdatedAt);
 }
+
+public record ReorderTasksRequest(List<Guid> OrderedIds);
 
 public record SubtaskResponse(Guid Id, string Title, bool IsCompleted, double SortOrder);
 

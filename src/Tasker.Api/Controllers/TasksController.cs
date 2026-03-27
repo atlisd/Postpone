@@ -28,7 +28,8 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
             query = query.Where(t => t.CompletedAt == null);
 
         var tasks = await query
-            .OrderBy(t => t.DueDate.HasValue ? 0 : 1)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
             .ThenBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
@@ -169,6 +170,24 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         await sync.TaskDeleted(oldProjectId, id);
         await sync.TaskCreated(request.ProjectId, result);
         return Ok(result);
+    }
+
+    [HttpPost("api/projects/{projectId:guid}/tasks/reorder")]
+    public async Task<IActionResult> ReorderTasks(Guid projectId, [FromBody] ReorderTasksRequest request)
+    {
+        var userId = User.GetUserId();
+        if (!await access.CanEditProjectAsync(userId, projectId))
+            return Forbid();
+
+        var tasks = await db.Tasks
+            .Where(t => request.OrderedIds.Contains(t.Id) && t.ProjectId == projectId && !t.IsDeleted)
+            .ToListAsync();
+
+        foreach (var task in tasks)
+            task.SortOrder = request.OrderedIds.IndexOf(task.Id);
+
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpPut("api/tasks/{id:guid}/due-date")]
