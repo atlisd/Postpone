@@ -10,6 +10,7 @@ public class Project
     public string? Icon { get; set; }
     public bool IsArchived { get; set; }
     public bool IsInbox { get; set; }
+    public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

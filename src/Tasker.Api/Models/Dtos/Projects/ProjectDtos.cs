@@ -6,6 +6,8 @@ public record UpdateProjectRequest(string? Name, string? Color, string? Icon, bo
 
 public record ShareProjectRequest(Guid UserId, string Permission = "edit");
 
+public record ReorderProjectsRequest(List<Guid> OrderedIds);
+
 public record ProjectResponse(
     Guid Id,
     Guid OwnerId,

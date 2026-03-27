@@ -21,6 +21,10 @@ export async function deleteProject(id: string): Promise<void> {
   await api.delete(`api/projects/${id}`);
 }
 
+export async function reorderProjects(orderedIds: string[]): Promise<void> {
+  await api.post('api/projects/reorder', { json: { orderedIds } });
+}
+
 export interface ProjectMember {
   userId: string;
   displayName: string;

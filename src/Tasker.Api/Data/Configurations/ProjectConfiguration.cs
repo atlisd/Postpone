@@ -15,6 +15,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(p => p.Color).IsRequired().HasDefaultValue("#4A90D9");
         builder.Property(p => p.IsArchived).HasDefaultValue(false);
         builder.Property(p => p.IsInbox).HasDefaultValue(false);
+        builder.Property(p => p.SortOrder).HasDefaultValue(int.MaxValue);
         builder.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(p => p.UpdatedAt).HasDefaultValueSql("now()");
 

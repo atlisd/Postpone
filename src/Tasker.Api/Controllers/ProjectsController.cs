@@ -24,6 +24,7 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
             .Where(p => projectIds.Contains(p.Id))
             .Include(p => p.Owner)
             .OrderByDescending(p => p.IsInbox)
+            .ThenBy(p => p.SortOrder)
             .ThenBy(p => p.CreatedAt)
             .Select(p => new ProjectResponse(
                 p.Id,
@@ -133,6 +134,23 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
             taskCount, completedCount, project.CreatedAt, project.IsInbox));
+    }
+
+    [HttpPost("reorder")]
+    public async Task<IActionResult> Reorder([FromBody] ReorderProjectsRequest request)
+    {
+        var userId = User.GetUserId();
+        var projects = await db.Projects
+            .Where(p => request.OrderedIds.Contains(p.Id) && p.OwnerId == userId)
+            .ToListAsync();
+
+        foreach (var project in projects)
+        {
+            project.SortOrder = request.OrderedIds.IndexOf(project.Id);
+        }
+
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpDelete("{id:guid}")]
