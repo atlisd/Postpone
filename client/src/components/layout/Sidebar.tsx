@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,6 +39,7 @@ import {
   Home,
   UserCheck,
   GripVertical,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -152,6 +153,24 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
+  const [navOverflows, setNavOverflows] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+
+  const checkNavOverflow = useCallback(() => {
+    const el = navRef.current;
+    if (!el) return;
+    setNavOverflows(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    checkNavOverflow();
+    el.addEventListener('scroll', checkNavOverflow);
+    const ro = new ResizeObserver(checkNavOverflow);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', checkNavOverflow); ro.disconnect(); };
+  }, [checkNavOverflow]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -167,6 +186,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   }, []);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => { checkNavOverflow(); }, [projects, checkNavOverflow]);
   useSignalR(fetchProjects);
 
   const handleCreateProject = async (data: { name: string; color: string; householdId?: string }) => {
@@ -245,7 +265,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </div>
 
         {/* Smart Lists */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+        <div className="flex-1 relative min-h-0">
+        <nav ref={navRef} className="h-full overflow-y-auto px-3 py-3 space-y-1">
           <p className="px-3 py-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
             Smart Lists
           </p>
@@ -323,6 +344,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </>
           )}
         </nav>
+        {navOverflows && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 flex items-end justify-center pb-1 bg-gradient-to-t from-white dark:from-gray-900 to-transparent">
+            <ChevronDown size={16} className="text-gray-400 dark:text-gray-500" />
+          </div>
+        )}
+        </div>
 
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-gray-700 px-3 py-3 space-y-1">
