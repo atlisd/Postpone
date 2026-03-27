@@ -155,6 +155,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
   const [navOverflows, setNavOverflows] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const fetchVersionRef = useRef(0);
 
   const checkNavOverflow = useCallback(() => {
     const el = navRef.current;
@@ -177,9 +178,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   );
 
   const fetchProjects = useCallback(async () => {
+    const version = ++fetchVersionRef.current;
     try {
       const data = await listProjects();
-      setProjects(data);
+      if (fetchVersionRef.current === version) {
+        setProjects(data);
+      }
     } catch {
       // silent
     }
@@ -224,6 +228,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     const reordered = arrayMove(sortableProjects, oldIndex, newIndex);
 
     const inbox = projects.find(p => p.isInbox);
+    // Invalidate any in-flight fetchProjects so the optimistic update isn't overwritten
+    fetchVersionRef.current++;
     setProjects(inbox ? [inbox, ...reordered] : reordered);
 
     try {
