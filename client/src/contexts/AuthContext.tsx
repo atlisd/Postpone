@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { setTokens, clearTokens, getStoredRefreshToken } from '../api/client';
+import { HTTPError } from 'ky';
+import { setTokens, clearTokens, getAccessToken } from '../api/client';
 import { login as apiLogin, getProfile, logout as apiLogout, refreshTokens, getSetupStatus } from '../api/auth';
 import type { UserProfile } from '../types/api';
 
@@ -40,17 +41,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      const rt = getStoredRefreshToken();
-      if (rt) {
+      // Try stored access token first (works across tabs via localStorage)
+      const storedToken = getAccessToken();
+      if (storedToken) {
         try {
-          const tokens = await refreshTokens(rt);
-          setTokens(tokens.accessToken, tokens.refreshToken);
           await refreshUser();
+          setIsLoading(false);
+          return;
         } catch {
-          clearTokens();
-          await recheckSetup();
+          // Token might be expired — fall through to cookie refresh
         }
-      } else {
+      }
+
+      // Fall back to cookie-based refresh
+      try {
+        const tokens = await refreshTokens();
+        setTokens(tokens.accessToken);
+        await refreshUser();
+      } catch (err) {
+        if (err instanceof HTTPError && err.response.status !== 401) {
+          // Non-auth error (network down, server error) — don't treat as logged out
+        } else {
+          clearTokens();
+        }
         await recheckSetup();
       }
       setIsLoading(false);
@@ -60,16 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await apiLogin(email, password);
-    setTokens(response.accessToken, response.refreshToken);
+    setTokens(response.accessToken);
     await refreshUser();
     return { mustChangePassword: response.mustChangePassword };
   };
 
   const logout = async () => {
-    const rt = getStoredRefreshToken();
-    if (rt) {
-      try { await apiLogout(rt); } catch { /* ignore */ }
-    }
+    try { await apiLogout(); } catch { /* ignore */ }
     clearTokens();
     setUser(null);
   };

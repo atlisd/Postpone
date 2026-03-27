@@ -58,6 +58,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         return Ok(new { message = "Setup complete" });
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -66,26 +67,49 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         if (result is null)
             return Unauthorized(new { message = "Invalid email or password" });
 
-        return Ok(result);
+        SetRefreshTokenCookie(result.RefreshToken);
+        return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
     }
 
+    [AllowAnonymous]
     [HttpPost("refresh")]
     [EnableRateLimiting("auth")]
-    public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+    public async Task<IActionResult> Refresh()
     {
-        var result = await authService.RefreshAsync(request.RefreshToken);
+        var refreshToken = Request.Cookies["refreshToken"];
+        if (refreshToken is null)
+            return Unauthorized(new { message = "No refresh token" });
+
+        var result = await authService.RefreshAsync(refreshToken);
         if (result is null)
             return Unauthorized(new { message = "Invalid or expired refresh token" });
 
-        return Ok(result);
+        SetRefreshTokenCookie(result.RefreshToken);
+        return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
     }
 
-    [Authorize]
+    [AllowAnonymous]
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout([FromBody] RefreshRequest request)
+    public async Task<IActionResult> Logout()
     {
-        await authService.RevokeRefreshTokenAsync(request.RefreshToken);
+        var refreshToken = Request.Cookies["refreshToken"];
+        if (refreshToken is not null)
+            await authService.RevokeRefreshTokenAsync(refreshToken);
+
+        Response.Cookies.Delete("refreshToken", new CookieOptions { Path = "/" });
+        Response.Cookies.Delete("refreshToken", new CookieOptions { Path = "/api/auth" });
         return NoContent();
+    }
+
+    private void SetRefreshTokenCookie(string token)
+    {
+        Response.Cookies.Append("refreshToken", token, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddDays(365),
+            Path = "/"
+        });
     }
 
     [Authorize]

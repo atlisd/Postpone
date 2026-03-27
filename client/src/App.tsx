@@ -43,6 +43,7 @@ export default function App() {
             </Route>
           </Route>
 
+          <Route index element={<Navigate to="/app" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         <Toaster position="top-right" richColors />

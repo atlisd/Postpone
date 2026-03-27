@@ -1,43 +1,40 @@
 import ky from 'ky';
 
+const ACCESS_TOKEN_KEY = 'accessToken';
+
 let accessToken: string | null = null;
-let refreshToken: string | null = null;
 let refreshPromise: Promise<void> | null = null;
 
-export function setTokens(access: string, refresh: string) {
+// Restore from localStorage on module load
+try { accessToken = localStorage.getItem(ACCESS_TOKEN_KEY); } catch {}
+
+export function setTokens(access: string) {
   accessToken = access;
-  refreshToken = refresh;
-  localStorage.setItem('refreshToken', refresh);
+  try { localStorage.setItem(ACCESS_TOKEN_KEY, access); } catch {}
 }
 
 export function clearTokens() {
   accessToken = null;
-  refreshToken = null;
-  localStorage.removeItem('refreshToken');
-}
-
-export function getStoredRefreshToken(): string | null {
-  return refreshToken || localStorage.getItem('refreshToken');
+  try { localStorage.removeItem(ACCESS_TOKEN_KEY); } catch {}
 }
 
 export function getAccessToken(): string | null {
   return accessToken;
 }
 
+// Sync access token across tabs via storage event
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === ACCESS_TOKEN_KEY) {
+      accessToken = e.newValue;
+    }
+  });
+}
+
 async function refreshAccessToken(): Promise<void> {
-  const rt = getStoredRefreshToken();
-  if (!rt) {
-    clearTokens();
-    window.location.href = '/login';
-    return;
-  }
-
   try {
-    const response = await ky.post('/api/auth/refresh', {
-      json: { refreshToken: rt },
-    }).json<{ accessToken: string; refreshToken: string }>();
-
-    setTokens(response.accessToken, response.refreshToken);
+    const response = await ky.post('/api/auth/refresh', { credentials: 'include' }).json<{ accessToken: string }>();
+    setTokens(response.accessToken);
   } catch {
     clearTokens();
     window.location.href = '/login';
@@ -46,6 +43,7 @@ async function refreshAccessToken(): Promise<void> {
 
 export const api = ky.create({
   prefixUrl: '/',
+  credentials: 'include',
   hooks: {
     beforeRequest: [
       (request) => {

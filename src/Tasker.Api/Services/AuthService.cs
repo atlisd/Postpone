@@ -7,7 +7,7 @@ namespace Tasker.Api.Services;
 
 public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuthService
 {
-    private const int RefreshTokenExpirationDays = 30;
+    private const int RefreshTokenExpirationDays = 365;
 
     public async Task<AuthResponse?> LoginAsync(LoginRequest request)
     {
