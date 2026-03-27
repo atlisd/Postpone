@@ -2,11 +2,28 @@ import { useState } from 'react';
 import { Outlet } from 'react-router';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
+import { DragDropProvider } from '@dnd-kit/react';
+import { moveTask } from '../../api/tasks';
+import { toast } from 'sonner';
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
+    const { source, target } = event.operation;
+    if (!source?.id || !target?.id) return;
+    const targetId = String(target.id);
+    if (!targetId.startsWith('project-drop-')) return;
+    const projectId = targetId.replace('project-drop-', '');
+    try {
+      await moveTask(String(source.id), projectId);
+    } catch {
+      toast.error('Failed to move task');
+    }
+  };
+
   return (
+    <DragDropProvider onDragEnd={handleDragEnd}>
     <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -27,5 +44,6 @@ export function AppShell() {
         </div>
       </main>
     </div>
+    </DragDropProvider>
   );
 }

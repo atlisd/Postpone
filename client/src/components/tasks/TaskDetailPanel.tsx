@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Trash2, Plus, Check, Calendar, Flag, UserPlus } from 'lucide-react';
-import type { TaskResponse } from '../../types/api';
-import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, setRecurrence, removeRecurrence } from '../../api/tasks';
-import { getProjectMembers } from '../../api/projects';
+import { X, Trash2, Plus, Check, Calendar, Flag, UserPlus, FolderOpen } from 'lucide-react';
+import type { TaskResponse, ProjectResponse } from '../../types/api';
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, setRecurrence, removeRecurrence, moveTask } from '../../api/tasks';
+import { getProjectMembers, listProjects } from '../../api/projects';
 import type { ProjectMember } from '../../api/projects';
 import { PRIORITIES } from '../../lib/priorities';
 import { RecurrencePicker } from './RecurrencePicker';
@@ -22,6 +22,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [projects, setProjects] = useState<ProjectResponse[]>([]);
 
   useEffect(() => {
     setTitle(task.title);
@@ -33,6 +34,20 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   useEffect(() => {
     getProjectMembers(task.projectId).then(setMembers).catch(() => {});
   }, [task.projectId]);
+
+  useEffect(() => {
+    listProjects().then(setProjects).catch(() => {});
+  }, []);
+
+  const handleMoveProject = async (newProjectId: string) => {
+    if (newProjectId === task.projectId) return;
+    try {
+      await moveTask(task.id, newProjectId);
+      onUpdate();
+    } catch {
+      toast.error('Failed to move task');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -116,9 +131,19 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
       <div className="absolute right-0 top-0 bottom-0 w-full max-w-md md:max-w-none md:static bg-white dark:bg-gray-900 flex flex-col shadow-xl md:shadow-none">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: task.projectColor + '20', color: task.projectColor }}>
-            {task.projectName}
-          </span>
+          <div className="flex items-center gap-1.5" style={{ color: task.projectColor }}>
+            <FolderOpen size={14} />
+            <select
+              value={task.projectId}
+              onChange={(e) => handleMoveProject(e.target.value)}
+              className="text-xs px-1.5 py-1 rounded border-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+              style={{ backgroundColor: task.projectColor + '20', color: task.projectColor }}
+            >
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-1">
             <button onClick={handleDelete} className="p-1.5 text-gray-400 hover:text-red-500 rounded">
               <Trash2 size={16} />

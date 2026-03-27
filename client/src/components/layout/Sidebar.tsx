@@ -21,6 +21,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useDroppable } from '@dnd-kit/react';
 import {
   Sun,
   Sunrise,
@@ -76,6 +77,7 @@ function SortableProjectItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
   });
+  const { ref: dropRef, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -84,6 +86,7 @@ function SortableProjectItem({
   };
 
   return (
+    <div ref={dropRef} className={`rounded-md ${isDropTarget ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
     <div ref={setNodeRef} style={style} className="relative group">
       <NavLink
         to={`/app/projects/${project.id}`}
@@ -118,6 +121,26 @@ function SortableProjectItem({
           <MoreHorizontal size={14} />
         </button>
       )}
+    </div>
+    </div>
+  );
+}
+
+function InboxProjectItem({ project, navLinkClass, onClose }: {
+  project: ProjectResponse;
+  navLinkClass: (props: { isActive: boolean }) => string;
+  onClose: () => void;
+}) {
+  const { ref, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
+  return (
+    <div ref={ref} className={`relative group rounded-md ${isDropTarget ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+      <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onClose}>
+        <FolderOpen size={16} style={{ color: project.color }} />
+        <span className="flex-1 truncate">{project.name}</span>
+        <span className="text-xs text-gray-400">
+          {project.taskCount - project.completedTaskCount}
+        </span>
+      </NavLink>
     </div>
   );
 }
@@ -264,19 +287,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <>
               {/* Inbox — always first, not draggable */}
               {inboxProject && (
-                <div className="relative group">
-                  <NavLink
-                    to={`/app/projects/${inboxProject.id}`}
-                    className={navLinkClass}
-                    onClick={onClose}
-                  >
-                    <FolderOpen size={16} style={{ color: inboxProject.color }} />
-                    <span className="flex-1 truncate">{inboxProject.name}</span>
-                    <span className="text-xs text-gray-400">
-                      {inboxProject.taskCount - inboxProject.completedTaskCount}
-                    </span>
-                  </NavLink>
-                </div>
+                <InboxProjectItem
+                  project={inboxProject}
+                  navLinkClass={navLinkClass}
+                  onClose={onClose}
+                />
               )}
 
               {/* Sortable projects */}

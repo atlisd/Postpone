@@ -1,7 +1,8 @@
-import { Check, Flag, Repeat } from 'lucide-react';
+import { Check, Flag, Repeat, GripVertical } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
 import { formatDueDate, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
+import { useDraggable } from '@dnd-kit/react';
 
 interface TaskItemProps {
   task: TaskResponse;
@@ -15,14 +16,24 @@ export function TaskItem({ task, onToggleComplete, onSelect, showProject }: Task
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
   const subtaskDone = task.subtasks.filter(s => s.isCompleted).length;
+  const { ref, isDragging } = useDraggable({ id: task.id });
 
   return (
     <div
-      className={`group flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer border-b border-gray-100 dark:border-gray-800 transition-colors ${
+      ref={ref}
+      className={`relative group flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer border-b border-gray-100 dark:border-gray-800 transition-colors ${
         isCompleted ? 'opacity-50' : ''
-      }`}
+      } ${isDragging ? 'opacity-40' : ''}`}
       onClick={() => onSelect(task)}
     >
+      {/* Drag handle */}
+      <span
+        className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical size={14} className="text-gray-300 dark:text-gray-600" />
+      </span>
+
       {/* Checkbox */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
