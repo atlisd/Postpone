@@ -20,6 +20,12 @@ export function dueDateColor(dateStr: string | null): string {
   return 'text-gray-500';
 }
 
+export function formatDueTime(dueDateTimeUtc: string | null): string {
+  if (!dueDateTimeUtc) return '';
+  const normalized = /[Z+\-]\d*$/.test(dueDateTimeUtc) ? dueDateTimeUtc : dueDateTimeUtc + 'Z';
+  return format(new Date(normalized), 'h:mm a');
+}
+
 export function groupByDate(dateStr: string): string {
   const date = parseISO(dateStr);
   if (isToday(date)) return 'Today';

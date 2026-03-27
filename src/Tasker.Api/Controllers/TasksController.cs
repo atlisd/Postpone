@@ -91,8 +91,10 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         if (request.Title is not null) task.Title = request.Title;
         if (request.Description is not null) task.Description = request.Description;
         if (request.Priority.HasValue) task.Priority = request.Priority.Value;
-        if (request.DueDate.HasValue) task.DueDate = request.DueDate.Value;
-        if (request.DueDateTime.HasValue) task.DueDateTime = request.DueDateTime.Value;
+        if (request.ClearDueDate) task.DueDate = null;
+        else if (request.DueDate.HasValue) task.DueDate = request.DueDate.Value;
+        if (request.ClearDueDateTime) task.DueDateTime = null;
+        else if (request.DueDateTime.HasValue) task.DueDateTime = request.DueDateTime.Value;
         if (request.AssignedToId.HasValue) task.AssignedToId = request.AssignedToId.Value;
 
         await db.SaveChangesAsync();

@@ -1,6 +1,6 @@
 import { Check, Flag, Repeat, GripVertical } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
-import { formatDueDate, dueDateColor } from '../../lib/dates';
+import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
 import { useSortable } from '@dnd-kit/react/sortable';
 
@@ -71,7 +71,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, showProject, index,
           )}
           {task.dueDate && (
             <span className={`text-xs ${dueDateColor(task.dueDate)}`}>
-              {formatDueDate(task.dueDate)}
+              {formatDueDate(task.dueDate)}{formatDueTime(task.dueDateTime) && ` ${formatDueTime(task.dueDateTime)}`}
             </span>
           )}
           {subtaskTotal > 0 && (

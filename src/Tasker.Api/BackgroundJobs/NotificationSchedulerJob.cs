@@ -48,60 +48,93 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var now = DateTime.UtcNow;
         var projectIds = await access.GetAccessibleProjectIdsAsync(user.Id);
 
-        // Find tasks due within the next hour that haven't been notified
         var tasks = await db.Tasks
             .Include(t => t.Project)
             .Where(t => projectIds.Contains(t.ProjectId)
                 && !t.IsDeleted
                 && t.CompletedAt == null
-                && t.DueDate.HasValue
-                && t.RecurrenceParentId == null || t.Rrule == null) // don't notify templates
+                && (t.DueDate.HasValue || t.DueDateTime.HasValue)
+                && (t.RecurrenceParentId == null || t.Rrule == null))
             .ToListAsync();
+
+        TimeZoneInfo tz;
+        try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); }
+        catch { tz = TimeZoneInfo.Utc; }
+
+        var userNow = TimeZoneInfo.ConvertTimeFromUtc(now, tz);
 
         foreach (var task in tasks)
         {
-            // Check if task is due today (in user's timezone)
-            TimeZoneInfo tz;
-            try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); }
-            catch { tz = TimeZoneInfo.Utc; }
+            if (task.DueDateTime.HasValue)
+                await ProcessTimedNotification(db, pushover, user, task, now, tz);
+            else
+                await ProcessDateOnlyNotification(db, pushover, user, task, now, userNow);
+        }
+    }
 
-            var userNow = TimeZoneInfo.ConvertTimeFromUtc(now, tz);
-            var dueDate = task.DueDate!.Value;
+    private async Task ProcessTimedNotification(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, TodoTask task, DateTime utcNow, TimeZoneInfo tz)
+    {
+        var dueUtc = task.DueDateTime!.Value;
+        var windowStart = utcNow.AddMinutes(-16);
+        if (dueUtc < windowStart || dueUtc > utcNow) return;
 
-            // Notify if task is due today and it's morning (8 AM-9 AM local time)
-            // or if task is overdue (past due date)
-            var isOverdue = dueDate < DateOnly.FromDateTime(userNow);
-            var isDueToday = dueDate == DateOnly.FromDateTime(userNow);
-            var isMorning = userNow.Hour >= 8 && userNow.Hour < 9;
+        var dueDateTimeForHash = dueUtc.ToString("yyyy-MM-ddTHH:mm");
+        var payloadHash = ComputeHash($"{user.Id}:{task.Id}:time:{dueDateTimeForHash}");
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
 
-            if (!isDueToday && !isOverdue) continue;
-            if (isDueToday && !isMorning) continue;
+        var dueLocal = TimeZoneInfo.ConvertTimeFromUtc(dueUtc, tz);
+        var timeStr = dueLocal.ToString("h:mm tt");
+        var message = $"{task.Title} — {task.Project.Name} (due at {timeStr})";
 
-            // Dedup check
-            var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
-            var alreadySent = await db.NotificationLogs
-                .AnyAsync(n => n.PayloadHash == payloadHash);
-            if (alreadySent) continue;
-
-            var title = isOverdue ? "Overdue task" : "Task due today";
-            var message = $"{task.Title} — {task.Project.Name}";
-
-            var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message);
-
-            if (sent)
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, "Task due now", message);
+        if (sent)
+        {
+            db.NotificationLogs.Add(new NotificationLog
             {
-                db.NotificationLogs.Add(new NotificationLog
-                {
-                    UserId = user.Id,
-                    TaskId = task.Id,
-                    Channel = "pushover",
-                    SentAt = now,
-                    PayloadHash = payloadHash,
-                });
-                await db.SaveChangesAsync();
+                UserId = user.Id,
+                TaskId = task.Id,
+                Channel = "pushover",
+                SentAt = utcNow,
+                PayloadHash = payloadHash,
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Sent timed notification to {User} for task {Task}", user.Email, task.Title);
+        }
+    }
 
-                logger.LogInformation("Sent notification to {User} for task {Task}", user.Email, task.Title);
-            }
+    private async Task ProcessDateOnlyNotification(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, TodoTask task, DateTime utcNow, DateTime userNow)
+    {
+        var dueDate = task.DueDate!.Value;
+        var isOverdue = dueDate < DateOnly.FromDateTime(userNow);
+        var isDueToday = dueDate == DateOnly.FromDateTime(userNow);
+        var isMorning = userNow.Hour >= 8 && userNow.Hour < 9;
+
+        if (!isDueToday && !isOverdue) return;
+        if (isDueToday && !isMorning) return;
+
+        var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
+
+        var title = isOverdue ? "Overdue task" : "Task due today";
+        var message = $"{task.Title} — {task.Project.Name}";
+
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message);
+        if (sent)
+        {
+            db.NotificationLogs.Add(new NotificationLog
+            {
+                UserId = user.Id,
+                TaskId = task.Id,
+                Channel = "pushover",
+                SentAt = utcNow,
+                PayloadHash = payloadHash,
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Sent notification to {User} for task {Task}", user.Email, task.Title);
         }
     }
 

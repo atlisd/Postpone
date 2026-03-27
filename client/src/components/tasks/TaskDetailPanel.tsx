@@ -1,4 +1,11 @@
 import { useState, useEffect } from 'react';
+
+function extractLocalTime(dueDateTimeUtc: string | null): string {
+  if (!dueDateTimeUtc) return '';
+  const normalized = /[Z+\-]\d*$/.test(dueDateTimeUtc) ? dueDateTimeUtc : dueDateTimeUtc + 'Z';
+  const d = new Date(normalized);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 import { X, Trash2, Plus, Check, Calendar, Flag, UserPlus, FolderOpen } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, setRecurrence, removeRecurrence, moveTask } from '../../api/tasks';
@@ -19,6 +26,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   const [description, setDescription] = useState(task.description);
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate ?? '');
+  const [dueTime, setDueTime] = useState(() => extractLocalTime(task.dueDateTime));
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -29,6 +37,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
     setDescription(task.description);
     setPriority(task.priority);
     setDueDate(task.dueDate ?? '');
+    setDueTime(extractLocalTime(task.dueDateTime));
   }, [task]);
 
   useEffect(() => {
@@ -49,14 +58,40 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
     }
   };
 
+  const originalDueTime = extractLocalTime(task.dueDateTime);
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      const dateChanged = dueDate !== (task.dueDate ?? '');
+      const timeChanged = dueTime !== originalDueTime;
+
+      let dueDatePayload: string | undefined;
+      let clearDueDatePayload: boolean | undefined;
+      let dueDateTimePayload: string | undefined;
+      let clearDueDateTimePayload: boolean | undefined;
+
+      if (dateChanged) {
+        if (dueDate) dueDatePayload = dueDate;
+        else { clearDueDatePayload = true; clearDueDateTimePayload = true; }
+      }
+
+      if (dueDate && dueTime && (dateChanged || timeChanged)) {
+        dueDateTimePayload = new Date(`${dueDate}T${dueTime}`).toISOString();
+      } else if (timeChanged && !dueTime) {
+        clearDueDateTimePayload = true;
+      } else if (dateChanged && dueDate && !dueTime) {
+        clearDueDateTimePayload = true;
+      }
+
       await updateTask(task.id, {
         title: title !== task.title ? title : undefined,
         description: description !== task.description ? description : undefined,
         priority: priority !== task.priority ? priority : undefined,
-        dueDate: dueDate !== (task.dueDate ?? '') ? (dueDate || undefined) : undefined,
+        dueDate: dueDatePayload,
+        clearDueDate: clearDueDatePayload,
+        dueDateTime: dueDateTimePayload,
+        clearDueDateTime: clearDueDateTimePayload,
       });
       onUpdate();
     } catch {
@@ -118,7 +153,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
   // Save on blur for title/description
   const handleBlur = () => {
-    if (title !== task.title || description !== task.description || priority !== task.priority || dueDate !== (task.dueDate ?? '')) {
+    if (title !== task.title || description !== task.description || priority !== task.priority || dueDate !== (task.dueDate ?? '') || dueTime !== originalDueTime) {
       handleSave();
     }
   };
@@ -165,20 +200,45 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             placeholder="Task title"
           />
 
-          {/* Due Date & Priority row */}
-          <div className="flex gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <Calendar size={16} className="text-gray-400" />
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => { setDueDate(e.target.value); }}
-                onBlur={handleBlur}
-                className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 flex-1"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Flag size={16} className="text-gray-400" />
+          {/* Due Date row */}
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-gray-400 flex-shrink-0" />
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => { setDueDate(e.target.value); if (!e.target.value) setDueTime(''); }}
+              onBlur={handleBlur}
+              className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 flex-1"
+            />
+            <input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              onBlur={handleBlur}
+              disabled={!dueDate}
+              className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 w-28 disabled:opacity-40 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          {/* Recurrence + Priority row */}
+          <div className="flex items-center gap-3">
+            <RecurrencePicker
+              currentRrule={task.rrule}
+              onSet={async (rrule) => {
+                try {
+                  await setRecurrence(task.id, rrule);
+                  onUpdate();
+                } catch { toast.error('Failed to set recurrence'); }
+              }}
+              onRemove={async () => {
+                try {
+                  await removeRecurrence(task.id);
+                  onUpdate();
+                } catch { toast.error('Failed to remove recurrence'); }
+              }}
+            />
+            <div className="flex items-center gap-2 ml-auto">
+              <Flag size={16} className="text-gray-400 flex-shrink-0" />
               <select
                 value={priority}
                 onChange={(e) => { setPriority(Number(e.target.value)); setTimeout(handleBlur, 0); }}
@@ -190,23 +250,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
               </select>
             </div>
           </div>
-
-          {/* Recurrence */}
-          <RecurrencePicker
-            currentRrule={task.rrule}
-            onSet={async (rrule) => {
-              try {
-                await setRecurrence(task.id, rrule);
-                onUpdate();
-              } catch { toast.error('Failed to set recurrence'); }
-            }}
-            onRemove={async () => {
-              try {
-                await removeRecurrence(task.id);
-                onUpdate();
-              } catch { toast.error('Failed to remove recurrence'); }
-            }}
-          />
 
           {/* Assignment */}
           {members.length > 1 && (

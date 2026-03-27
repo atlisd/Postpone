@@ -27,7 +27,9 @@ export async function updateTask(id: string, data: {
   description?: string;
   priority?: number;
   dueDate?: string;
+  clearDueDate?: boolean;
   dueDateTime?: string;
+  clearDueDateTime?: boolean;
   assignedToId?: string;
 }): Promise<TaskResponse> {
   return api.put(`api/tasks/${id}`, { json: data }).json<TaskResponse>();
