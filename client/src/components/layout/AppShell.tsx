@@ -24,7 +24,7 @@ export function AppShell() {
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
-    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="flex-1 flex flex-col min-w-0">
