@@ -1,4 +1,4 @@
-import { Check, Flag, Repeat, GripVertical } from 'lucide-react';
+import { Check, Flag, Repeat, GripVertical, FileText } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
 import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
@@ -60,6 +60,9 @@ export function TaskItem({ task, onToggleComplete, onSelect, showProject, index,
           )}
           {task.rrule && (
             <Repeat size={12} className="text-gray-400" />
+          )}
+          {task.description && (
+            <FileText size={12} className="text-gray-400" />
           )}
         </div>
 
