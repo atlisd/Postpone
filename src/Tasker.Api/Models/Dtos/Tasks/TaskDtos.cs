@@ -19,7 +19,8 @@ public record UpdateTaskRequest(
     bool ClearDueDate,
     DateTime? DueDateTime,
     bool ClearDueDateTime,
-    Guid? AssignedToId);
+    Guid? AssignedToId,
+    bool ClearAssignedTo);
 
 public record UpdateDueDateRequest(DateOnly? DueDate);
 

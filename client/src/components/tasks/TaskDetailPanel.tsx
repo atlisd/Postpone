@@ -144,7 +144,11 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
   const handleAssign = async (userId: string | null) => {
     try {
-      await updateTask(task.id, { assignedToId: userId ?? undefined });
+      if (userId === null) {
+        await updateTask(task.id, { clearAssignedTo: true });
+      } else {
+        await updateTask(task.id, { assignedToId: userId });
+      }
       onUpdate();
     } catch {
       toast.error('Failed to assign task');
