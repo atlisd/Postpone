@@ -5,6 +5,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { getCalendarTasks } from '../../api/calendar';
+import { parseNaturalDate } from '../../lib/naturalDate';
 import { updateTaskDueDate, createTask } from '../../api/tasks';
 import { listProjects } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
@@ -65,7 +66,15 @@ export function CalendarView() {
     e.preventDefault();
     if (!newTaskTitle.trim() || !newTaskProjectId || !addingToDate) return;
     try {
-      await createTask(newTaskProjectId, { title: newTaskTitle.trim(), dueDate: addingToDate });
+      const parsed = parseNaturalDate(newTaskTitle.trim());
+      const effectiveTitle = parsed ? parsed.cleanTitle || newTaskTitle.trim() : newTaskTitle.trim();
+      const effectiveDueDate = parsed ? parsed.dueDate : addingToDate;
+      const effectiveDueDateTime = parsed?.dueDateTime;
+      await createTask(newTaskProjectId, {
+        title: effectiveTitle,
+        dueDate: effectiveDueDate,
+        dueDateTime: effectiveDueDateTime,
+      });
       setAddingToDate(null);
       setNewTaskTitle('');
       await fetchTasks();

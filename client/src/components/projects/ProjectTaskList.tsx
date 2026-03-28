@@ -86,10 +86,10 @@ export function ProjectTaskList() {
     fetchData();
   }, [projectId, showCompleted]);
 
-  const handleAdd = async (title: string) => {
+  const handleAdd = async (title: string, dueDate?: string, dueDateTime?: string) => {
     if (!projectId) return;
     try {
-      await createTask(projectId, { title });
+      await createTask(projectId, { title, dueDate, dueDateTime });
       await fetchData();
     } catch {
       toast.error('Failed to create task');

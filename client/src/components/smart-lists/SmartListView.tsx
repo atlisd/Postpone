@@ -58,13 +58,15 @@ export function SmartListView({ type, title }: SmartListViewProps) {
     fetchData();
   }, [type]);
 
-  const handleAdd = async (title: string) => {
+  const handleAdd = async (title: string, dueDate?: string, dueDateTime?: string) => {
     if (!inboxProjectId) return;
     try {
-      let dueDate: string | undefined;
-      if (type === 'today' || type === 'next7days') dueDate = format(new Date(), 'yyyy-MM-dd');
-      else if (type === 'tomorrow') dueDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-      await createTask(inboxProjectId, { title, dueDate });
+      let resolvedDueDate = dueDate;
+      if (!resolvedDueDate) {
+        if (type === 'today' || type === 'next7days') resolvedDueDate = format(new Date(), 'yyyy-MM-dd');
+        else if (type === 'tomorrow') resolvedDueDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+      }
+      await createTask(inboxProjectId, { title, dueDate: resolvedDueDate, dueDateTime });
       await fetchData();
     } catch {
       toast.error('Failed to create task');
