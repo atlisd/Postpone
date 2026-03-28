@@ -35,6 +35,7 @@ services:
       Admin__Email: ${ADMIN_EMAIL:-admin@tasker.local}
       Admin__Password: ${ADMIN_PASSWORD:-admin123}
       Admin__DisplayName: ${ADMIN_DISPLAY_NAME:-Admin}
+      App__Url: ${APP_URL:-http://localhost:3000}
       Pushover__ApiToken: ${PUSHOVER_API_TOKEN:-}
       TZ: ${TZ:-UTC}
       DEFAULT_TIMEZONE: ${TZ:-UTC}

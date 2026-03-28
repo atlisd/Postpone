@@ -117,6 +117,7 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | `DB_PASSWORD` | PostgreSQL password | `changeme` |
 | `JWT_SECRET` | JWT signing key (min 32 chars) | dev default |
 | `PUSHOVER_API_TOKEN` | Pushover application API token | _(empty, notifications disabled)_ |
+| `APP_URL` | Public frontend URL (used in CLI-generated reset links) | `http://localhost:3000` |
 
 ## Architecture
 
@@ -251,6 +252,28 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 2. Set `PUSHOVER_API_TOKEN` in your `.env` file
 3. Each user enters their personal Pushover user key in **Settings > Notifications**
 4. Notifications are sent for tasks due today (between 8-9 AM in the user's configured timezone) and overdue tasks
+
+## Admin Password Reset
+
+If the admin account is locked out, generate a one-time reset link directly from the server without needing to be logged in:
+
+```bash
+docker compose exec api dotnet Tasker.Api.dll generate-admin-reset-link
+```
+
+This prints a URL valid for 24 hours. Paste it in a browser to set a new password.
+
+If you have multiple admin accounts, specify which one by email:
+
+```bash
+docker compose exec api dotnet Tasker.Api.dll generate-admin-reset-link --email admin@example.com
+```
+
+By default the link uses `http://localhost:3000` as the base URL. Set `APP_URL` in your `.env` file to generate links with your actual domain:
+
+```
+APP_URL=https://your-domain.com
+```
 
 ## Database
 
