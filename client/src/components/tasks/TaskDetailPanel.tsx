@@ -337,7 +337,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
         {/* Footer */}
         <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
-          {saving ? 'Saving...' : `Created by ${task.createdByName}`}
+          {saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
         </div>
       </div>
     </div>
