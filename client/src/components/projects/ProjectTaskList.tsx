@@ -147,6 +147,7 @@ export function ProjectTaskList() {
                 task={task}
                 onToggleComplete={handleToggleComplete}
                 onSelect={setSelectedTask}
+                isSelected={selectedTask?.id === task.id}
                 index={index}
                 group={projectId}
               />

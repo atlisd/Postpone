@@ -284,14 +284,16 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
           )}
 
           {/* Description */}
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleBlur}
-            placeholder="Add description..."
-            rows={4}
-            className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border border-gray-200 dark:border-gray-700 rounded-md p-2 outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-          />
+          <div className="-mx-4 border-t border-b border-gray-200 dark:border-gray-700">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={handleBlur}
+              placeholder="Add description..."
+              rows={4}
+              className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border-none outline-none resize-none px-4 py-2"
+            />
+          </div>
 
           {/* Subtasks */}
           <div>

@@ -160,6 +160,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
                     task={task}
                     onToggleComplete={handleToggleComplete}
                     onSelect={setSelectedTask}
+                    isSelected={selectedTask?.id === task.id}
                     showProject={showProject}
                     index={index}
                   />
