@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getSmartList, completeTask, uncompleteTask } from '../../api/tasks';
+import { getSmartList, createTask, completeTask, uncompleteTask } from '../../api/tasks';
+import { listProjects } from '../../api/projects';
 import type { TaskResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
+import { AddTaskInput } from '../tasks/AddTaskInput';
 import { groupByDate } from '../../lib/dates';
-import { parseISO } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
 import { toast } from 'sonner';
@@ -18,6 +20,7 @@ interface SmartListViewProps {
 
 export function SmartListView({ type, title }: SmartListViewProps) {
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [inboxProjectId, setInboxProjectId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
   const selectedTaskRef = useRef(selectedTask);
   selectedTaskRef.current = selectedTask;
@@ -42,9 +45,31 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   useSignalR(fetchData);
 
   useEffect(() => {
+    listProjects()
+      .then(projects => {
+        const inbox = projects.find(p => p.isInbox);
+        if (inbox) setInboxProjectId(inbox.id);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setSelectedTask(null);
     fetchData();
   }, [type]);
+
+  const handleAdd = async (title: string) => {
+    if (!inboxProjectId) return;
+    try {
+      let dueDate: string | undefined;
+      if (type === 'today' || type === 'next7days') dueDate = format(new Date(), 'yyyy-MM-dd');
+      else if (type === 'tomorrow') dueDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+      await createTask(inboxProjectId, { title, dueDate });
+      await fetchData();
+    } catch {
+      toast.error('Failed to create task');
+    }
+  };
 
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
@@ -106,6 +131,8 @@ export function SmartListView({ type, title }: SmartListViewProps) {
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
           <p className="text-sm text-gray-500 mt-0.5">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</p>
         </div>
+
+        {inboxProjectId && <AddTaskInput onAdd={handleAdd} />}
 
         <div className="flex-1 overflow-y-auto">
           {loading && tasks.length === 0 ? (
