@@ -6,5 +6,6 @@ public interface ITokenService
 {
     string GenerateAccessToken(User user);
     (string token, string hash) GenerateRefreshToken();
+    (string token, string hash) GenerateSecureToken();
     string HashToken(string token);
 }

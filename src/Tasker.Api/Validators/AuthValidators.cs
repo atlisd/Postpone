@@ -30,6 +30,30 @@ public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRe
     }
 }
 
+public class AcceptInvitationRequestValidator : AbstractValidator<AcceptInvitationRequest>
+{
+    public AcceptInvitationRequestValidator()
+    {
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(64);
+        RuleFor(x => x.NewPassword)
+            .NotEmpty()
+            .MinimumLength(6).WithMessage("Password must be at least 6 characters")
+            .MaximumLength(128);
+    }
+}
+
+public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequest>
+{
+    public ResetPasswordRequestValidator()
+    {
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(64);
+        RuleFor(x => x.NewPassword)
+            .NotEmpty()
+            .MinimumLength(6).WithMessage("Password must be at least 6 characters")
+            .MaximumLength(128);
+    }
+}
+
 public class UpdateProfileRequestValidator : AbstractValidator<UpdateProfileRequest>
 {
     public UpdateProfileRequestValidator()

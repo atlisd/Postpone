@@ -14,7 +14,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         var normalizedEmail = request.Email.Trim().ToUpperInvariant();
         var user = await db.Users.FirstOrDefaultAsync(u => u.EmailNormalized == normalizedEmail);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        if (user is null || user.PasswordHash is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
 
         return await GenerateTokensAsync(user);
@@ -78,7 +78,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         if (user is null)
             return false;
 
-        if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash))
+        if (user.PasswordHash is null || !BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash))
             return false;
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
@@ -86,6 +86,64 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         await db.SaveChangesAsync();
 
         return true;
+    }
+
+    public async Task<bool> AcceptInvitationAsync(string token, string newPassword)
+    {
+        var hash = tokenService.HashToken(token);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.InvitationTokenHash == hash);
+
+        if (user is null || user.InvitationExpiresAt < DateTime.UtcNow)
+            return false;
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.InvitationTokenHash = null;
+        user.InvitationExpiresAt = null;
+        user.MustChangePassword = false;
+        await db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> ResetPasswordAsync(string token, string newPassword)
+    {
+        var hash = tokenService.HashToken(token);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.PasswordResetTokenHash == hash);
+
+        if (user is null || user.PasswordResetExpiresAt < DateTime.UtcNow)
+            return false;
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.PasswordResetTokenHash = null;
+        user.PasswordResetExpiresAt = null;
+        user.MustChangePassword = false;
+        await db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<(bool isValid, string? email, string? displayName)> ValidateTokenAsync(string token, string type)
+    {
+        var hash = tokenService.HashToken(token);
+        User? user = type switch
+        {
+            "invitation" => await db.Users.FirstOrDefaultAsync(u => u.InvitationTokenHash == hash),
+            "password-reset" => await db.Users.FirstOrDefaultAsync(u => u.PasswordResetTokenHash == hash),
+            _ => null
+        };
+
+        if (user is null) return (false, null, null);
+
+        var expired = type switch
+        {
+            "invitation" => user.InvitationExpiresAt < DateTime.UtcNow,
+            "password-reset" => user.PasswordResetExpiresAt < DateTime.UtcNow,
+            _ => true
+        };
+
+        if (expired) return (false, null, null);
+
+        return (true, user.Email, user.DisplayName);
     }
 
     private async Task<AuthResponse> GenerateTokensAsync(User user)

@@ -16,6 +16,12 @@ public record SetupRequest(string Email, string Password, string DisplayName);
 
 public record SetupStatusResponse(bool NeedsSetup);
 
+public record AcceptInvitationRequest(string Token, string NewPassword);
+
+public record ResetPasswordRequest(string Token, string NewPassword);
+
+public record ValidateTokenResponse(bool IsValid, string? Email, string? DisplayName);
+
 public record UserProfileResponse(
     Guid Id,
     string Email,

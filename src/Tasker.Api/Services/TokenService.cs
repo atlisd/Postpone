@@ -44,6 +44,17 @@ public class TokenService(IConfiguration configuration) : ITokenService
         return (token, hash);
     }
 
+    public (string token, string hash) GenerateSecureToken()
+    {
+        var tokenBytes = RandomNumberGenerator.GetBytes(32);
+        var token = Convert.ToBase64String(tokenBytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+        var hash = HashToken(token);
+        return (token, hash);
+    }
+
     public string HashToken(string token)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));

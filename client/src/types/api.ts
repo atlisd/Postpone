@@ -22,6 +22,11 @@ export interface AdminUser {
   isAdmin: boolean;
   mustChangePassword: boolean;
   createdAt: string;
+  hasPassword: boolean;
+}
+
+export interface AdminUserCreated extends AdminUser {
+  invitationToken: string;
 }
 
 export interface ProjectResponse {

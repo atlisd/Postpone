@@ -9,4 +9,7 @@ public interface IAuthService
     Task RevokeRefreshTokenAsync(string refreshToken);
     Task RevokeAllUserTokensAsync(Guid userId);
     Task<bool> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
+    Task<bool> AcceptInvitationAsync(string token, string newPassword);
+    Task<bool> ResetPasswordAsync(string token, string newPassword);
+    Task<(bool isValid, string? email, string? displayName)> ValidateTokenAsync(string token, string type);
 }

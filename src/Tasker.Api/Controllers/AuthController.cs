@@ -157,6 +157,42 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         return NoContent();
     }
 
+    [AllowAnonymous]
+    [HttpGet("validate-token")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ValidateToken([FromQuery] string token, [FromQuery] string type)
+    {
+        if (string.IsNullOrEmpty(token) || (type != "invitation" && type != "password-reset"))
+            return Ok(new ValidateTokenResponse(false, null, null));
+
+        var (isValid, email, displayName) = await authService.ValidateTokenAsync(token, type);
+        return Ok(new ValidateTokenResponse(isValid, email, displayName));
+    }
+
+    [AllowAnonymous]
+    [HttpPost("accept-invitation")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> AcceptInvitation([FromBody] AcceptInvitationRequest request)
+    {
+        var success = await authService.AcceptInvitationAsync(request.Token, request.NewPassword);
+        if (!success)
+            return BadRequest(new { message = "Invalid or expired invitation link" });
+
+        return NoContent();
+    }
+
+    [AllowAnonymous]
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var success = await authService.ResetPasswordAsync(request.Token, request.NewPassword);
+        if (!success)
+            return BadRequest(new { message = "Invalid or expired password reset link" });
+
+        return NoContent();
+    }
+
     [Authorize]
     [HttpPut("me/pushover")]
     public async Task<IActionResult> SetPushoverKey([FromBody] SetPushoverKeyRequest request)

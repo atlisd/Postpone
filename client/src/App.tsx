@@ -4,6 +4,8 @@ import { AuthGuard } from './components/auth/AuthGuard';
 import { LoginPage } from './components/auth/LoginPage';
 import { SetupPage } from './components/auth/SetupPage';
 import { ChangePasswordPage } from './components/auth/ChangePasswordPage';
+import { AcceptInvitationPage } from './components/auth/AcceptInvitationPage';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { AppShell } from './components/layout/AppShell';
 import { AdminUsersPage } from './components/auth/AdminUsersPage';
 import { ProjectTaskList } from './components/projects/ProjectTaskList';
@@ -25,6 +27,8 @@ export default function App() {
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
+          <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route element={<AuthGuard />}>
             <Route path="/app" element={<AppShell />}>

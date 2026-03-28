@@ -36,3 +36,18 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function setPushoverKey(userKey: string | null): Promise<void> {
   await api.put('api/auth/me/pushover', { json: { userKey } });
 }
+
+export async function validateToken(
+  token: string,
+  type: 'invitation' | 'password-reset'
+): Promise<{ isValid: boolean; email?: string; displayName?: string }> {
+  return api.get(`api/auth/validate-token?token=${encodeURIComponent(token)}&type=${type}`).json();
+}
+
+export async function acceptInvitation(token: string, newPassword: string): Promise<void> {
+  await api.post('api/auth/accept-invitation', { json: { token, newPassword } });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await api.post('api/auth/reset-password', { json: { token, newPassword } });
+}
