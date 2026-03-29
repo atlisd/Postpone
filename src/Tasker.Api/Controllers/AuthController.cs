@@ -122,7 +122,9 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
 
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.Timezone, user.PushoverUserKey, user.IsAdmin, user.MustChangePassword));
+            user.Timezone, user.PushoverUserKey,
+            user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
+            user.IsAdmin, user.MustChangePassword));
     }
 
     [Authorize]
@@ -141,7 +143,9 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
 
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.Timezone, user.PushoverUserKey, user.IsAdmin, user.MustChangePassword));
+            user.Timezone, user.PushoverUserKey,
+            user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
+            user.IsAdmin, user.MustChangePassword));
     }
 
     [Authorize]
@@ -204,6 +208,29 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         user.PushoverUserKey = request.UserKey;
         await db.SaveChangesAsync();
 
+        return NoContent();
+    }
+
+    [Authorize]
+    [HttpPut("me/notification-preferences")]
+    public async Task<IActionResult> SetNotificationPreferences([FromBody] SetNotificationPreferencesRequest request)
+    {
+        var userId = User.GetUserId();
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return NotFound();
+
+        if (request.OverdueNotificationsEnabled.HasValue)
+            user.OverdueNotificationsEnabled = request.OverdueNotificationsEnabled.Value;
+
+        if (request.OverdueNotificationHour.HasValue)
+        {
+            var hour = request.OverdueNotificationHour.Value;
+            if (hour < 0 || hour > 23)
+                return BadRequest(new { message = "Hour must be between 0 and 23" });
+            user.OverdueNotificationHour = hour;
+        }
+
+        await db.SaveChangesAsync();
         return NoContent();
     }
 }

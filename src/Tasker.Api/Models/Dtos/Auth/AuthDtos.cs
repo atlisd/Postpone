@@ -12,6 +12,8 @@ public record UpdateProfileRequest(string? DisplayName, string? Timezone, string
 
 public record SetPushoverKeyRequest(string? UserKey);
 
+public record SetNotificationPreferencesRequest(bool? OverdueNotificationsEnabled, int? OverdueNotificationHour);
+
 public record SetupRequest(string Email, string Password, string DisplayName);
 
 public record SetupStatusResponse(bool NeedsSetup);
@@ -29,5 +31,7 @@ public record UserProfileResponse(
     string? AvatarUrl,
     string Timezone,
     string? PushoverUserKey,
+    bool OverdueNotificationsEnabled,
+    int OverdueNotificationHour,
     bool IsAdmin,
     bool MustChangePassword);

@@ -37,6 +37,13 @@ export async function setPushoverKey(userKey: string | null): Promise<void> {
   await api.put('api/auth/me/pushover', { json: { userKey } });
 }
 
+export async function setNotificationPreferences(data: {
+  overdueNotificationsEnabled?: boolean;
+  overdueNotificationHour?: number;
+}): Promise<void> {
+  await api.put('api/auth/me/notification-preferences', { json: data });
+}
+
 export async function validateToken(
   token: string,
   type: 'invitation' | 'password-reset'

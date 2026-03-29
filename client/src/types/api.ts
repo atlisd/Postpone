@@ -11,6 +11,8 @@ export interface UserProfile {
   avatarUrl: string | null;
   timezone: string;
   pushoverUserKey: string | null;
+  overdueNotificationsEnabled: boolean;
+  overdueNotificationHour: number;
   isAdmin: boolean;
   mustChangePassword: boolean;
 }

@@ -10,6 +10,8 @@ public class User
     public string? AvatarUrl { get; set; }
     public string Timezone { get; set; } = "UTC";
     public string? PushoverUserKey { get; set; }
+    public bool OverdueNotificationsEnabled { get; set; } = true;
+    public int OverdueNotificationHour { get; set; } = 8;
     public bool IsAdmin { get; set; }
     public bool MustChangePassword { get; set; } = true;
     public string? InvitationTokenHash { get; set; }

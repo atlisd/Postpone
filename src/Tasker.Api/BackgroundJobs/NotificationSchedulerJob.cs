@@ -115,6 +115,8 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         if (!isDueToday && !isOverdue) return;
         if (isDueToday && !isMorning) return;
+        if (isOverdue && !user.OverdueNotificationsEnabled) return;
+        if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
 
         var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;

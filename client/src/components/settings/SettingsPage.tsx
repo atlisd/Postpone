@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, type ThemeMode } from '../../contexts/ThemeContext';
-import { updateProfile, setPushoverKey, changePassword } from '../../api/auth';
+import { updateProfile, setPushoverKey, changePassword, setNotificationPreferences } from '../../api/auth';
 import { Settings, Bell, Lock, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -17,6 +17,8 @@ export function SettingsPage() {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
+  const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
+  const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,6 +46,17 @@ export function SettingsPage() {
       toast.success('Pushover key updated');
     } catch {
       toast.error('Failed to update Pushover key');
+    }
+  };
+
+  const handleSaveNotificationPreferences = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await setNotificationPreferences({ overdueNotificationsEnabled, overdueNotificationHour });
+      await refreshUser();
+      toast.success('Notification preferences saved');
+    } catch {
+      toast.error('Failed to save notification preferences');
     }
   };
 
@@ -167,6 +180,40 @@ export function SettingsPage() {
 
         <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
           Save Pushover key
+        </button>
+      </form>
+
+      {/* Overdue notification preferences */}
+      <form onSubmit={handleSaveNotificationPreferences} className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Overdue task notifications</h3>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={overdueNotificationsEnabled}
+            onChange={(e) => setOverdueNotificationsEnabled(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Notify me about overdue tasks</span>
+        </label>
+
+        <div className={overdueNotificationsEnabled ? '' : 'opacity-50 pointer-events-none'}>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Send overdue notifications at</label>
+          <select
+            value={overdueNotificationHour}
+            onChange={(e) => setOverdueNotificationHour(Number(e.target.value))}
+            disabled={!overdueNotificationsEnabled}
+            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            {Array.from({ length: 24 }, (_, h) => {
+              const label = h === 0 ? '12:00 AM (midnight)' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM (noon)' : `${h - 12}:00 PM`;
+              return <option key={h} value={h}>{label}</option>;
+            })}
+          </select>
+        </div>
+
+        <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+          Save notification preferences
         </button>
       </form>
 
