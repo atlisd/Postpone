@@ -73,6 +73,10 @@ export async function deleteSubtask(id: string): Promise<void> {
   await api.delete(`api/subtasks/${id}`);
 }
 
+export async function reorderSubtasks(taskId: string, items: { id: string; sortOrder: number }[]): Promise<void> {
+  await api.put(`api/tasks/${taskId}/subtasks/reorder`, { json: { items } });
+}
+
 // Tags on tasks
 export async function addTagToTask(taskId: string, tagId: string): Promise<void> {
   await api.post(`api/tasks/${taskId}/tags`, { json: { tagId } });
