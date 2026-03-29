@@ -2,6 +2,7 @@ import { Check, Flag, Repeat, GripVertical, FileText } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
 import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
+import { useLocale } from '../../contexts/LocaleContext';
 import { useSortable } from '@dnd-kit/react/sortable';
 
 interface TaskItemProps {
@@ -15,6 +16,7 @@ interface TaskItemProps {
 }
 
 export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showProject, index, group }: TaskItemProps) {
+  const { locale } = useLocale();
   const isCompleted = !!task.completedAt;
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
@@ -22,7 +24,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   const { ref, handleRef, isDragging } = useSortable({ id: task.id, index, group: group ?? task.id });
 
   const dueLabel = task.dueDate
-    ? `${formatDueDate(task.dueDate)}${formatDueTime(task.dueDateTime) ? ` ${formatDueTime(task.dueDateTime)}` : ''}`
+    ? `${formatDueDate(task.dueDate, locale)}${formatDueTime(task.dueDateTime, locale) ? ` ${formatDueTime(task.dueDateTime, locale)}` : ''}`
     : null;
 
   return (

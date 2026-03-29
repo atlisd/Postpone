@@ -40,6 +40,7 @@ public class AdminController(TaskerDbContext db, ITokenService tokenService) : C
 
         var (token, hash) = tokenService.GenerateSecureToken();
         var defaultTimezone = Environment.GetEnvironmentVariable("DEFAULT_TIMEZONE") ?? "UTC";
+        var defaultLocale = Environment.GetEnvironmentVariable("DEFAULT_LOCALE") ?? "en";
         var user = new User
         {
             Email = request.Email.Trim(),
@@ -48,6 +49,7 @@ public class AdminController(TaskerDbContext db, ITokenService tokenService) : C
             MustChangePassword = false,
             IsAdmin = false,
             Timezone = defaultTimezone,
+            Locale = defaultLocale,
             InvitationTokenHash = hash,
             InvitationExpiresAt = DateTime.UtcNow.AddHours(1)
         };

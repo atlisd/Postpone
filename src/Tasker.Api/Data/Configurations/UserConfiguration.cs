@@ -16,6 +16,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordHash).IsRequired(false);
         builder.Property(u => u.DisplayName).IsRequired();
         builder.Property(u => u.Timezone).IsRequired().HasDefaultValue("UTC");
+        builder.Property(u => u.Locale).IsRequired().HasDefaultValue("en");
         builder.Property(u => u.IsAdmin).HasDefaultValue(false);
         builder.Property(u => u.MustChangePassword).HasDefaultValue(true);
         builder.Property(u => u.CreatedAt).HasDefaultValueSql("now()");

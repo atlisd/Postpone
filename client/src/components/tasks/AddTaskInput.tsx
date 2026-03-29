@@ -3,12 +3,14 @@ import { Plus, CalendarDays, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { parseNaturalDate } from '../../lib/naturalDate';
 import { formatDueDate } from '../../lib/dates';
+import { useLocale } from '../../contexts/LocaleContext';
 
 interface AddTaskInputProps {
   onAdd: (title: string, dueDate?: string, dueDateTime?: string) => void;
 }
 
 export function AddTaskInput({ onAdd }: AddTaskInputProps) {
+  const { locale } = useLocale();
   const [title, setTitle] = useState('');
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -18,8 +20,8 @@ export function AddTaskInput({ onAdd }: AddTaskInputProps) {
 
   const chipLabel = parsedResult
     ? parsedResult.dueDateTime
-      ? `${formatDueDate(parsedResult.dueDate)}, ${format(new Date(parsedResult.dueDateTime), 'h:mm a')}`
-      : formatDueDate(parsedResult.dueDate)
+      ? `${formatDueDate(parsedResult.dueDate, locale)}, ${format(new Date(parsedResult.dueDateTime), 'p', { locale })}`
+      : formatDueDate(parsedResult.dueDate, locale)
     : '';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

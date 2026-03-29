@@ -1,12 +1,12 @@
-import { format, isToday, isTomorrow, isYesterday, parseISO } from 'date-fns';
+import { format, isToday, isTomorrow, isYesterday, parseISO, type Locale } from 'date-fns';
 
-export function formatDueDate(dateStr: string | null): string {
+export function formatDueDate(dateStr: string | null, locale: Locale): string {
   if (!dateStr) return '';
   const date = parseISO(dateStr);
   if (isToday(date)) return 'Today';
   if (isTomorrow(date)) return 'Tomorrow';
   if (isYesterday(date)) return 'Yesterday';
-  return format(date, 'MMM d');
+  return format(date, 'P', { locale });
 }
 
 export function dueDateColor(dateStr: string | null): string {
@@ -20,15 +20,15 @@ export function dueDateColor(dateStr: string | null): string {
   return 'text-gray-500';
 }
 
-export function formatDueTime(dueDateTimeUtc: string | null): string {
+export function formatDueTime(dueDateTimeUtc: string | null, locale: Locale): string {
   if (!dueDateTimeUtc) return '';
   const normalized = /[Z+\-]\d*$/.test(dueDateTimeUtc) ? dueDateTimeUtc : dueDateTimeUtc + 'Z';
-  return format(new Date(normalized), 'h:mm a');
+  return format(new Date(normalized), 'p', { locale });
 }
 
-export function groupByDate(dateStr: string): string {
+export function groupByDate(dateStr: string, locale: Locale): string {
   const date = parseISO(dateStr);
   if (isToday(date)) return 'Today';
   if (isTomorrow(date)) return 'Tomorrow';
-  return format(date, 'EEEE, MMM d');
+  return format(date, 'EEEE, P', { locale });
 }

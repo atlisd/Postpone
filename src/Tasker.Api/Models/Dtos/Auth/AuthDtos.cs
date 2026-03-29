@@ -8,7 +8,7 @@ public record RefreshRequest(string RefreshToken);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl);
+public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale);
 
 public record SetPushoverKeyRequest(string? UserKey);
 
@@ -30,6 +30,7 @@ public record UserProfileResponse(
     string DisplayName,
     string? AvatarUrl,
     string Timezone,
+    string Locale,
     string? PushoverUserKey,
     bool OverdueNotificationsEnabled,
     int OverdueNotificationHour,

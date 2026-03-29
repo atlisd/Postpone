@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  eachDayOfInterval, format, addMonths, subMonths, isSameMonth, isToday, parseISO,
+  eachDayOfInterval, format, addMonths, subMonths, addDays, isSameMonth, isToday, parseISO,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useLocale } from '../../contexts/LocaleContext';
 import { getCalendarTasks } from '../../api/calendar';
 import { parseNaturalDate } from '../../lib/naturalDate';
 import { updateTaskDueDate, createTask } from '../../api/tasks';
@@ -15,6 +16,7 @@ import { DragDropProvider } from '@dnd-kit/react';
 import { toast } from 'sonner';
 
 export function CalendarView() {
+  const { locale } = useLocale();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
@@ -113,7 +115,8 @@ export function CalendarView() {
     tasksByDate.get(key)!.push(task);
   }
 
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const refMonday = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(refMonday, i), 'EEE', { locale }));
 
   return (
     <div className="flex h-full">
@@ -121,7 +124,7 @@ export function CalendarView() {
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {format(currentMonth, 'MMMM yyyy')}
+            {format(currentMonth, 'LLLL yyyy', { locale })}
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -199,7 +202,7 @@ export function CalendarView() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Add task — {format(parseISO(addingToDate), 'MMM d, yyyy')}
+                Add task — {format(parseISO(addingToDate), 'PP', { locale })}
               </h3>
               <button onClick={() => setAddingToDate(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X size={16} />

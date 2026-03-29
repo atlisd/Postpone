@@ -4,6 +4,7 @@ import { useTheme, type ThemeMode } from '../../contexts/ThemeContext';
 import { updateProfile, setPushoverKey, changePassword, setNotificationPreferences } from '../../api/auth';
 import { Settings, Bell, Lock, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLocale, SUPPORTED_LOCALES } from '../../contexts/LocaleContext';
 
 const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -14,8 +15,10 @@ const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 export function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { formatHour } = useLocale();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
+  const [locale, setLocaleState] = useState(user?.locale ?? 'en');
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
   const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
   const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
@@ -28,7 +31,7 @@ export function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateProfile({ displayName, timezone });
+      await updateProfile({ displayName, timezone, locale });
       await refreshUser();
       toast.success('Profile updated');
     } catch {
@@ -114,6 +117,20 @@ export function SettingsPage() {
               <option key={tz} value={tz}>{tz}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Language & format</label>
+          <select
+            value={locale}
+            onChange={(e) => setLocaleState(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          >
+            {SUPPORTED_LOCALES.map(l => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">Controls date, time, and number formatting throughout the app.</p>
         </div>
 
         <button
@@ -205,10 +222,9 @@ export function SettingsPage() {
             disabled={!overdueNotificationsEnabled}
             className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           >
-            {Array.from({ length: 24 }, (_, h) => {
-              const label = h === 0 ? '12:00 AM (midnight)' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM (noon)' : `${h - 12}:00 PM`;
-              return <option key={h} value={h}>{label}</option>;
-            })}
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>{formatHour(h)}</option>
+            ))}
           </select>
         </div>
 

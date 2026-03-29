@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -85,7 +86,10 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
 
         var dueLocal = TimeZoneInfo.ConvertTimeFromUtc(dueUtc, tz);
-        var timeStr = dueLocal.ToString("h:mm tt");
+        CultureInfo culture;
+        try { culture = new CultureInfo(user.Locale); }
+        catch { culture = CultureInfo.InvariantCulture; }
+        var timeStr = dueLocal.ToString("t", culture);
         var message = $"{task.Title} — {task.Project.Name} (due at {timeStr})";
 
         var sent = await pushover.SendAsync(user.PushoverUserKey!, "Task due now", message);

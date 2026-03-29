@@ -31,6 +31,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
             return Conflict(new { message = "Setup has already been completed" });
 
         var defaultTimezone = Environment.GetEnvironmentVariable("DEFAULT_TIMEZONE") ?? "UTC";
+        var defaultLocale = Environment.GetEnvironmentVariable("DEFAULT_LOCALE") ?? "en";
         var user = new User
         {
             Email = request.Email,
@@ -39,7 +40,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
             DisplayName = request.DisplayName,
             IsAdmin = true,
             MustChangePassword = false,
-            Timezone = defaultTimezone
+            Timezone = defaultTimezone,
+            Locale = defaultLocale
         };
 
         db.Users.Add(user);
@@ -122,7 +124,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
 
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.Timezone, user.PushoverUserKey,
+            user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
             user.IsAdmin, user.MustChangePassword));
     }
@@ -138,12 +140,13 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         if (request.DisplayName is not null) user.DisplayName = request.DisplayName;
         if (request.Timezone is not null) user.Timezone = request.Timezone;
         if (request.AvatarUrl is not null) user.AvatarUrl = request.AvatarUrl;
+        if (request.Locale is not null) user.Locale = request.Locale;
 
         await db.SaveChangesAsync();
 
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
-            user.Timezone, user.PushoverUserKey,
+            user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
             user.IsAdmin, user.MustChangePassword));
     }

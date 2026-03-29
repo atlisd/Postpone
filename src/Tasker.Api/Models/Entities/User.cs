@@ -9,6 +9,7 @@ public class User
     public string DisplayName { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public string Timezone { get; set; } = "UTC";
+    public string Locale { get; set; } = "en";
     public string? PushoverUserKey { get; set; }
     public bool OverdueNotificationsEnabled { get; set; } = true;
     public int OverdueNotificationHour { get; set; } = 8;

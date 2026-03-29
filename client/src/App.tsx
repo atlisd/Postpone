@@ -17,12 +17,14 @@ import { HouseholdPage } from './components/households/HouseholdPage';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LocaleProvider } from './contexts/LocaleContext';
 
 export default function App() {
   return (
     <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
+        <LocaleProvider>
         <Routes>
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -51,6 +53,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         <Toaster position="top-right" richColors />
+        </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>
     </ThemeProvider>

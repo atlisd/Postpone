@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useLocale } from '../../contexts/LocaleContext';
+import { LocaleDateInput } from '../shared/LocaleDateInput';
+import { LocaleTimeInput } from '../shared/LocaleTimeInput';
 
 function extractLocalTime(dueDateTimeUtc: string | null): string {
   if (!dueDateTimeUtc) return '';
@@ -22,6 +25,7 @@ interface TaskDetailPanelProps {
 }
 
 export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProps) {
+  const { localeCode } = useLocale();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [priority, setPriority] = useState(task.priority);
@@ -207,17 +211,15 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
           {/* Due Date row */}
           <div className="flex items-center gap-2">
             <Calendar size={16} className="text-gray-400 flex-shrink-0" />
-            <input
-              type="date"
+            <LocaleDateInput
               value={dueDate}
-              onChange={(e) => { setDueDate(e.target.value); if (!e.target.value) setDueTime(''); }}
+              onChange={(val) => { setDueDate(val); if (!val) setDueTime(''); }}
               onBlur={handleBlur}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 flex-1"
             />
-            <input
-              type="time"
+            <LocaleTimeInput
               value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
+              onChange={setDueTime}
               onBlur={handleBlur}
               disabled={!dueDate}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 w-28 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -337,7 +339,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
         {/* Footer */}
         <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
-          {saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
+          {saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(localeCode, { dateStyle: 'medium', timeStyle: 'short' })}`}
         </div>
       </div>
     </div>

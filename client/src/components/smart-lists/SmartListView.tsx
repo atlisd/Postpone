@@ -7,6 +7,7 @@ import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { AddTaskInput } from '../tasks/AddTaskInput';
 import { groupByDate } from '../../lib/dates';
 import { format, addDays, parseISO } from 'date-fns';
+import { useLocale } from '../../contexts/LocaleContext';
 import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
 import { toast } from 'sonner';
@@ -19,6 +20,7 @@ interface SmartListViewProps {
 }
 
 export function SmartListView({ type, title }: SmartListViewProps) {
+  const { locale } = useLocale();
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [inboxProjectId, setInboxProjectId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
@@ -92,7 +94,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
 
     if (type === 'next7days') {
       for (const task of tasks) {
-        const key = task.dueDate ? groupByDate(task.dueDate) : 'No date';
+        const key = task.dueDate ? groupByDate(task.dueDate, locale) : 'No date';
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(task);
       }
