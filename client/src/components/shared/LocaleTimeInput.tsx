@@ -9,17 +9,15 @@ interface LocaleTimeInputProps {
   className?: string;
 }
 
-function is24Hour(localeCode: string): boolean {
-  const formatted = new Intl.DateTimeFormat(localeCode, { hour: 'numeric' }).format(new Date(2000, 0, 1, 15));
-  return formatted.includes('15');
-}
-
-function formatForDisplay(time: string, localeCode: string): string {
+function formatForDisplay(time: string, localeCode: string, use24Hour: boolean): string {
   if (!time) return '';
   const [h, m] = time.split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return time;
+  if (use24Hour) {
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
   const date = new Date(2000, 0, 1, h, m);
-  return new Intl.DateTimeFormat(localeCode, { hour: '2-digit', minute: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat(localeCode, { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 
 function parseInput(input: string): string | null {
@@ -70,22 +68,22 @@ function parseInput(input: string): string | null {
   return null;
 }
 
-function getPlaceholder(localeCode: string): string {
-  return is24Hour(localeCode) ? 'hh:mm' : 'hh:mm am';
+function getPlaceholder(use24Hour: boolean): string {
+  return use24Hour ? 'hh:mm' : 'hh:mm am';
 }
 
 export function LocaleTimeInput({ value, onChange, onBlur, disabled, className }: LocaleTimeInputProps) {
-  const { localeCode } = useLocale();
-  const [displayValue, setDisplayValue] = useState(() => formatForDisplay(value, localeCode));
+  const { localeCode, use24Hour } = useLocale();
+  const [displayValue, setDisplayValue] = useState(() => formatForDisplay(value, localeCode, use24Hour));
   const [editing, setEditing] = useState(false);
   const lastValidRef = useRef(value);
 
   useEffect(() => {
     if (!editing) {
-      setDisplayValue(formatForDisplay(value, localeCode));
+      setDisplayValue(formatForDisplay(value, localeCode, use24Hour));
       lastValidRef.current = value;
     }
-  }, [value, localeCode, editing]);
+  }, [value, localeCode, use24Hour, editing]);
 
   const handleFocus = () => {
     setEditing(true);
@@ -101,9 +99,9 @@ export function LocaleTimeInput({ value, onChange, onBlur, disabled, className }
     if (parsed !== null) {
       lastValidRef.current = parsed;
       onChange(parsed);
-      setDisplayValue(formatForDisplay(parsed, localeCode));
+      setDisplayValue(formatForDisplay(parsed, localeCode, use24Hour));
     } else {
-      setDisplayValue(formatForDisplay(lastValidRef.current, localeCode));
+      setDisplayValue(formatForDisplay(lastValidRef.current, localeCode, use24Hour));
     }
     onBlur?.();
   };
@@ -122,7 +120,7 @@ export function LocaleTimeInput({ value, onChange, onBlur, disabled, className }
       onFocus={handleFocus}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      placeholder={getPlaceholder(localeCode)}
+      placeholder={getPlaceholder(use24Hour)}
       disabled={disabled}
       className={className}
     />

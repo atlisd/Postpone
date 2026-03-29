@@ -36,6 +36,11 @@ export const SUPPORTED_LOCALES = [
   { code: 'pl', label: 'Polski' },
 ];
 
+// Only these locales use 12-hour clock — everything else defaults to 24-hour.
+// We use an explicit list rather than Intl detection because Chrome and Safari
+// disagree on the default hour cycle for locales like 'is'.
+const TWELVE_HOUR_LOCALES = new Set(['en', 'en-US']);
+
 function resolveLocale(code: string): Locale {
   return LOCALE_MAP[code] ?? LOCALE_MAP[code.split('-')[0]] ?? enUS;
 }
@@ -43,6 +48,7 @@ function resolveLocale(code: string): Locale {
 interface LocaleContextType {
   locale: Locale;
   localeCode: string;
+  use24Hour: boolean;
   formatHour: (hour: number) => string;
 }
 
@@ -54,18 +60,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => {
     const locale = resolveLocale(localeCode);
-
-    const hourFormatter = new Intl.DateTimeFormat(localeCode, {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    const use24Hour = !TWELVE_HOUR_LOCALES.has(localeCode);
 
     const formatHour = (hour: number): string => {
+      if (use24Hour) {
+        return `${String(hour).padStart(2, '0')}:00`;
+      }
       const date = new Date(2000, 0, 1, hour, 0);
-      return hourFormatter.format(date);
+      return new Intl.DateTimeFormat(localeCode, { hour: 'numeric', minute: '2-digit' }).format(date);
     };
 
-    return { locale, localeCode, formatHour };
+    return { locale, localeCode, use24Hour, formatHour };
   }, [localeCode]);
 
   return (
