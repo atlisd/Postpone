@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { useDragDropMonitor } from '@dnd-kit/react';
-import { useSortable, isSortableOperation } from '@dnd-kit/react/sortable';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { DragDropProvider } from '@dnd-kit/react';
+import { useSortable } from '@dnd-kit/react/sortable';
 import { useLocale } from '../../contexts/LocaleContext';
 import { LocaleDateInput } from '../shared/LocaleDateInput';
 import { LocaleTimeInput } from '../shared/LocaleTimeInput';
@@ -60,6 +60,59 @@ function SortableSubtask({ sub, index, group, onToggle, onDelete }: {
   );
 }
 
+function SubtaskDragContainer({ taskId, subtasks, onToggle, onDelete, onUpdate }: {
+  taskId: string;
+  subtasks: SubtaskResponse[];
+  onToggle: (id: string, isCompleted: boolean) => void;
+  onDelete: (id: string) => void;
+  onUpdate: () => void;
+}) {
+  const subtaskGroup = taskId + '-subtasks';
+  const [localSubtasks, setLocalSubtasks] = useState<SubtaskResponse[]>(subtasks);
+  const localSubtasksRef = useRef(localSubtasks);
+  localSubtasksRef.current = localSubtasks;
+
+  useEffect(() => {
+    setLocalSubtasks(subtasks);
+  }, [subtasks]);
+
+  const handleDragEnd = useCallback((event: { operation: { source: unknown } }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const source = event.operation.source as any;
+    if (!source) return;
+    const fromIndex: number = source.initialIndex;
+    const toIndex: number = source.index;
+    if (fromIndex == null || toIndex == null || fromIndex === toIndex) return;
+
+    const reordered = [...localSubtasksRef.current];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setLocalSubtasks(reordered);
+
+    reorderSubtasks(taskId, reordered.map((s, i) => ({ id: s.id, sortOrder: i }))).catch(() => {
+      toast.error('Failed to save subtask order');
+      onUpdate();
+    });
+  }, [taskId, onUpdate]);
+
+  return (
+    <DragDropProvider onDragEnd={handleDragEnd}>
+      <div className="space-y-1">
+        {localSubtasks.map((sub, index) => (
+          <SortableSubtask
+            key={sub.id}
+            sub={sub}
+            index={index}
+            group={subtaskGroup}
+            onToggle={onToggle}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
+    </DragDropProvider>
+  );
+}
+
 interface TaskDetailPanelProps {
   task: TaskResponse;
   onClose: () => void;
@@ -73,9 +126,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate ?? '');
   const [dueTime, setDueTime] = useState(() => extractLocalTime(task.dueDateTime));
-  const [subtasks, setSubtasks] = useState<SubtaskResponse[]>(task.subtasks);
-  const subtasksRef = useRef(subtasks);
-  subtasksRef.current = subtasks;
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -87,7 +137,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
     setPriority(task.priority);
     setDueDate(task.dueDate ?? '');
     setDueTime(extractLocalTime(task.dueDateTime));
-    setSubtasks(task.subtasks);
   }, [task]);
 
   useEffect(() => {
@@ -204,31 +253,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
       toast.error('Failed to assign task');
     }
   };
-
-  const subtaskGroup = task.id + '-subtasks';
-
-  useDragDropMonitor({
-    onDragEnd(event) {
-      const { operation } = event;
-      if (!isSortableOperation(operation)) return;
-      const { source, target } = operation;
-      if (!source || !target) return;
-      if (source.group !== subtaskGroup) return;
-      const fromIndex = source.initialIndex;
-      const toIndex = source.index;
-      if (fromIndex === toIndex) return;
-
-      const reordered = [...subtasksRef.current];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(toIndex, 0, moved);
-      setSubtasks(reordered);
-
-      reorderSubtasks(task.id, reordered.map((s, i) => ({ id: s.id, sortOrder: i }))).catch(() => {
-        toast.error('Failed to save subtask order');
-        onUpdate();
-      });
-    }
-  });
 
   // Save on blur for title/description
   const handleBlur = () => {
@@ -371,18 +395,13 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
           {/* Subtasks */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Subtasks</h4>
-            <div className="space-y-1">
-              {subtasks.map((sub, index) => (
-                <SortableSubtask
-                  key={sub.id}
-                  sub={sub}
-                  index={index}
-                  group={subtaskGroup}
-                  onToggle={handleToggleSubtask}
-                  onDelete={handleDeleteSubtask}
-                />
-              ))}
-            </div>
+            <SubtaskDragContainer
+              taskId={task.id}
+              subtasks={task.subtasks}
+              onToggle={handleToggleSubtask}
+              onDelete={handleDeleteSubtask}
+              onUpdate={onUpdate}
+            />
             <form onSubmit={handleAddSubtask} className="flex items-center gap-2 mt-2">
               <Plus size={14} className="text-gray-400 flex-shrink-0" />
               <input
