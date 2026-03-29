@@ -4,6 +4,15 @@ A self-hosted general purpose task manager. Built with .NET 10, React 19, and Po
 
 Postpone lets family members manage their own private task lists while selectively sharing projects with their household. Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate through households with invite codes.
 
+## Today view
+![Today view screenshot](media/Today.png)
+
+## Calendar view
+![Today view screenshot](media/Calendar.png)
+
+## Household
+![Today view screenshot](media/Household.png)
+
 ## Features
 
 ### Task Management
