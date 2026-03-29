@@ -7,8 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository_owner }}/tasker-api
-  CLIENT_IMAGE: ghcr.io/${{ github.repository_owner }}/tasker-client
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/postpone-api
+  CLIENT_IMAGE: ghcr.io/${{ github.repository_owner }}/postpone-client
 
 jobs:
   build-and-push:
