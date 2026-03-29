@@ -13,7 +13,6 @@ Postpone lets family members manage their own private task lists while selective
 - **Subtasks/Checklists** — break tasks into smaller steps with reordering
 - **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with lazy instance generation
 - **Priority Levels** — none, low, medium, high with visual indicators
-- **Tags** — per-user color-coded tags assignable to tasks
 - **Due Dates** — with optional time; overdue tasks stay pinned in the Today view under a highlighted Overdue section
 - **Natural Language Input** — type dates inline when creating tasks: `tomorrow 5pm`, `next friday`, `tonight`, `apr 20`, `mon 9:30` — the date is parsed out and the task title is cleaned automatically
 - **Task Assignment** — assign tasks to household members
@@ -27,7 +26,7 @@ Postpone lets family members manage their own private task lists while selective
 
 ### User Management
 - **Admin-Created Accounts** — no public registration; the admin creates all users
-- **JWT Authentication** — access tokens (15 min) + rotating refresh tokens (30 days) with theft detection
+- **JWT Authentication** — access tokens (15 min) + rotating refresh tokens (1 year) with theft detection
 - **First-Run Setup** — on first launch, create your admin account directly in the browser
 
 ### Notifications
@@ -216,16 +215,6 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | PUT | `/api/subtasks/{id}` | Update subtask |
 | DELETE | `/api/subtasks/{id}` | Delete subtask |
 | PUT | `/api/tasks/{id}/subtasks/reorder` | Reorder subtasks |
-
-### Tags
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/tags` | List user's tags |
-| POST | `/api/tags` | Create tag |
-| PUT | `/api/tags/{id}` | Update tag |
-| DELETE | `/api/tags/{id}` | Delete tag |
-| POST | `/api/tasks/{id}/tags` | Add tag to task |
-| DELETE | `/api/tasks/{id}/tags/{tagId}` | Remove tag from task |
 
 ### Smart Lists
 | Method | Path | Description |
