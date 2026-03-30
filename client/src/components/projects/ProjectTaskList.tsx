@@ -173,6 +173,7 @@ export function ProjectTaskList() {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onUpdate={fetchData}
+          onToggleComplete={handleToggleComplete}
         />
       )}
     </div>

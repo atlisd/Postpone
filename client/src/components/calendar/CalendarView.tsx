@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
 import { getCalendarTasks } from '../../api/calendar';
 import { parseNaturalDate } from '../../lib/naturalDate';
-import { updateTaskDueDate, createTask, rescheduleOccurrence } from '../../api/tasks';
+import { updateTaskDueDate, createTask, rescheduleOccurrence, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
 import { listProjects } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
@@ -63,6 +63,20 @@ export function CalendarView() {
       setTimeout(() => titleInputRef.current?.focus(), 50);
     }
   }, [addingToDate]);
+
+  const handleToggleComplete = async (task: TaskResponse) => {
+    try {
+      if (task.occurrenceDate) {
+        task.completedAt ? await uncompleteOccurrence(task.id, task.occurrenceDate)
+                         : await completeOccurrence(task.id, task.occurrenceDate);
+      } else {
+        task.completedAt ? await uncompleteTask(task.id) : await completeTask(task.id);
+      }
+      await fetchTasks();
+    } catch {
+      toast.error('Failed to update task');
+    }
+  };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,6 +215,7 @@ export function CalendarView() {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onUpdate={fetchTasks}
+          onToggleComplete={handleToggleComplete}
         />
       )}
 

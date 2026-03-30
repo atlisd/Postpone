@@ -188,6 +188,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onUpdate={fetchData}
+          onToggleComplete={handleToggleComplete}
         />
       )}
     </div>

@@ -117,9 +117,10 @@ interface TaskDetailPanelProps {
   task: TaskResponse;
   onClose: () => void;
   onUpdate: () => void;
+  onToggleComplete?: (task: TaskResponse) => void;
 }
 
-export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: TaskDetailPanelProps) {
   const { localeCode } = useLocale();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -130,6 +131,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const isCompleted = !!task.completedAt;
 
   useEffect(() => {
     setTitle(task.title);
@@ -322,13 +324,27 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Title */}
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleBlur}
-            className="w-full text-lg font-medium text-gray-900 dark:text-white bg-transparent border-none outline-none"
-            placeholder="Task title"
-          />
+          <div className="flex items-start gap-3">
+            <button
+              onClick={() => onToggleComplete?.(task)}
+              className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors mt-1 ${
+                isCompleted
+                  ? 'bg-blue-500 border-blue-500 text-white'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
+              }`}
+            >
+              {isCompleted && <Check size={12} strokeWidth={3} />}
+            </button>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleBlur}
+              className={`flex-1 text-lg font-medium bg-transparent border-none outline-none ${
+                isCompleted ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'
+              }`}
+              placeholder="Task title"
+            />
+          </div>
 
           {/* Due Date row */}
           <div className="flex items-center gap-2">
