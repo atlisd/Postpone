@@ -16,6 +16,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function isJwtExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp !== 'number' || payload.exp < Date.now() / 1000 + 10;
+  } catch {
+    return true;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       // Try stored access token first (works across tabs via localStorage)
       const storedToken = getAccessToken();
-      if (storedToken) {
+      if (storedToken && !isJwtExpired(storedToken)) {
         try {
           await refreshUser();
           setIsLoading(false);
