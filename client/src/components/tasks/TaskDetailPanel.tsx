@@ -11,7 +11,7 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { X, Trash2, Plus, Check, Calendar, Flag, UserPlus, FolderOpen, GripVertical } from 'lucide-react';
+import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence } from '../../api/tasks';
 import type { SubtaskResponse } from '../../types/api';
@@ -332,7 +332,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
           {/* Due Date row */}
           <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-gray-400 flex-shrink-0" />
             <LocaleDateInput
               value={dueDate}
               onChange={(val) => { setDueDate(val); if (!val) setDueTime(''); }}

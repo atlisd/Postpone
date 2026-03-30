@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, isToday } from 'date-fns';
+import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
 
 interface LocaleDateInputProps {
@@ -89,11 +90,152 @@ function getPlaceholder(localeCode: string): string {
   }).join('');
 }
 
+function toIso(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function buildCalendarDays(viewYear: number, viewMonth: number): (Date | null)[] {
+  const firstDay = startOfMonth(new Date(viewYear, viewMonth, 1));
+  const lastDay = endOfMonth(firstDay);
+  const days = eachDayOfInterval({ start: firstDay, end: lastDay });
+
+  // Pad start with nulls so grid starts on Sunday
+  const startPad = getDay(firstDay); // 0=Sunday
+  const cells: (Date | null)[] = Array(startPad).fill(null);
+  for (const d of days) cells.push(d);
+
+  // Pad end to complete last row
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return cells;
+}
+
+interface CalendarPopupProps {
+  value: string;
+  onSelect: (iso: string) => void;
+  onClose: () => void;
+  locale: import('date-fns').Locale;
+}
+
+function CalendarPopup({ value, onSelect, onClose, locale }: CalendarPopupProps) {
+  const today = new Date();
+  const selected = value ? parseISO(value) : null;
+  const initial = selected && isValid(selected) ? selected : today;
+
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  const cells = buildCalendarDays(viewYear, viewMonth);
+  const monthLabel = format(new Date(viewYear, viewMonth, 1), 'MMMM yyyy', { locale });
+
+  // Locale-aware weekday headers: Sun Jan 1 2023 was a Sunday
+  const weekdayHeaders = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(2023, 0, 1 + i); // Jan 1–7, 2023 = Sun–Sat
+    return format(d, 'EEEEE', { locale }); // single letter
+  });
+
+  function handlePrev() {
+    const prev = subMonths(new Date(viewYear, viewMonth, 1), 1);
+    setViewYear(prev.getFullYear());
+    setViewMonth(prev.getMonth());
+  }
+
+  function handleNext() {
+    const next = addMonths(new Date(viewYear, viewMonth, 1), 1);
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth());
+  }
+
+  function handleDayClick(day: Date) {
+    onSelect(toIso(day));
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 select-none"
+      style={{ minWidth: '240px' }}
+      onMouseDown={e => e.preventDefault()} // prevent input blur
+    >
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-2">
+        <button
+          type="button"
+          onClick={handlePrev}
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+          aria-label="Previous month"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{monthLabel}</span>
+        <button
+          type="button"
+          onClick={handleNext}
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+          aria-label="Next month"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {weekdayHeaders.map((h, i) => (
+          <div key={i} className="text-center text-xs font-medium text-gray-400 dark:text-gray-500 py-0.5">
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />;
+          const isSelected = selected && isValid(selected) && isSameDay(day, selected);
+          const isTodayDate = isToday(day);
+          const isCurrentMonth = day.getMonth() === viewMonth;
+
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleDayClick(day)}
+              className={[
+                'text-xs rounded py-1 text-center transition-colors',
+                isSelected
+                  ? 'bg-blue-500 text-white font-medium'
+                  : isTodayDate
+                  ? 'text-blue-500 dark:text-blue-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-700'
+                  : isCurrentMonth
+                  ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  : 'text-gray-300 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750',
+              ].join(' ')}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDateInputProps) {
   const { locale, localeCode } = useLocale();
   const [displayValue, setDisplayValue] = useState(() => formatForDisplay(value, locale));
   const [editing, setEditing] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const lastValidRef = useRef(value);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!editing) {
@@ -101,6 +243,18 @@ export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDa
       lastValidRef.current = value;
     }
   }, [value, localeCode, locale, editing]);
+
+  // Close calendar on outside click
+  useEffect(() => {
+    if (!showCalendar) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [showCalendar]);
 
   const handleFocus = () => {
     setEditing(true);
@@ -130,16 +284,44 @@ export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDa
     }
   };
 
+  function handleCalendarSelect(iso: string) {
+    lastValidRef.current = iso;
+    onChange(iso);
+    setDisplayValue(formatForDisplay(iso, locale));
+    setShowCalendar(false);
+    onBlur?.();
+  }
+
   return (
-    <input
-      type="text"
-      value={displayValue}
-      onChange={handleChange}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      placeholder={getPlaceholder(localeCode)}
-      className={className}
-    />
+    <div ref={containerRef} className="relative flex items-center gap-1 flex-1">
+      <input
+        type="text"
+        value={displayValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={getPlaceholder(localeCode)}
+        className={className}
+        style={{ flex: 1 }}
+      />
+      <button
+        type="button"
+        onClick={() => setShowCalendar(s => !s)}
+        className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        aria-label="Pick date"
+        tabIndex={-1}
+      >
+        <CalendarDays size={14} />
+      </button>
+      {showCalendar && (
+        <CalendarPopup
+          value={value}
+          onSelect={handleCalendarSelect}
+          onClose={() => setShowCalendar(false)}
+          locale={locale}
+        />
+      )}
+    </div>
   );
 }
