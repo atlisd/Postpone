@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getSmartList, createTask, completeTask, uncompleteTask } from '../../api/tasks';
+import { getSmartList, createTask, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
 import { listProjects } from '../../api/projects';
 import type { TaskResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
@@ -33,7 +33,8 @@ export function SmartListView({ type, title }: SmartListViewProps) {
       const data = await getSmartList(type);
       setTasks(data);
       if (selectedTaskRef.current) {
-        const updated = data.find(t => t.id === selectedTaskRef.current!.id);
+        const sel = selectedTaskRef.current;
+        const updated = data.find(t => t.id === sel.id && t.occurrenceDate === sel.occurrenceDate);
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }
@@ -77,10 +78,19 @@ export function SmartListView({ type, title }: SmartListViewProps) {
 
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
-      if (task.completedAt) {
-        await uncompleteTask(task.id);
+      if (task.occurrenceDate) {
+        // Virtual recurring instance
+        if (task.completedAt) {
+          await uncompleteOccurrence(task.id, task.occurrenceDate);
+        } else {
+          await completeOccurrence(task.id, task.occurrenceDate);
+        }
       } else {
-        await completeTask(task.id);
+        if (task.completedAt) {
+          await uncompleteTask(task.id);
+        } else {
+          await completeTask(task.id);
+        }
       }
       await fetchData();
     } catch {
@@ -158,11 +168,11 @@ export function SmartListView({ type, title }: SmartListViewProps) {
                 )}
                 {groupTasks.map((task, index) => (
                   <TaskItem
-                    key={task.id}
+                    key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
                     task={task}
                     onToggleComplete={handleToggleComplete}
                     onSelect={setSelectedTask}
-                    isSelected={selectedTask?.id === task.id}
+                    isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
                     showProject={showProject}
                     index={index}
                   />

@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
 import { getCalendarTasks } from '../../api/calendar';
 import { parseNaturalDate } from '../../lib/naturalDate';
-import { updateTaskDueDate, createTask } from '../../api/tasks';
+import { updateTaskDueDate, createTask, rescheduleOccurrence } from '../../api/tasks';
 import { listProjects } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
@@ -89,11 +89,18 @@ export function CalendarView() {
     const { source, target } = event.operation;
     if (!source?.id || !target?.id) return;
 
-    const taskId = String(source.id);
+    const dragId = String(source.id);
     const newDate = String(target.id); // date string from droppable
 
     try {
-      await updateTaskDueDate(taskId, newDate);
+      // Check if this is a virtual recurring instance (composite key: taskId_occurrenceDate)
+      const task = tasks.find(t => `${t.id}_${t.occurrenceDate ?? 'single'}` === dragId);
+      if (task?.occurrenceDate) {
+        await rescheduleOccurrence(task.id, task.occurrenceDate, newDate);
+      } else {
+        const taskId = task?.id ?? dragId;
+        await updateTaskDueDate(taskId, newDate);
+      }
       await fetchTasks();
     } catch {
       toast.error('Failed to reschedule task');

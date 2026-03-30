@@ -79,7 +79,7 @@ public class ProjectAccessService(TaskerDbContext db) : IProjectAccessService
             .Select(hm => hm.HouseholdId);
 
         return db.Tasks
-            .Where(t => !t.IsDeleted && t.RecurrenceParentId == null) // exclude templates shown as non-completable
+            .Where(t => !t.IsDeleted)
             .Where(t =>
                 t.Project.OwnerId == userId ||
                 db.ProjectShares.Any(ps => ps.ProjectId == t.ProjectId && ps.UserId == userId) ||

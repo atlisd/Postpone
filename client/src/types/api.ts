@@ -63,8 +63,8 @@ export interface TaskResponse {
   dueDateTime: string | null;
   completedAt: string | null;
   rrule: string | null;
-  recurrenceParentId: string | null;
-  recurrenceOriginDate: string | null;
+  occurrenceDate: string | null;
+  isRecurrenceException: boolean;
   subtasks: SubtaskResponse[];
   tags: TagResponse[];
   sortOrder: number;

@@ -13,7 +13,7 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
 }
 import { X, Trash2, Plus, Check, Calendar, Flag, UserPlus, FolderOpen, GripVertical } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
-import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask } from '../../api/tasks';
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence } from '../../api/tasks';
 import type { SubtaskResponse } from '../../types/api';
 import { getProjectMembers, listProjects } from '../../api/projects';
 import type { ProjectMember } from '../../api/projects';
@@ -162,36 +162,46 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   const handleSave = async () => {
     setSaving(true);
     try {
-      const dateChanged = dueDate !== (task.dueDate ?? '');
-      const timeChanged = dueTime !== originalDueTime;
+      if (task.occurrenceDate) {
+        // Editing a virtual occurrence — save field overrides via occurrence endpoint
+        await editOccurrence(task.id, task.occurrenceDate, {
+          title: title !== task.title ? title : undefined,
+          description: description !== task.description ? description : undefined,
+          priority: priority !== task.priority ? priority : undefined,
+        });
+      } else {
+        // Normal task or series master
+        const dateChanged = dueDate !== (task.dueDate ?? '');
+        const timeChanged = dueTime !== originalDueTime;
 
-      let dueDatePayload: string | undefined;
-      let clearDueDatePayload: boolean | undefined;
-      let dueDateTimePayload: string | undefined;
-      let clearDueDateTimePayload: boolean | undefined;
+        let dueDatePayload: string | undefined;
+        let clearDueDatePayload: boolean | undefined;
+        let dueDateTimePayload: string | undefined;
+        let clearDueDateTimePayload: boolean | undefined;
 
-      if (dateChanged) {
-        if (dueDate) dueDatePayload = dueDate;
-        else { clearDueDatePayload = true; clearDueDateTimePayload = true; }
+        if (dateChanged) {
+          if (dueDate) dueDatePayload = dueDate;
+          else { clearDueDatePayload = true; clearDueDateTimePayload = true; }
+        }
+
+        if (dueDate && dueTime && (dateChanged || timeChanged)) {
+          dueDateTimePayload = new Date(`${dueDate}T${dueTime}`).toISOString();
+        } else if (timeChanged && !dueTime) {
+          clearDueDateTimePayload = true;
+        } else if (dateChanged && dueDate && !dueTime) {
+          clearDueDateTimePayload = true;
+        }
+
+        await updateTask(task.id, {
+          title: title !== task.title ? title : undefined,
+          description: description !== task.description ? description : undefined,
+          priority: priority !== task.priority ? priority : undefined,
+          dueDate: dueDatePayload,
+          clearDueDate: clearDueDatePayload,
+          dueDateTime: dueDateTimePayload,
+          clearDueDateTime: clearDueDateTimePayload,
+        });
       }
-
-      if (dueDate && dueTime && (dateChanged || timeChanged)) {
-        dueDateTimePayload = new Date(`${dueDate}T${dueTime}`).toISOString();
-      } else if (timeChanged && !dueTime) {
-        clearDueDateTimePayload = true;
-      } else if (dateChanged && dueDate && !dueTime) {
-        clearDueDateTimePayload = true;
-      }
-
-      await updateTask(task.id, {
-        title: title !== task.title ? title : undefined,
-        description: description !== task.description ? description : undefined,
-        priority: priority !== task.priority ? priority : undefined,
-        dueDate: dueDatePayload,
-        clearDueDate: clearDueDatePayload,
-        dueDateTime: dueDateTimePayload,
-        clearDueDateTime: clearDueDateTimePayload,
-      });
       onUpdate();
     } catch {
       toast.error('Failed to save');
@@ -201,13 +211,30 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this task?')) return;
-    try {
-      await deleteTask(task.id);
-      onUpdate();
-      onClose();
-    } catch {
-      toast.error('Failed to delete');
+    if (task.occurrenceDate) {
+      // Recurring task occurrence — ask what to delete
+      const choice = prompt('Delete this occurrence or the entire series?\nType "this" or "all":', 'this');
+      if (!choice) return;
+      try {
+        if (choice.toLowerCase() === 'all') {
+          await deleteTask(task.id);
+        } else {
+          await skipOccurrence(task.id, task.occurrenceDate);
+        }
+        onUpdate();
+        onClose();
+      } catch {
+        toast.error('Failed to delete');
+      }
+    } else {
+      if (!confirm('Delete this task?')) return;
+      try {
+        await deleteTask(task.id);
+        onUpdate();
+        onClose();
+      } catch {
+        toast.error('Failed to delete');
+      }
     }
   };
 

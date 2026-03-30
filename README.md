@@ -20,7 +20,7 @@ Postpone lets family members manage their own private task lists while selective
 - **Smart Lists** — Today (with overdue grouping), Tomorrow, Next 7 Days, All Tasks, Assigned to Me
 - **Calendar View** — month grid with drag-and-drop to reschedule tasks
 - **Subtasks/Checklists** — break tasks into smaller steps with reordering
-- **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with lazy instance generation
+- **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with virtual instances (no database bloat). Skip, reschedule, or edit individual occurrences without affecting the rest of the series
 - **Priority Levels** — none, low, medium, high with visual indicators
 - **Due Dates** — with optional time; overdue tasks stay pinned in the Today view under a highlighted Overdue section
 - **Natural Language Input** — type dates inline when creating tasks: `tomorrow 5pm`, `next friday`, `tonight`, `apr 20`, `mon 9:30` — the date is parsed out and the task title is cleaned automatically
@@ -153,7 +153,6 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
                                          │              │
                                          │  Background  │
                                          │  Jobs:       │
-                                         │  - Recurrence│
                                          │  - Notify    │──▶ Pushover API
                                          └──────────────┘
 ```
@@ -215,6 +214,15 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | PUT | `/api/tasks/{id}/due-date` | Update due date |
 | PUT | `/api/tasks/{id}/recurrence` | Set recurrence rule |
 | DELETE | `/api/tasks/{id}/recurrence` | Remove recurrence |
+
+### Recurring Task Occurrences
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/tasks/{id}/occurrences/{date}/complete` | Complete a single occurrence |
+| POST | `/api/tasks/{id}/occurrences/{date}/uncomplete` | Uncomplete a single occurrence |
+| DELETE | `/api/tasks/{id}/occurrences/{date}` | Skip (delete) a single occurrence |
+| PUT | `/api/tasks/{id}/occurrences/{date}` | Edit a single occurrence |
+| PUT | `/api/tasks/{id}/occurrences/{date}/due-date` | Reschedule a single occurrence |
 
 ### Subtasks
 | Method | Path | Description |

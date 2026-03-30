@@ -7,7 +7,8 @@ interface CalendarTaskChipProps {
 }
 
 export function CalendarTaskChip({ task, onSelect }: CalendarTaskChipProps) {
-  const { ref } = useDraggable({ id: task.id });
+  const dragId = `${task.id}_${task.occurrenceDate ?? 'single'}`;
+  const { ref } = useDraggable({ id: dragId });
 
   return (
     <div

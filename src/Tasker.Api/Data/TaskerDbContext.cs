@@ -15,6 +15,8 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TaskTag> TaskTags => Set<TaskTag>();
+    public DbSet<RecurrenceException> RecurrenceExceptions => Set<RecurrenceException>();
+    public DbSet<ExceptionSubtaskCompletion> ExceptionSubtaskCompletions => Set<ExceptionSubtaskCompletion>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -45,6 +47,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
                 else if (entry.Entity is Household h) { h.CreatedAt = now; h.UpdatedAt = now; }
                 else if (entry.Entity is Project p) { p.CreatedAt = now; p.UpdatedAt = now; }
                 else if (entry.Entity is TodoTask t) { t.CreatedAt = now; t.UpdatedAt = now; }
+                else if (entry.Entity is RecurrenceException re) { re.CreatedAt = now; re.UpdatedAt = now; }
             }
             else if (entry.State == EntityState.Modified)
             {
@@ -52,6 +55,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
                 else if (entry.Entity is Household h) h.UpdatedAt = now;
                 else if (entry.Entity is Project p) p.UpdatedAt = now;
                 else if (entry.Entity is TodoTask t) t.UpdatedAt = now;
+                else if (entry.Entity is RecurrenceException re) re.UpdatedAt = now;
             }
         }
     }

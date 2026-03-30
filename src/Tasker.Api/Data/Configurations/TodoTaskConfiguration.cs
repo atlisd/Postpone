@@ -21,7 +21,6 @@ public class TodoTaskConfiguration : IEntityTypeConfiguration<TodoTask>
         builder.HasIndex(t => t.ProjectId).HasFilter("NOT \"IsDeleted\"");
         builder.HasIndex(t => t.DueDate).HasFilter("\"DueDate\" IS NOT NULL AND \"CompletedAt\" IS NULL AND NOT \"IsDeleted\"");
         builder.HasIndex(t => t.AssignedToId).HasFilter("\"AssignedToId\" IS NOT NULL");
-        builder.HasIndex(t => t.RecurrenceParentId).HasFilter("\"RecurrenceParentId\" IS NOT NULL");
         builder.HasIndex(t => new { t.CreatedById, t.CompletedAt }).HasFilter("NOT \"IsDeleted\"");
 
         builder.HasOne(t => t.Project)
@@ -37,11 +36,6 @@ public class TodoTaskConfiguration : IEntityTypeConfiguration<TodoTask>
         builder.HasOne(t => t.AssignedTo)
             .WithMany()
             .HasForeignKey(t => t.AssignedToId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        builder.HasOne(t => t.RecurrenceParent)
-            .WithMany(t => t.RecurrenceChildren)
-            .HasForeignKey(t => t.RecurrenceParentId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }

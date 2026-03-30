@@ -16,8 +16,6 @@ public class TodoTask
 
     // Recurrence
     public string? Rrule { get; set; }
-    public Guid? RecurrenceParentId { get; set; }
-    public DateOnly? RecurrenceOriginDate { get; set; }
 
     public int SortOrder { get; set; }
 
@@ -27,8 +25,7 @@ public class TodoTask
     public Project Project { get; set; } = null!;
     public User CreatedBy { get; set; } = null!;
     public User? AssignedTo { get; set; }
-    public TodoTask? RecurrenceParent { get; set; }
-    public ICollection<TodoTask> RecurrenceChildren { get; set; } = [];
+    public ICollection<RecurrenceException> RecurrenceExceptions { get; set; } = [];
     public ICollection<Subtask> Subtasks { get; set; } = [];
     public ICollection<TaskTag> TaskTags { get; set; } = [];
 }

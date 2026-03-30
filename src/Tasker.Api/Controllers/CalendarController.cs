@@ -10,7 +10,7 @@ namespace Tasker.Api.Controllers;
 [ApiController]
 [Route("api/calendar")]
 [Authorize]
-public class CalendarController(IProjectAccessService access) : ControllerBase
+public class CalendarController(IProjectAccessService access, IRecurrenceService recurrence) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetCalendarTasks(
@@ -19,13 +19,23 @@ public class CalendarController(IProjectAccessService access) : ControllerBase
     {
         var userId = User.GetUserId();
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.DueDate >= start && t.DueDate <= end)
+        // Non-recurring tasks in date range
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.DueDate >= start && t.DueDate <= end)
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
-        return Ok(tasks);
+        // Recurring task occurrences in date range
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, start, end);
+
+        var all = regularTasks.Concat(virtualInstances)
+            .OrderBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ToList();
+
+        return Ok(all);
     }
 }

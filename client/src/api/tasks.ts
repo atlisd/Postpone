@@ -95,6 +95,33 @@ export async function removeRecurrence(taskId: string): Promise<TaskResponse> {
   return api.delete(`api/tasks/${taskId}/recurrence`).json<TaskResponse>();
 }
 
+// Occurrence-specific operations (for recurring tasks)
+export async function completeOccurrence(taskId: string, date: string): Promise<void> {
+  await api.post(`api/tasks/${taskId}/occurrences/${date}/complete`);
+}
+
+export async function uncompleteOccurrence(taskId: string, date: string): Promise<void> {
+  await api.post(`api/tasks/${taskId}/occurrences/${date}/uncomplete`);
+}
+
+export async function skipOccurrence(taskId: string, date: string): Promise<void> {
+  await api.delete(`api/tasks/${taskId}/occurrences/${date}`);
+}
+
+export async function editOccurrence(taskId: string, date: string, data: {
+  title?: string;
+  description?: string;
+  priority?: number;
+  assignedToId?: string;
+  clearAssignedTo?: boolean;
+}): Promise<void> {
+  await api.put(`api/tasks/${taskId}/occurrences/${date}`, { json: data });
+}
+
+export async function rescheduleOccurrence(taskId: string, date: string, newDate: string): Promise<void> {
+  await api.put(`api/tasks/${taskId}/occurrences/${date}/due-date`, { json: { newDate } });
+}
+
 // Smart lists
 export async function getSmartList(name: 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me'): Promise<TaskResponse[]> {
   return api.get(`api/smart-lists/${name}`).json<TaskResponse[]>();

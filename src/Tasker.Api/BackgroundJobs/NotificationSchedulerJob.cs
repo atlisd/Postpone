@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Tasker.Api.Data;
 using Tasker.Api.Models.Entities;
 using Tasker.Api.Services;
@@ -49,13 +50,14 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var now = DateTime.UtcNow;
         var projectIds = await access.GetAccessibleProjectIdsAsync(user.Id);
 
+        // Non-recurring tasks
         var tasks = await db.Tasks
             .Include(t => t.Project)
             .Where(t => projectIds.Contains(t.ProjectId)
                 && !t.IsDeleted
                 && t.CompletedAt == null
                 && (t.DueDate.HasValue || t.DueDateTime.HasValue)
-                && (t.RecurrenceParentId == null || t.Rrule == null))
+                && t.Rrule == null)
             .ToListAsync();
 
         TimeZoneInfo tz;
@@ -70,6 +72,18 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 await ProcessTimedNotification(db, pushover, user, task, now, tz);
             else
                 await ProcessDateOnlyNotification(db, pushover, user, task, now, userNow);
+        }
+
+        // Recurring task occurrences — expand for today and check notifications
+        var recurrenceService = new RecurrenceService(db, LoggerFactory.Create(b => { }).CreateLogger<RecurrenceService>());
+        var today = DateOnly.FromDateTime(userNow);
+        var recurringQuery = db.Tasks
+            .Where(t => projectIds.Contains(t.ProjectId) && !t.IsDeleted && t.Rrule != null);
+        var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today);
+
+        foreach (var instance in virtualInstances.Where(v => v.CompletedAt == null))
+        {
+            await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
         }
     }
 
@@ -141,6 +155,43 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             });
             await db.SaveChangesAsync();
             logger.LogInformation("Sent notification to {User} for task {Task}", user.Email, task.Title);
+        }
+    }
+
+    private async Task ProcessRecurringDateNotification(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, Models.Dtos.Tasks.TaskResponse instance, DateTime utcNow, DateTime userNow)
+    {
+        var dueDate = instance.DueDate!.Value;
+        var isOverdue = dueDate < DateOnly.FromDateTime(userNow);
+        var isDueToday = dueDate == DateOnly.FromDateTime(userNow);
+        var isMorning = userNow.Hour >= 8 && userNow.Hour < 9;
+
+        if (!isDueToday && !isOverdue) return;
+        if (isDueToday && !isMorning) return;
+        if (isOverdue && !user.OverdueNotificationsEnabled) return;
+        if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
+
+        var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence:{instance.OccurrenceDate}");
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
+
+        var title = isOverdue ? "Overdue task" : "Task due today";
+        var message = $"{instance.Title} — {instance.ProjectName}";
+
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message);
+        if (sent)
+        {
+            db.NotificationLogs.Add(new NotificationLog
+            {
+                UserId = user.Id,
+                TaskId = instance.Id,
+                Channel = "pushover",
+                SentAt = utcNow,
+                PayloadHash = payloadHash,
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Sent recurring notification to {User} for task {Task} occurrence {Date}",
+                user.Email, instance.Title, instance.OccurrenceDate);
         }
     }
 

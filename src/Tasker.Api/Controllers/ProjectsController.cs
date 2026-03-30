@@ -35,8 +35,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
                 p.Color,
                 p.Icon,
                 p.IsArchived,
-                p.Tasks.Count(t => !t.IsDeleted && t.RecurrenceParentId == null),
-                p.Tasks.Count(t => !t.IsDeleted && t.CompletedAt != null && t.RecurrenceParentId == null),
+                p.Tasks.Count(t => !t.IsDeleted && t.Rrule == null),
+                p.Tasks.Count(t => !t.IsDeleted && t.CompletedAt != null && t.Rrule == null),
                 p.CreatedAt,
                 p.IsInbox))
             .ToListAsync();
@@ -99,8 +99,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         if (project is null) return NotFound();
 
-        var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.RecurrenceParentId == null);
-        var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null && t.RecurrenceParentId == null);
+        var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.Rrule == null);
+        var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null && t.Rrule == null);
 
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
@@ -127,8 +127,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         await sync.ProjectUpdated(id);
 
-        var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.RecurrenceParentId == null);
-        var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null && t.RecurrenceParentId == null);
+        var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.Rrule == null);
+        var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null && t.Rrule == null);
 
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,

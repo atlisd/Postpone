@@ -35,7 +35,7 @@ export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday,
       </div>
       <div className="space-y-0.5 overflow-y-auto max-h-[60px] md:max-h-[80px]">
         {tasks.map(task => (
-          <div key={task.id} onClick={e => e.stopPropagation()}>
+          <div key={`${task.id}_${task.occurrenceDate ?? 'single'}`} onClick={e => e.stopPropagation()}>
             <CalendarTaskChip
               task={task}
               onSelect={() => onSelectTask(task)}

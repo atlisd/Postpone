@@ -42,8 +42,8 @@ public record TaskResponse(
     DateTime? DueDateTime,
     DateTime? CompletedAt,
     string? Rrule,
-    Guid? RecurrenceParentId,
-    DateOnly? RecurrenceOriginDate,
+    DateOnly? OccurrenceDate,
+    bool IsRecurrenceException,
     List<SubtaskResponse> Subtasks,
     List<TagResponse> Tags,
     int SortOrder,
@@ -66,8 +66,8 @@ public record TaskResponse(
         t.DueDateTime,
         t.CompletedAt,
         t.Rrule,
-        t.RecurrenceParentId,
-        t.RecurrenceOriginDate,
+        null, // OccurrenceDate — set for virtual instances, null for real tasks
+        false, // IsRecurrenceException
         t.Subtasks.OrderBy(s => s.SortOrder).Select(s => new SubtaskResponse(s.Id, s.Title, s.IsCompleted, s.SortOrder)).ToList(),
         t.TaskTags.Select(tt => new TagResponse(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
         t.SortOrder,
@@ -89,3 +89,12 @@ public record SubtaskOrderItem(Guid Id, double SortOrder);
 public record TagResponse(Guid Id, string Name, string Color);
 
 public record SetRecurrenceRequest(string Rrule);
+
+public record EditOccurrenceRequest(
+    string? Title,
+    string? Description,
+    short? Priority,
+    Guid? AssignedToId,
+    bool ClearAssignedTo);
+
+public record RescheduleOccurrenceRequest(DateOnly NewDate);

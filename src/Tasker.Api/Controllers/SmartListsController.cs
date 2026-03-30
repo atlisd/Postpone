@@ -11,7 +11,7 @@ namespace Tasker.Api.Controllers;
 [ApiController]
 [Route("api/smart-lists")]
 [Authorize]
-public class SmartListsController(IProjectAccessService access, TaskerDbContext db) : ControllerBase
+public class SmartListsController(IProjectAccessService access, IRecurrenceService recurrence, TaskerDbContext db) : ControllerBase
 {
     private async Task<DateOnly> GetUserTodayAsync(Guid userId)
     {
@@ -28,17 +28,29 @@ public class SmartListsController(IProjectAccessService access, TaskerDbContext 
         var userId = User.GetUserId();
         var today = await GetUserTodayAsync(userId);
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null && t.DueDate <= today)
+        // Non-recurring tasks due today or overdue
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null && t.DueDate <= today)
+            .Select(TaskResponse.Projection)
+            .ToListAsync();
+
+        // Recurring task occurrences: expand from 1 year ago to today to catch overdue
+        var overdueSince = today.AddYears(-1);
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, overdueSince, today);
+        var filteredInstances = virtualInstances
+            .Where(v => v.CompletedAt == null && v.DueDate <= today)
+            .ToList();
+
+        var all = regularTasks.Concat(filteredInstances)
             .OrderBy(t => t.DueDate == today ? 1 : 0)
             .ThenBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.DueDateTime)
             .ThenBy(t => t.CreatedAt)
-            .Select(TaskResponse.Projection)
-            .ToListAsync();
+            .ToList();
 
-        return Ok(tasks);
+        return Ok(all);
     }
 
     [HttpGet("tomorrow")]
@@ -47,15 +59,22 @@ public class SmartListsController(IProjectAccessService access, TaskerDbContext 
         var userId = User.GetUserId();
         var tomorrow = (await GetUserTodayAsync(userId)).AddDays(1);
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null && t.DueDate == tomorrow)
-            .OrderByDescending(t => t.Priority)
-            .ThenBy(t => t.DueDateTime)
-            .ThenBy(t => t.CreatedAt)
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null && t.DueDate == tomorrow)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
-        return Ok(tasks);
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, tomorrow, tomorrow);
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null).ToList();
+
+        var all = regularTasks.Concat(filteredInstances)
+            .OrderByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDateTime)
+            .ThenBy(t => t.CreatedAt)
+            .ToList();
+
+        return Ok(all);
     }
 
     [HttpGet("next7days")]
@@ -65,48 +84,76 @@ public class SmartListsController(IProjectAccessService access, TaskerDbContext 
         var today = await GetUserTodayAsync(userId);
         var endDate = today.AddDays(7);
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null && t.DueDate >= today && t.DueDate <= endDate)
-            .OrderBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
-            .ThenBy(t => t.CreatedAt)
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null && t.DueDate >= today && t.DueDate <= endDate)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
-        return Ok(tasks);
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, today, endDate);
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null).ToList();
+
+        var all = regularTasks.Concat(filteredInstances)
+            .OrderBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .ToList();
+
+        return Ok(all);
     }
 
     [HttpGet("all")]
     public async Task<IActionResult> All()
     {
         var userId = User.GetUserId();
+        var today = await GetUserTodayAsync(userId);
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null)
-            .OrderBy(t => t.Project.Name)
-            .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
-            .ThenBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
+        // Non-recurring incomplete tasks
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
-        return Ok(tasks);
+        // Expand recurring tasks for next 90 days
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, today, today.AddDays(90));
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null).ToList();
+
+        var all = regularTasks.Concat(filteredInstances)
+            .OrderBy(t => t.ProjectName)
+            .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ToList();
+
+        return Ok(all);
     }
 
     [HttpGet("assigned-to-me")]
     public async Task<IActionResult> AssignedToMe()
     {
         var userId = User.GetUserId();
+        var today = await GetUserTodayAsync(userId);
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.CompletedAt == null && t.AssignedToId == userId)
-            .OrderBy(t => t.DueDate.HasValue ? 0 : 1)
-            .ThenBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null && t.AssignedToId == userId)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
-        return Ok(tasks);
-    }
+        // Recurring tasks assigned to me — expand next 90 days
+        var recurringQuery = access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule != null && t.AssignedToId == userId);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, today, today.AddDays(90));
+        var filteredInstances = virtualInstances
+            .Where(v => v.CompletedAt == null && v.AssignedToId == userId)
+            .ToList();
 
+        var all = regularTasks.Concat(filteredInstances)
+            .OrderBy(t => t.DueDate.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ToList();
+
+        return Ok(all);
+    }
 }

@@ -22,7 +22,7 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
 
         var query = db.Tasks
             .Where(t => t.ProjectId == projectId && !t.IsDeleted)
-            .Where(t => t.Rrule == null || t.RecurrenceParentId != null); // show instances, not templates
+            ; // recurring masters show as single items in project list
 
         if (!includeCompleted)
             query = query.Where(t => t.CompletedAt == null);
@@ -245,6 +245,78 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
 
         var result = await GetTaskResponse(id);
         return Ok(result);
+    }
+
+    // --- Occurrence-specific endpoints ---
+
+    [HttpPost("api/tasks/{id:guid}/occurrences/{date}/complete")]
+    public async Task<IActionResult> CompleteOccurrence(Guid id, DateOnly date)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        await recurrenceService.CompleteOccurrenceAsync(id, date);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
+    }
+
+    [HttpPost("api/tasks/{id:guid}/occurrences/{date}/uncomplete")]
+    public async Task<IActionResult> UncompleteOccurrence(Guid id, DateOnly date)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        await recurrenceService.UncompleteOccurrenceAsync(id, date);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
+    }
+
+    [HttpDelete("api/tasks/{id:guid}/occurrences/{date}")]
+    public async Task<IActionResult> SkipOccurrence(Guid id, DateOnly date)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        await recurrenceService.SkipOccurrenceAsync(id, date);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
+    }
+
+    [HttpPut("api/tasks/{id:guid}/occurrences/{date}")]
+    public async Task<IActionResult> EditOccurrence(Guid id, DateOnly date, [FromBody] EditOccurrenceRequest request)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        await recurrenceService.EditOccurrenceAsync(id, date, request);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
+    }
+
+    [HttpPut("api/tasks/{id:guid}/occurrences/{date}/due-date")]
+    public async Task<IActionResult> RescheduleOccurrence(Guid id, DateOnly date, [FromBody] RescheduleOccurrenceRequest request)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        await recurrenceService.RescheduleOccurrenceAsync(id, date, request.NewDate);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
     }
 
     private async Task<TaskResponse> GetTaskResponse(Guid taskId)

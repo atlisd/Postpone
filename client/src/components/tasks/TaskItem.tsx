@@ -21,7 +21,8 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
   const subtaskDone = task.subtasks.filter(s => s.isCompleted).length;
-  const { ref, handleRef, isDragging } = useSortable({ id: task.id, index, group: group ?? task.id });
+  const itemId = `${task.id}_${task.occurrenceDate ?? 'single'}`;
+  const { ref, handleRef, isDragging } = useSortable({ id: itemId, index, group: group ?? itemId });
 
   const dueLabel = task.dueDate
     ? `${formatDueDate(task.dueDate, locale)}${formatDueTime(task.dueDateTime, locale) ? ` ${formatDueTime(task.dueDateTime, locale)}` : ''}`

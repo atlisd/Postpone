@@ -54,9 +54,15 @@ Three-level hierarchy enforced via `IProjectAccessService` before any operation:
 2. **Direct share** — `ProjectShares` table
 3. **Household membership** — projects linked to a household visible to all members
 
+### Recurring Tasks
+- Virtual instance model: one master task in DB, occurrences computed on-the-fly from RRULE
+- `RecurrenceException` table stores per-occurrence modifications (skip, complete, edit, reschedule)
+- `ExceptionSubtaskCompletion` tracks per-occurrence subtask completion state
+- Smart lists and calendar expand occurrences via `RecurrenceService.ExpandOccurrencesAsync`
+- Dual-query pattern: non-recurring tasks via SQL + recurring masters expanded in-memory, then merged
+
 ### Background Jobs
-- **RecurrenceGeneratorJob** — runs hourly, generates task instances from RRULE patterns
-- **NotificationSchedulerJob** — runs daily 8–9 AM (per user's timezone), sends Pushover notifications
+- **NotificationSchedulerJob** — runs every 15 minutes, sends Pushover notifications for tasks due today and overdue tasks
 
 ### Key Directories
 ```

@@ -104,7 +104,6 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient();
 
         // Background jobs
-        services.AddHostedService<BackgroundJobs.RecurrenceGeneratorJob>();
         services.AddHostedService<BackgroundJobs.NotificationSchedulerJob>();
 
         return services;
