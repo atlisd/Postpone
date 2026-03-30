@@ -30,9 +30,16 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         if (stored is null)
             return null;
 
-        // Token reuse detection: if revoked token is presented, revoke all user tokens
+        // Token reuse detection: distinguish race-condition from actual theft.
+        // If the token was revoked very recently, it's almost certainly a multi-tab
+        // or page-reload race — not a stolen token. Return 401 without mass-revoking.
         if (stored.RevokedAt.HasValue)
         {
+            const int gracePeriodSeconds = 30;
+            if ((DateTime.UtcNow - stored.RevokedAt.Value).TotalSeconds <= gracePeriodSeconds)
+                return null;
+
+            // Revoked longer ago than the grace window — treat as theft
             await RevokeAllUserTokensAsync(stored.UserId);
             return null;
         }
