@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { listTasks, createTask, completeTask, uncompleteTask, reorderTasks } from '../../api/tasks';
 import { useDragDropMonitor } from '@dnd-kit/react';
 import { isSortableOperation } from '@dnd-kit/react/sortable';
@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 export function ProjectTaskList() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [project, setProject] = useState<ProjectResponse | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
@@ -85,6 +86,16 @@ export function ProjectTaskList() {
     setSelectedTask(null);
     fetchData();
   }, [projectId, showCompleted]);
+
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId || tasks.length === 0) return;
+    const occurrence = searchParams.get('occurrence');
+    const match = tasks.find(t =>
+      t.id === taskId && (occurrence ? t.occurrenceDate === occurrence : true)
+    );
+    if (match) setSelectedTask(match);
+  }, [tasks, searchParams]);
 
   const handleAdd = async (title: string, dueDate?: string, dueDateTime?: string) => {
     if (!projectId) return;

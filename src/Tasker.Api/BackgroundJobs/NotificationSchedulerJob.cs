@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Tasker.Api.Data;
 using Tasker.Api.Models.Entities;
@@ -9,7 +10,7 @@ using Tasker.Api.Services;
 
 namespace Tasker.Api.BackgroundJobs;
 
-public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger) : IHostedService, IDisposable
+public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger, IConfiguration configuration) : IHostedService, IDisposable
 {
     private Timer? _timer;
 
@@ -105,8 +106,9 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         catch { culture = CultureInfo.InvariantCulture; }
         var timeStr = dueLocal.ToString("t", culture);
         var message = $"{task.Title} — {task.Project.Name} (due at {timeStr})";
+        var url = BuildTaskUrl(task.ProjectId, task.Id, null);
 
-        var sent = await pushover.SendAsync(user.PushoverUserKey!, "Task due now", message);
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, "Task due now", message, url);
         if (sent)
         {
             db.NotificationLogs.Add(new NotificationLog
@@ -141,8 +143,9 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         var title = isOverdue ? "Overdue task" : "Task due today";
         var message = $"{task.Title} — {task.Project.Name}";
+        var url = BuildTaskUrl(task.ProjectId, task.Id, null);
 
-        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message);
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
         if (sent)
         {
             db.NotificationLogs.Add(new NotificationLog
@@ -177,8 +180,9 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         var title = isOverdue ? "Overdue task" : "Task due today";
         var message = $"{instance.Title} — {instance.ProjectName}";
+        var url = BuildTaskUrl(instance.ProjectId, instance.Id, instance.OccurrenceDate);
 
-        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message);
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
         if (sent)
         {
             db.NotificationLogs.Add(new NotificationLog
@@ -193,6 +197,15 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             logger.LogInformation("Sent recurring notification to {User} for task {Task} occurrence {Date}",
                 user.Email, instance.Title, instance.OccurrenceDate);
         }
+    }
+
+    private string BuildTaskUrl(Guid projectId, Guid taskId, DateOnly? occurrenceDate)
+    {
+        var baseUrl = configuration["App:Url"]?.TrimEnd('/') ?? "";
+        var url = $"{baseUrl}/app/projects/{projectId}?task={taskId}";
+        if (occurrenceDate.HasValue)
+            url += $"&occurrence={occurrenceDate.Value:yyyy-MM-dd}";
+        return url;
     }
 
     private static string ComputeHash(string input)
