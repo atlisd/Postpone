@@ -22,18 +22,23 @@ export function rruleToHuman(rrule: string | null): string {
   const preset = PRESETS.find(p => p.rrule === rrule);
   if (preset) return preset.label;
 
-  // Basic parsing for display
-  if (rrule.includes('FREQ=DAILY')) return 'Daily';
-  if (rrule.includes('FREQ=WEEKLY')) {
-    const match = rrule.match(/BYDAY=([^;]+)/);
-    if (match) return `Weekly on ${match[1]}`;
-    const interval = rrule.match(/INTERVAL=(\d+)/);
-    if (interval) return `Every ${interval[1]} weeks`;
-    return 'Weekly';
+  const interval = parseInt(rrule.match(/INTERVAL=(\d+)/)?.[1] ?? '1', 10);
+  const days = rrule.match(/BYDAY=([^;]+)/)?.[1];
+
+  if (rrule.includes('FREQ=DAILY')) {
+    return interval > 1 ? `Every ${interval} days` : 'Daily';
   }
-  if (rrule.includes('FREQ=MONTHLY')) return 'Monthly';
-  if (rrule.includes('FREQ=YEARLY')) return 'Yearly';
-  return rrule;
+  if (rrule.includes('FREQ=WEEKLY')) {
+    const base = interval > 1 ? `Every ${interval} weeks` : 'Weekly';
+    return days ? `${base} on ${days}` : base;
+  }
+  if (rrule.includes('FREQ=MONTHLY')) {
+    return interval > 1 ? `Every ${interval} months` : 'Monthly';
+  }
+  if (rrule.includes('FREQ=YEARLY')) {
+    return interval > 1 ? `Every ${interval} years` : 'Yearly';
+  }
+  return 'Custom';
 }
 
 export function RecurrencePicker({ currentRrule, onSet, onRemove }: RecurrencePickerProps) {
