@@ -43,11 +43,11 @@ interface SidebarProps {
 let dragOccurred = false;
 
 const smartLists = [
-  { to: '/app/today', label: 'Today', icon: Sun },
-  { to: '/app/tomorrow', label: 'Tomorrow', icon: Sunrise },
-  { to: '/app/next7days', label: 'Next 7 Days', icon: Calendar },
-  { to: '/app/all', label: 'All Tasks', icon: List },
-  { to: '/app/assigned', label: 'Assigned to Me', icon: UserCheck },
+  { to: '/app/today', label: 'Today', icon: Sun, key: 'today' },
+  { to: '/app/tomorrow', label: 'Tomorrow', icon: Sunrise, key: 'tomorrow' },
+  { to: '/app/next7days', label: 'Next 7 Days', icon: Calendar, key: 'next7days' },
+  { to: '/app/all', label: 'All Tasks', icon: List, key: 'all' },
+  { to: '/app/assigned', label: 'Assigned to Me', icon: UserCheck, key: 'assigned' },
 ];
 
 interface SortableProjectItemProps {
@@ -158,6 +158,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [editingTag, setEditingTag] = useState<TagFull | null>(null);
   const [tagContextMenu, setTagContextMenu] = useState<{ tagId: string; rect: DOMRect } | null>(null);
   const [hasAssignedTasks, setHasAssignedTasks] = useState<boolean | null>(null);
+  const [smartListCounts, setSmartListCounts] = useState<Record<string, number>>({});
   const [navOverflows, setNavOverflows] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const fetchVersionRef = useRef(0);
@@ -201,8 +202,21 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   const fetchAssignedCount = useCallback(async () => {
     try {
-      const data = await getSmartList('assigned-to-me');
-      setHasAssignedTasks(data.length > 0);
+      const [today, tomorrow, next7days, all, assigned] = await Promise.all([
+        getSmartList('today'),
+        getSmartList('tomorrow'),
+        getSmartList('next7days'),
+        getSmartList('all'),
+        getSmartList('assigned-to-me'),
+      ]);
+      setHasAssignedTasks(assigned.length > 0);
+      setSmartListCounts({
+        today: today.length,
+        tomorrow: tomorrow.length,
+        next7days: next7days.length,
+        all: all.length,
+        assigned: assigned.length,
+      });
     } catch {
       setHasAssignedTasks(null);
     }
@@ -402,10 +416,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           </p>
           {smartLists
             .filter(({ to }) => to !== '/app/assigned' || hasAssignedTasks !== false)
-            .map(({ to, label, icon: Icon }) => (
+            .map(({ to, label, icon: Icon, key }) => (
               <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
-                <Icon size={18} />
-                {label}
+                <Icon size={18} className="flex-shrink-0" />
+                <span className="flex-1 truncate">{label}</span>
+                {smartListCounts[key] > 0 && (
+                  <span className="text-xs text-gray-400">{smartListCounts[key]}</span>
+                )}
               </NavLink>
             ))}
 
