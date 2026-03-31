@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { CalendarDays, SquareCheck, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -5,9 +6,10 @@ import { useAuth } from '../../contexts/AuthContext';
 const taskRoutes = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/'];
 
 export function IconSidebar() {
-  const { user } = useAuth();
+  const { user, gravatarUrl } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [gravatarFailed, setGravatarFailed] = useState(false);
 
   const isTasksActive = taskRoutes.some(r => location.pathname.startsWith(r));
   const isCalendarActive = location.pathname === '/app/calendar';
@@ -20,6 +22,8 @@ const isSettingsActive = location.pathname === '/app/settings';
         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-800'
     }`;
 
+  const effectiveAvatarUrl = (!gravatarFailed && gravatarUrl) ? gravatarUrl : user?.avatarUrl;
+
   return (
     <aside className="hidden md:flex flex-col items-center w-14 py-3 gap-2 bg-gray-200 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
       {/* User avatar */}
@@ -28,8 +32,13 @@ const isSettingsActive = location.pathname === '/app/settings';
         className={`${btnClass(isSettingsActive)} mb-2`}
         title="Settings"
       >
-        {user?.avatarUrl ? (
-          <img src={user.avatarUrl} alt={user.displayName} className="w-7 h-7 rounded-full object-cover" />
+        {effectiveAvatarUrl ? (
+          <img
+            src={effectiveAvatarUrl}
+            alt={user?.displayName}
+            className="w-7 h-7 rounded-full object-cover"
+            onError={() => setGravatarFailed(true)}
+          />
         ) : user?.displayName ? (
           <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold ${
             isSettingsActive

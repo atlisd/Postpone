@@ -8,7 +8,7 @@ public record RefreshRequest(string RefreshToken);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale);
+public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale, bool? UseGravatar);
 
 public record SetPushoverKeyRequest(string? UserKey);
 
@@ -34,5 +34,6 @@ public record UserProfileResponse(
     string? PushoverUserKey,
     bool OverdueNotificationsEnabled,
     int OverdueNotificationHour,
+    bool UseGravatar,
     bool IsAdmin,
     bool MustChangePassword);

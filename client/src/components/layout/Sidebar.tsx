@@ -146,7 +146,8 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
 }
 
 export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) {
-  const { user } = useAuth();
+  const { user, gravatarUrl } = useAuth();
+  const [gravatarFailed, setGravatarFailed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -387,8 +388,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             return (
               <>
                 <button onClick={() => { navigate('/app/settings'); onClose(); }} className={iconBtn(isSettingsActive)} title="Settings">
-                  {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={user?.displayName} className="w-7 h-7 rounded-full object-cover" />
+                  {((!gravatarFailed && gravatarUrl) || user?.avatarUrl) ? (
+                    <img
+                      src={(!gravatarFailed && gravatarUrl) ? gravatarUrl : user!.avatarUrl!}
+                      alt={user?.displayName}
+                      className="w-7 h-7 rounded-full object-cover"
+                      onError={() => setGravatarFailed(true)}
+                    />
                   ) : user?.displayName ? (
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold ${isSettingsActive ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
                       {user.displayName[0].toUpperCase()}

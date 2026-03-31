@@ -126,7 +126,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
-            user.IsAdmin, user.MustChangePassword));
+            user.UseGravatar, user.IsAdmin, user.MustChangePassword));
     }
 
     [Authorize]
@@ -141,6 +141,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         if (request.Timezone is not null) user.Timezone = request.Timezone;
         if (request.AvatarUrl is not null) user.AvatarUrl = request.AvatarUrl;
         if (request.Locale is not null) user.Locale = request.Locale;
+        if (request.UseGravatar is not null) user.UseGravatar = request.UseGravatar.Value;
 
         await db.SaveChangesAsync();
 
@@ -148,7 +149,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
-            user.IsAdmin, user.MustChangePassword));
+            user.UseGravatar, user.IsAdmin, user.MustChangePassword));
     }
 
     [Authorize]

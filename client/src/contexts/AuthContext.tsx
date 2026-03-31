@@ -2,10 +2,12 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { HTTPError } from 'ky';
 import { setTokens, clearTokens, getAccessToken } from '../api/client';
 import { login as apiLogin, getProfile, logout as apiLogout, refreshTokens, getSetupStatus } from '../api/auth';
+import { getGravatarUrl } from '../lib/gravatar';
 import type { UserProfile } from '../types/api';
 
 interface AuthContextType {
   user: UserProfile | null;
+  gravatarUrl: string | null;
   isLoading: boolean;
   needsSetup: boolean;
   login: (email: string, password: string) => Promise<{ mustChangePassword: boolean }>;
@@ -27,6 +29,7 @@ function isJwtExpired(token: string): boolean {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [gravatarUrl, setGravatarUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
 
@@ -47,6 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setNeedsSetup(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (user?.email && user.useGravatar) {
+      getGravatarUrl(user.email).then(setGravatarUrl);
+    } else {
+      setGravatarUrl(null);
+    }
+  }, [user?.email, user?.useGravatar]);
 
   useEffect(() => {
     const init = async () => {
@@ -94,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, needsSetup, login, logout, refreshUser, recheckSetup }}>
+    <AuthContext.Provider value={{ user, gravatarUrl, isLoading, needsSetup, login, logout, refreshUser, recheckSetup }}>
       {children}
     </AuthContext.Provider>
   );
