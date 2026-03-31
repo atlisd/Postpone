@@ -21,10 +21,29 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access) : 
         var tags = await db.Tags
             .Where(t => t.UserId == userId)
             .OrderBy(t => t.Name)
-            .Select(t => new TagFullResponse(t.Id, t.Name, t.Color, t.CreatedAt))
+            .Select(t => new TagFullResponse(t.Id, t.Name, t.Color, t.CreatedAt,
+                t.TaskTags.Count(tt => !tt.Task.IsDeleted && tt.Task.CompletedAt == null)))
             .ToListAsync();
 
         return Ok(tags);
+    }
+
+    [HttpGet("api/tags/{id:guid}/tasks")]
+    public async Task<IActionResult> GetTasks(Guid id)
+    {
+        var userId = User.GetUserId();
+        var tag = await db.Tags.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+        if (tag is null) return NotFound();
+
+        var tasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.TaskTags.Any(tt => tt.TagId == id) && !t.IsDeleted && t.CompletedAt == null)
+            .OrderBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .Select(TaskResponse.Projection)
+            .ToListAsync();
+
+        return Ok(tasks);
     }
 
     [HttpPost("api/tags")]

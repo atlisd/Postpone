@@ -11,9 +11,11 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical } from 'lucide-react';
+import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
-import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence } from '../../api/tasks';
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence, addTagToTask, removeTagFromTask } from '../../api/tasks';
+import { listTags, createTag } from '../../api/tags';
+import type { TagFull } from '../../types/api';
 import type { SubtaskResponse } from '../../types/api';
 import { getProjectMembers, listProjects } from '../../api/projects';
 import type { ProjectMember } from '../../api/projects';
@@ -133,6 +135,10 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const [allTags, setAllTags] = useState<TagFull[]>([]);
+  const [tagSearch, setTagSearch] = useState('');
+  const [tagOpen, setTagOpen] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
   const isCompleted = !!task.completedAt;
 
   useEffect(() => {
@@ -151,6 +157,10 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   useEffect(() => {
     listProjects().then(setProjects).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    listTags().then(setAllTags).catch(() => {});
   }, []);
 
   const handleMoveProject = async (newProjectId: string) => {
@@ -287,6 +297,39 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     }
   };
 
+  const handleAddTag = async (tagId: string) => {
+    try {
+      await addTagToTask(task.id, tagId);
+      setTagOpen(false);
+      setTagSearch('');
+      onUpdate();
+    } catch {
+      toast.error('Failed to add tag');
+    }
+  };
+
+  const handleRemoveTag = async (tagId: string) => {
+    try {
+      await removeTagFromTask(task.id, tagId);
+      onUpdate();
+    } catch {
+      toast.error('Failed to remove tag');
+    }
+  };
+
+  const handleCreateAndAddTag = async (name: string) => {
+    try {
+      const newTag = await createTag({ name });
+      setAllTags(prev => [...prev, newTag]);
+      await addTagToTask(task.id, newTag.id);
+      setTagOpen(false);
+      setTagSearch('');
+      onUpdate();
+    } catch {
+      toast.error('Failed to create tag');
+    }
+  };
+
   // Save on blur for title/description
   const handleBlur = () => {
     if (title !== task.title || description !== task.description || priority !== task.priority || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
@@ -416,15 +459,72 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           )}
 
           {/* Tags */}
-          {task.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {task.tags.map(tag => (
-                <span key={tag.id} className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: tag.color + '20', color: tag.color }}>
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-1.5 relative">
+            <Tag size={14} className="text-gray-400 flex-shrink-0" />
+            {task.tags.map(tag => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: tag.color + '20', color: tag.color }}
+              >
+                {tag.name}
+                <button
+                  onClick={() => handleRemoveTag(tag.id)}
+                  className="opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => { setTagOpen(true); setTimeout(() => tagInputRef.current?.focus(), 0); }}
+              className="text-xs text-gray-400 hover:text-blue-500 flex items-center gap-0.5 transition-colors"
+            >
+              <Plus size={12} />
+              Add tag
+            </button>
+            {tagOpen && (
+              <div className="absolute top-full left-0 mt-1 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-52">
+                <input
+                  ref={tagInputRef}
+                  value={tagSearch}
+                  onChange={e => setTagSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setTagOpen(false); setTagSearch(''); } }}
+                  onBlur={() => { setTimeout(() => { setTagOpen(false); setTagSearch(''); }, 100); }}
+                  placeholder="Search or create..."
+                  className="w-full px-3 py-2 text-sm bg-transparent border-b border-gray-200 dark:border-gray-700 outline-none text-gray-900 dark:text-white"
+                />
+                <div className="max-h-40 overflow-y-auto py-1">
+                  {allTags
+                    .filter(t => !task.tags.some(tt => tt.id === t.id))
+                    .filter(t => !tagSearch || t.name.toLowerCase().includes(tagSearch.toLowerCase()))
+                    .map(t => (
+                      <button
+                        key={t.id}
+                        onMouseDown={(e) => { e.preventDefault(); handleAddTag(t.id); }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                      >
+                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+                        {t.name}
+                      </button>
+                    ))
+                  }
+                  {tagSearch.trim() && !allTags.some(t => t.name.toLowerCase() === tagSearch.trim().toLowerCase()) && (
+                    <button
+                      onMouseDown={(e) => { e.preventDefault(); handleCreateAndAddTag(tagSearch.trim()); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                    >
+                      <Plus size={12} />
+                      Create "{tagSearch.trim()}"
+                    </button>
+                  )}
+                  {!tagSearch && allTags.filter(t => !task.tags.some(tt => tt.id === t.id)).length === 0 && (
+                    <p className="px-3 py-2 text-xs text-gray-400">Type to create a tag</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Description */}
           <div className="-mx-4 border-t border-b border-gray-200 dark:border-gray-700">

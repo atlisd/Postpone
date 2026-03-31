@@ -9,6 +9,7 @@ import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { AppShell } from './components/layout/AppShell';
 import { AdminUsersPage } from './components/auth/AdminUsersPage';
 import { ProjectTaskList } from './components/projects/ProjectTaskList';
+import { TagTaskList } from './components/tags/TagTaskList';
 import { SmartListView } from './components/smart-lists/SmartListView';
 import { CalendarView } from './components/calendar/CalendarView';
 import { SettingsPage } from './components/settings/SettingsPage';
@@ -41,6 +42,7 @@ export default function App() {
               <Route path="all" element={<ErrorBoundary><SmartListView type="all" title="All Tasks" /></ErrorBoundary>} />
               <Route path="assigned" element={<ErrorBoundary><SmartListView type="assigned-to-me" title="Assigned to Me" /></ErrorBoundary>} />
               <Route path="projects/:id" element={<ErrorBoundary><ProjectTaskList /></ErrorBoundary>} />
+              <Route path="tags/:id" element={<ErrorBoundary><TagTaskList /></ErrorBoundary>} />
               <Route path="calendar" element={<ErrorBoundary><CalendarView /></ErrorBoundary>} />
               <Route path="households" element={<ErrorBoundary><HouseholdListPage /></ErrorBoundary>} />
               <Route path="household/:id" element={<ErrorBoundary><HouseholdPage /></ErrorBoundary>} />

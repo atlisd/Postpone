@@ -25,6 +25,7 @@ Postpone lets family members manage their own private task lists while selective
 - **Due Dates** — with optional time; overdue tasks stay pinned in the Today view under a highlighted Overdue section
 - **Natural Language Input** — type dates inline when creating tasks: `tomorrow 5pm`, `next friday`, `tonight`, `apr 20`, `mon 9:30` — the date is parsed out and the task title is cleaned automatically
 - **Task Assignment** — assign tasks to household members
+- **Tags** — color-coded tags to categorize tasks across projects; create and assign tags from the task detail panel; navigate to a tag to see all tagged tasks; manage tags (create, rename, recolor, delete) from the sidebar
 
 ### Collaboration
 - **Households** — create a household and invite family members via an 8-character invite code
@@ -255,6 +256,17 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | POST | `/api/households/{id}/regenerate-invite` | Regenerate invite code |
 | GET | `/api/households/{id}/members` | List members |
 | DELETE | `/api/households/{id}/members/{userId}` | Remove/leave member |
+
+### Tags
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/tags` | List tags (includes active task count) |
+| POST | `/api/tags` | Create tag |
+| PUT | `/api/tags/{id}` | Update tag (name, color) |
+| DELETE | `/api/tags/{id}` | Delete tag |
+| GET | `/api/tags/{id}/tasks` | List active tasks with this tag |
+| POST | `/api/tasks/{id}/tags` | Add tag to task |
+| DELETE | `/api/tasks/{id}/tags/{tagId}` | Remove tag from task |
 
 ### Infrastructure
 | Method | Path | Description |

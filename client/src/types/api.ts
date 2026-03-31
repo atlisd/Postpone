@@ -90,4 +90,5 @@ export interface TagFull {
   name: string;
   color: string;
   createdAt: string;
+  taskCount: number;
 }

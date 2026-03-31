@@ -4,8 +4,10 @@ import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSignalR } from '../../hooks/useSignalR';
 import { listProjects, createProject, deleteProject, reorderProjects, updateProject } from '../../api/projects';
+import { listTags, createTag, updateTag, deleteTag } from '../../api/tags';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
-import type { ProjectResponse } from '../../types/api';
+import { TagFormModal } from '../tags/TagFormModal';
+import type { ProjectResponse, TagFull } from '../../types/api';
 import {
   DndContext,
   closestCenter,
@@ -159,6 +161,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string; color: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
+  const [tags, setTags] = useState<TagFull[]>([]);
+  const [showCreateTagModal, setShowCreateTagModal] = useState(false);
+  const [editingTag, setEditingTag] = useState<TagFull | null>(null);
+  const [tagContextMenu, setTagContextMenu] = useState<{ tagId: string; rect: DOMRect } | null>(null);
   const [navOverflows, setNavOverflows] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const fetchVersionRef = useRef(0);
@@ -195,9 +201,25 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
     }
   }, []);
 
+  const fetchTags = useCallback(async () => {
+    try {
+      const data = await listTags();
+      setTags(data);
+    } catch {
+      // silent
+    }
+  }, []);
+
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
-  useEffect(() => { checkNavOverflow(); }, [projects, checkNavOverflow]);
-  useSignalR(fetchProjects);
+  useEffect(() => { fetchTags(); }, [fetchTags]);
+  useEffect(() => { checkNavOverflow(); }, [projects, tags, checkNavOverflow]);
+
+  const fetchAll = useCallback(() => {
+    fetchProjects();
+    fetchTags();
+  }, [fetchProjects, fetchTags]);
+
+  useSignalR(fetchAll);
 
   const handleCreateProject = async (data: { name: string; color: string; householdId?: string }) => {
     try {
@@ -232,6 +254,41 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       await fetchProjects();
     } catch {
       toast.error('Failed to update project');
+    }
+  };
+
+  const handleCreateTag = async (data: { name: string; color: string }) => {
+    try {
+      await createTag(data);
+      setShowCreateTagModal(false);
+      await fetchTags();
+    } catch {
+      toast.error('Failed to create tag');
+    }
+  };
+
+  const handleEditTagSubmit = async (data: { name: string; color: string }) => {
+    if (!editingTag) return;
+    try {
+      await updateTag(editingTag.id, data);
+      setEditingTag(null);
+      await fetchTags();
+    } catch {
+      toast.error('Failed to update tag');
+    }
+  };
+
+  const handleDeleteTag = async (id: string, name: string) => {
+    if (!confirm(`Delete tag "${name}"? It will be removed from all tasks.`)) return;
+    try {
+      await deleteTag(id);
+      setTagContextMenu(null);
+      if (location.pathname.includes(`/app/tags/${id}`)) {
+        navigate('/app/today', { replace: true });
+      }
+      await fetchTags();
+    } catch {
+      toast.error('Failed to delete tag');
     }
   };
 
@@ -396,6 +453,51 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               </DndContext>
             </>
           )}
+
+          {/* Tags */}
+          <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
+          <div className="flex items-center justify-between px-3 py-1">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Tags
+            </p>
+            <button
+              onClick={() => setShowCreateTagModal(true)}
+              className="text-gray-400 hover:text-blue-500 transition-colors"
+              title="New tag"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+          {tags.filter(t => t.taskCount > 0).length === 0 ? (
+            <p className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500 italic">
+              No tags yet
+            </p>
+          ) : (
+            tags.filter(t => t.taskCount > 0).map(tag => (
+              <div key={tag.id} className="relative group/tag flex items-center">
+                <NavLink
+                  to={`/app/tags/${tag.id}`}
+                  className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1 pr-7'}
+                  onClick={onClose}
+                >
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                  <span className="flex-1 truncate">{tag.name}</span>
+                  <span className="text-xs text-gray-400">{tag.taskCount}</span>
+                </NavLink>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setTagContextMenu(tagContextMenu?.tagId === tag.id ? null : { tagId: tag.id, rect });
+                    setContextMenu(null);
+                  }}
+                  className={`absolute right-1 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover/tag:opacity-100 transition-opacity ${tagContextMenu?.tagId === tag.id ? 'opacity-100' : ''}`}
+                >
+                  <MoreHorizontal size={14} />
+                </button>
+              </div>
+            ))
+          )}
         </nav>
         {navOverflows && (
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 flex items-end justify-center pb-1 bg-gradient-to-t from-white dark:from-gray-900 to-transparent">
@@ -453,6 +555,53 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           onClose={() => setEditingProject(null)}
           onSubmit={handleEditProject}
           initial={{ name: editingProject.name, color: editingProject.color }}
+        />
+      )}
+
+      {tagContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setTagContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
+            style={{ top: tagContextMenu.rect.bottom + 4, left: tagContextMenu.rect.left }}
+          >
+            <button
+              onClick={() => {
+                const tag = tags.find(t => t.id === tagContextMenu.tagId);
+                if (tag) { setEditingTag(tag); setTagContextMenu(null); }
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+            <button
+              onClick={() => {
+                const tag = tags.find(t => t.id === tagContextMenu.tagId);
+                if (tag) handleDeleteTag(tag.id, tag.name);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {showCreateTagModal && (
+        <TagFormModal
+          onClose={() => setShowCreateTagModal(false)}
+          onSubmit={handleCreateTag}
+        />
+      )}
+
+      {editingTag && (
+        <TagFormModal
+          onClose={() => setEditingTag(null)}
+          onSubmit={handleEditTagSubmit}
+          initial={{ name: editingTag.name, color: editingTag.color }}
         />
       )}
     </>
