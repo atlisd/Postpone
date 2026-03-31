@@ -64,6 +64,15 @@ export function CalendarView() {
     }
   }, [addingToDate]);
 
+  useEffect(() => {
+    if (selectedTask) {
+      const updated = tasks.find(
+        t => t.id === selectedTask.id && t.occurrenceDate === selectedTask.occurrenceDate
+      );
+      if (updated) setSelectedTask(updated);
+    }
+  }, [tasks]);
+
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
       if (task.occurrenceDate) {
