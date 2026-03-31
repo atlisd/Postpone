@@ -127,6 +127,8 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate ?? '');
   const [dueTime, setDueTime] = useState(() => extractLocalTime(task.dueDateTime));
+  const dueDateRef = useRef(task.dueDate ?? '');
+  const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -139,6 +141,8 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     setPriority(task.priority);
     setDueDate(task.dueDate ?? '');
     setDueTime(extractLocalTime(task.dueDateTime));
+    dueDateRef.current = task.dueDate ?? '';
+    dueTimeRef.current = extractLocalTime(task.dueDateTime);
   }, [task]);
 
   useEffect(() => {
@@ -173,8 +177,8 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
         });
       } else {
         // Normal task or series master
-        const dateChanged = dueDate !== (task.dueDate ?? '');
-        const timeChanged = dueTime !== originalDueTime;
+        const dateChanged = dueDateRef.current !== (task.dueDate ?? '');
+        const timeChanged = dueTimeRef.current !== originalDueTime;
 
         let dueDatePayload: string | undefined;
         let clearDueDatePayload: boolean | undefined;
@@ -182,15 +186,15 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
         let clearDueDateTimePayload: boolean | undefined;
 
         if (dateChanged) {
-          if (dueDate) dueDatePayload = dueDate;
+          if (dueDateRef.current) dueDatePayload = dueDateRef.current;
           else { clearDueDatePayload = true; clearDueDateTimePayload = true; }
         }
 
-        if (dueDate && dueTime && (dateChanged || timeChanged)) {
-          dueDateTimePayload = new Date(`${dueDate}T${dueTime}`).toISOString();
-        } else if (timeChanged && !dueTime) {
+        if (dueDateRef.current && dueTimeRef.current && (dateChanged || timeChanged)) {
+          dueDateTimePayload = new Date(`${dueDateRef.current}T${dueTimeRef.current}`).toISOString();
+        } else if (timeChanged && !dueTimeRef.current) {
           clearDueDateTimePayload = true;
-        } else if (dateChanged && dueDate && !dueTime) {
+        } else if (dateChanged && dueDateRef.current && !dueTimeRef.current) {
           clearDueDateTimePayload = true;
         }
 
@@ -285,7 +289,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   // Save on blur for title/description
   const handleBlur = () => {
-    if (title !== task.title || description !== task.description || priority !== task.priority || dueDate !== (task.dueDate ?? '') || dueTime !== originalDueTime) {
+    if (title !== task.title || description !== task.description || priority !== task.priority || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
       handleSave();
     }
   };
@@ -350,13 +354,13 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           <div className="flex items-center gap-2">
             <LocaleDateInput
               value={dueDate}
-              onChange={(val) => { setDueDate(val); if (!val) setDueTime(''); }}
+              onChange={(val) => { dueDateRef.current = val; setDueDate(val); if (!val) { dueTimeRef.current = ''; setDueTime(''); } }}
               onBlur={handleBlur}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 flex-1"
             />
             <LocaleTimeInput
               value={dueTime}
-              onChange={setDueTime}
+              onChange={(value) => { dueTimeRef.current = value; setDueTime(value); }}
               onBlur={handleBlur}
               disabled={!dueDate}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 w-28 disabled:opacity-40 disabled:cursor-not-allowed"
