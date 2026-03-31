@@ -440,7 +440,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
                 }}
                 className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300"
               >
-                {PRIORITIES.map(p => (
+                {[PRIORITIES[0], PRIORITIES[3], PRIORITIES[2], PRIORITIES[1]].map(p => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
