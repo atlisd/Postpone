@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSignalR } from '../../hooks/useSignalR';
-import { listProjects, createProject, deleteProject, reorderProjects } from '../../api/projects';
+import { listProjects, createProject, deleteProject, reorderProjects, updateProject } from '../../api/projects';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import type { ProjectResponse } from '../../types/api';
 import {
@@ -33,6 +33,7 @@ import {
   FolderOpen,
   MoreHorizontal,
   Trash2,
+  Pencil,
   UserCheck,
   GripVertical,
   ChevronDown,
@@ -156,6 +157,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const location = useLocation();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<{ id: string; name: string; color: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
   const [navOverflows, setNavOverflows] = useState(false);
   const navRef = useRef<HTMLElement>(null);
@@ -219,6 +221,17 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       await fetchProjects();
     } catch {
       toast.error('Failed to delete project');
+    }
+  };
+
+  const handleEditProject = async (data: { name: string; color: string }) => {
+    if (!editingProject) return;
+    try {
+      await updateProject(editingProject.id, { name: data.name, color: data.color });
+      setEditingProject(null);
+      await fetchProjects();
+    } catch {
+      toast.error('Failed to update project');
     }
   };
 
@@ -403,6 +416,19 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             <button
               onClick={() => {
                 const project = projects.find(p => p.id === contextMenu.projectId);
+                if (project) {
+                  setEditingProject({ id: project.id, name: project.name, color: project.color });
+                  setContextMenu(null);
+                }
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+            <button
+              onClick={() => {
+                const project = projects.find(p => p.id === contextMenu.projectId);
                 if (project) handleDeleteProject(project.id, project.name);
               }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -419,6 +445,14 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         <ProjectFormModal
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateProject}
+        />
+      )}
+
+      {editingProject && (
+        <ProjectFormModal
+          onClose={() => setEditingProject(null)}
+          onSubmit={handleEditProject}
+          initial={{ name: editingProject.name, color: editingProject.color }}
         />
       )}
     </>
