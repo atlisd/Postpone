@@ -94,6 +94,14 @@ export function CalendarView() {
     return VIEW_ORDER.includes(saved!) ? saved! : 'month';
   });
   const [showViewPicker, setShowViewPicker] = useState(false);
+  const [showProjectFilter, setShowProjectFilter] = useState(false);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('calendar-project-filter');
+      if (saved) return new Set(JSON.parse(saved) as string[]);
+    } catch { /* ignore */ }
+    return new Set();
+  });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
@@ -132,6 +140,15 @@ export function CalendarView() {
     listProjects().then(data => {
       setProjects(data);
       if (data.length > 0) setNewTaskProjectId(data[0].id);
+      // Clean up stale project IDs from saved filter
+      const validIds = new Set(data.map(p => p.id));
+      setSelectedProjectIds(prev => {
+        const cleaned = new Set([...prev].filter(id => validIds.has(id)));
+        if (cleaned.size !== prev.size) {
+          localStorage.setItem('calendar-project-filter', JSON.stringify([...cleaned]));
+        }
+        return cleaned;
+      });
     }).catch(() => {});
   }, []);
 
@@ -185,6 +202,21 @@ export function CalendarView() {
     }
   };
 
+  const toggleProjectFilter = (projectId: string) => {
+    setSelectedProjectIds(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      localStorage.setItem('calendar-project-filter', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const clearProjectFilter = () => {
+    setSelectedProjectIds(new Set());
+    localStorage.setItem('calendar-project-filter', JSON.stringify([]));
+  };
+
   const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
     const { source, target } = event.operation;
     if (!source?.id || !target?.id) return;
@@ -210,9 +242,21 @@ export function CalendarView() {
   const { start: calStart, end: calEnd } = getViewRange(viewType, currentDate);
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
+  // Count tasks per project for the current view (unfiltered)
+  const taskCountByProject = new Map<string, number>();
+  for (const task of tasks) {
+    if (!task.dueDate) continue;
+    taskCountByProject.set(task.projectId, (taskCountByProject.get(task.projectId) ?? 0) + 1);
+  }
+
+  // Filter tasks by selected projects
+  const filteredTasks = selectedProjectIds.size === 0
+    ? tasks
+    : tasks.filter(t => selectedProjectIds.has(t.projectId));
+
   // Group tasks by date
   const tasksByDate = new Map<string, TaskResponse[]>();
-  for (const task of tasks) {
+  for (const task of filteredTasks) {
     if (!task.dueDate) continue;
     if (!tasksByDate.has(task.dueDate)) tasksByDate.set(task.dueDate, []);
     tasksByDate.get(task.dueDate)!.push(task);
@@ -251,6 +295,69 @@ export function CalendarView() {
             >
               <ChevronRight size={20} />
             </button>
+
+            {/* Project filter */}
+            {projects.length > 1 && (
+              <div className="relative ml-2">
+                <button
+                  onClick={() => setShowProjectFilter(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors font-medium ${
+                    selectedProjectIds.size > 0
+                      ? 'border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  {selectedProjectIds.size === 0
+                    ? 'All projects'
+                    : selectedProjectIds.size === 1
+                      ? (projects.find(p => selectedProjectIds.has(p.id))?.name ?? '1 project')
+                      : `${selectedProjectIds.size} projects`}
+                  <ChevronDown size={14} className="text-gray-400" />
+                </button>
+                {showProjectFilter && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowProjectFilter(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]">
+                      <button
+                        onClick={clearProjectFilter}
+                        className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between gap-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                          selectedProjectIds.size === 0
+                            ? 'text-blue-600 dark:text-blue-400 font-medium'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        All projects
+                        {selectedProjectIds.size === 0 && <Check size={14} />}
+                      </button>
+                      <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                      {projects.map(p => {
+                        const count = taskCountByProject.get(p.id) ?? 0;
+                        const isSelected = selectedProjectIds.has(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => toggleProjectFilter(p.id)}
+                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                              count === 0 ? 'opacity-40' : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: p.color }}
+                            />
+                            <span className="flex-1 truncate">{p.name}</span>
+                            {count > 0 && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{count}</span>
+                            )}
+                            {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* View picker */}
             <div className="relative ml-2">
