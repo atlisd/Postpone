@@ -502,12 +502,12 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               <div key={tag.id} className="relative group/tag flex items-center">
                 <NavLink
                   to={`/app/tags/${tag.id}`}
-                  className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1 pr-7'}
+                  className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1'}
                   onClick={onClose}
                 >
                   <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
                   <span className="flex-1 truncate">{tag.name}</span>
-                  <span className="text-xs text-gray-400">{tag.taskCount}</span>
+                  <span className="text-xs text-gray-400 group-hover/tag:invisible">{tag.taskCount}</span>
                 </NavLink>
                 <button
                   onClick={(e) => {
