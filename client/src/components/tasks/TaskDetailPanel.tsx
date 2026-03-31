@@ -428,7 +428,16 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
               <Flag size={16} className="text-gray-400 flex-shrink-0" />
               <select
                 value={priority}
-                onChange={(e) => { setPriority(Number(e.target.value)); setTimeout(handleBlur, 0); }}
+                onChange={(e) => {
+                  const newPriority = Number(e.target.value);
+                  setPriority(newPriority);
+                  if (newPriority === task.priority) return;
+                  setSaving(true);
+                  const save = task.occurrenceDate
+                    ? editOccurrence(task.id, task.occurrenceDate, { priority: newPriority })
+                    : updateTask(task.id, { priority: newPriority });
+                  save.then(onUpdate).catch(() => toast.error('Failed to save')).finally(() => setSaving(false));
+                }}
                 className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300"
               >
                 {PRIORITIES.map(p => (
