@@ -17,7 +17,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
     public Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("NotificationSchedulerJob starting");
-        _timer = new Timer(DoWork, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(15));
+        _timer = new Timer(DoWork, null, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(1));
         return Task.CompletedTask;
     }
 
@@ -93,7 +93,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         User user, TodoTask task, DateTime utcNow, TimeZoneInfo tz)
     {
         var dueUtc = task.DueDateTime!.Value;
-        var windowStart = utcNow.AddMinutes(-16);
+        var windowStart = utcNow.AddMinutes(-2);
         if (dueUtc < windowStart || dueUtc > utcNow) return;
 
         var dueDateTimeForHash = dueUtc.ToString("yyyy-MM-ddTHH:mm");
