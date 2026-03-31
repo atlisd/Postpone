@@ -57,6 +57,8 @@ jobs:
           tags: |
             ${{ env.CLIENT_IMAGE }}:${{ github.ref_name }}
             ${{ env.CLIENT_IMAGE }}:latest
+          build-args: |
+            VITE_APP_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

@@ -288,6 +288,21 @@ export function SettingsPage() {
           Sign out
         </button>
       </div>
+
+      {/* About */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6 flex items-center justify-between">
+        <p className="text-xs text-gray-400 dark:text-gray-600">
+          Postpone {import.meta.env.VITE_APP_VERSION ? `build ${import.meta.env.VITE_APP_VERSION}` : 'local dev'}
+        </p>
+        <a
+          href="https://github.com/atlisd/Postpone"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+        >
+          GitHub
+        </a>
+      </div>
     </div>
   );
 }
