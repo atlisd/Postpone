@@ -26,6 +26,7 @@ Postpone lets family members manage their own private task lists while selective
 - **Natural Language Input** — type dates inline when creating tasks: `tomorrow 5pm`, `next friday`, `tonight`, `apr 20`, `mon 9:30` — the date is parsed out and the task title is cleaned automatically
 - **Task Assignment** — assign tasks to household members
 - **Tags** — color-coded tags to categorize tasks across projects; create and assign tags from the task detail panel; navigate to a tag to see all tagged tasks; manage tags (create, rename, recolor, delete) from the sidebar
+- **Dark mode** - Light or Dark mode, or Auto
 
 ### Collaboration
 - **Households** — create a household and invite family members via an 8-character invite code
