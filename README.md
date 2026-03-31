@@ -321,6 +321,52 @@ cd src/Tasker.Api
 dotnet ef migrations add MigrationName
 ```
 
+## Backup & Restore
+
+Postpone ships with two shell scripts that wrap standard PostgreSQL tools. Run them from the project root (the directory containing `docker-compose.yml`).
+
+### Backup
+
+```bash
+./scripts/backup.sh
+```
+
+Creates a timestamped SQL dump (e.g. `tasker_20260331-143000.sql`) in the current directory:
+
+```bash
+# Custom output path
+./scripts/backup.sh /backups/tasker_before_upgrade.sql
+```
+
+The underlying command is:
+
+```bash
+docker compose exec -T db pg_dump -U tasker tasker > tasker_$(date +%Y%m%d-%H%M%S).sql
+```
+
+The `-T` flag disables pseudo-TTY allocation, which is required when running from cron or scripts.
+
+### Restore
+
+```bash
+./scripts/restore.sh tasker_20260331-143000.sql
+```
+
+The script will:
+1. Prompt for confirmation (data will be overwritten)
+2. Stop the API container to prevent writes during restore
+3. Drop and recreate the `tasker` database
+4. Load the SQL dump
+5. Restart the API (EF Core migrations run automatically on startup)
+
+### Automated backups with cron
+
+```cron
+0 2 * * * cd /path/to/postpone && ./scripts/backup.sh /backups/tasker_$(date +\%Y\%m\%d-\%H\%M\%S).sql >> /var/log/postpone-backup.log 2>&1
+```
+
+Store backup files in a location outside the Docker volume — a mounted network share, object storage, or a separate disk — so they survive a `docker compose down -v`.
+
 ## License
 
 This project is for personal/family use.
