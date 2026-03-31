@@ -27,25 +27,25 @@ import {
   Sunrise,
   Calendar,
   List,
-  CalendarDays,
-  Settings,
   Users,
-  LogOut,
   X,
   Plus,
   FolderOpen,
   MoreHorizontal,
   Trash2,
-  Home,
   UserCheck,
   GripVertical,
   ChevronDown,
+  SquareCheck,
+  CalendarDays,
+  User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+  desktopVisible?: boolean;
 }
 
 // Set in onDragStart, cleared after onDragEnd — prevents the post-drag click from
@@ -150,8 +150,8 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
   );
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, logout } = useAuth();
+export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -251,7 +251,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
       isActive
         ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-gray-100 font-medium'
-        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'
     }`;
 
   const inboxProject = projects.find(p => p.isInbox);
@@ -265,9 +265,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full w-60 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-50 flex flex-col transition-transform duration-200 md:translate-x-0 md:static md:z-auto ${
+        className={`fixed top-0 left-0 h-full w-60 bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-50 flex flex-col transition-transform duration-200 md:translate-x-0 md:static md:z-auto ${
           open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        } ${!desktopVisible ? 'md:hidden' : ''}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -275,6 +275,39 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <button onClick={onClose} className="md:hidden text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
             <X size={20} />
           </button>
+        </div>
+
+        {/* Mobile icon row */}
+        <div className="md:hidden flex items-center gap-1 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          {(() => {
+            const taskRoutes = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/'];
+            const isTasksActive = taskRoutes.some(r => location.pathname.startsWith(r));
+            const isCalendarActive = location.pathname === '/app/calendar';
+            const isSettingsActive = location.pathname === '/app/settings';
+            const iconBtn = (active: boolean) =>
+              `flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${active ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'}`;
+            return (
+              <>
+                <button onClick={() => { navigate('/app/settings'); onClose(); }} className={iconBtn(isSettingsActive)} title="Settings">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user?.displayName} className="w-7 h-7 rounded-full object-cover" />
+                  ) : user?.displayName ? (
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold ${isSettingsActive ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                      {user.displayName[0].toUpperCase()}
+                    </span>
+                  ) : (
+                    <User size={18} />
+                  )}
+                </button>
+                <button onClick={() => { navigate('/app/today'); onClose(); }} className={iconBtn(isTasksActive)} title="Tasks">
+                  <SquareCheck size={20} />
+                </button>
+                <button onClick={() => { navigate('/app/calendar'); onClose(); }} className={iconBtn(isCalendarActive)} title="Calendar">
+                  <CalendarDays size={20} />
+                </button>
+              </>
+            );
+          })()}
         </div>
 
         {/* Smart Lists */}
@@ -289,13 +322,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               {label}
             </NavLink>
           ))}
-
-          <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
-
-          <NavLink to="/app/calendar" className={navLinkClass} onClick={onClose}>
-            <CalendarDays size={18} />
-            Calendar
-          </NavLink>
 
           <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
 
@@ -365,30 +391,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-gray-700 px-3 py-3 space-y-1">
-          <NavLink to="/app/households" className={navLinkClass} onClick={onClose}>
-            <Home size={18} />
-            Households
-          </NavLink>
-          <NavLink to="/app/settings" className={navLinkClass} onClick={onClose}>
-            <Settings size={18} />
-            Settings
-          </NavLink>
-          {user?.isAdmin && (
-            <NavLink to="/app/admin/users" className={navLinkClass} onClick={onClose}>
-              <Users size={18} />
-              Admin
-            </NavLink>
-          )}
-          <button
-            onClick={() => { logout(); onClose(); }}
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 w-full transition-colors"
-          >
-            <LogOut size={18} />
-            Sign out
-          </button>
-        </div>
       </aside>
 
       {contextMenu && createPortal(

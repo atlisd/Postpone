@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, type ThemeMode } from '../../contexts/ThemeContext';
 import { updateProfile, setPushoverKey, changePassword, setNotificationPreferences } from '../../api/auth';
@@ -13,7 +14,8 @@ const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 ];
 
 export function SettingsPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { formatHour } = useLocale();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
@@ -276,6 +278,16 @@ export function SettingsPage() {
           Change password
         </button>
       </form>
+
+      {/* Sign out */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <button
+          onClick={() => { logout(); navigate('/login'); }}
+          className="px-4 py-2 text-sm border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+        >
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }

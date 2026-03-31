@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
+import { IconSidebar } from './IconSidebar';
 import { DragDropProvider } from '@dnd-kit/react';
 import { moveTask } from '../../api/tasks';
 import { toast } from 'sonner';
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const showSidebar = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/']
+    .some(r => location.pathname.startsWith(r));
 
   const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
     const { source, target } = event.operation;
@@ -25,10 +29,11 @@ export function AppShell() {
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
     <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <IconSidebar />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} desktopVisible={showSidebar} />
 
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
+        {/* Mobile header — always visible so the user can navigate from any route */}
         <header className="md:hidden flex items-center px-4 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setSidebarOpen(true)}
