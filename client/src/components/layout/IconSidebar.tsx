@@ -11,7 +11,7 @@ export function IconSidebar() {
 
   const isTasksActive = taskRoutes.some(r => location.pathname.startsWith(r));
   const isCalendarActive = location.pathname === '/app/calendar';
-  const isSettingsActive = location.pathname === '/app/settings';
+const isSettingsActive = location.pathname === '/app/settings';
 
   const btnClass = (active: boolean) =>
     `flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${
@@ -60,6 +60,7 @@ export function IconSidebar() {
       >
         <CalendarDays size={20} />
       </button>
+
     </aside>
   );
 }

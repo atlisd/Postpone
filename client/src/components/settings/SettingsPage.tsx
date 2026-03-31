@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme, type ThemeMode } from '../../contexts/ThemeContext';
 import { updateProfile, setPushoverKey, changePassword, setNotificationPreferences } from '../../api/auth';
-import { Settings, Bell, Lock, Monitor, Sun, Moon } from 'lucide-react';
+import { Settings, Bell, Lock, Monitor, Sun, Moon, Users, Home } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocale, SUPPORTED_LOCALES } from '../../contexts/LocaleContext';
 
@@ -176,6 +176,44 @@ export function SettingsPage() {
       </div>
 
       <hr className="border-gray-200 dark:border-gray-700" />
+
+      {/* Households */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Home size={20} className="text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Households</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/app/households')}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Manage households
+        </button>
+      </div>
+
+      <hr className="border-gray-200 dark:border-gray-700" />
+
+      {/* Administration (admin only) */}
+      {user?.isAdmin && (
+        <>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Users size={20} className="text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Administration</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/app/admin/users')}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Manage users
+            </button>
+          </div>
+
+          <hr className="border-gray-200 dark:border-gray-700" />
+        </>
+      )}
 
       {/* Pushover */}
       <form onSubmit={handleSavePushover} className="space-y-4">
