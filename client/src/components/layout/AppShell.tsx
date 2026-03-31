@@ -13,14 +13,17 @@ export function AppShell() {
   const showSidebar = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/', '/app/tags/']
     .some(r => location.pathname.startsWith(r));
 
-  const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
+  const handleDragEnd = async (event: { operation: { source?: { id?: string | number; group?: string } | null; target?: { id?: string | number } | null } }) => {
     const { source, target } = event.operation;
     if (!source?.id || !target?.id) return;
+    if (source.group === 'sidebar-projects') return;
     const targetId = String(target.id);
     if (!targetId.startsWith('project-drop-')) return;
     const projectId = targetId.replace('project-drop-', '');
+    // source.id is a compound key "taskUuid_occurrenceDate|single" — extract just the UUID
+    const taskId = String(source.id).split('_')[0];
     try {
-      await moveTask(String(source.id), projectId);
+      await moveTask(taskId, projectId);
     } catch {
       toast.error('Failed to move task');
     }

@@ -8,22 +8,8 @@ import { listTags, createTag, updateTag, deleteTag } from '../../api/tags';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import { TagFormModal } from '../tags/TagFormModal';
 import type { ProjectResponse, TagFull } from '../../types/api';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useDroppable } from '@dnd-kit/react';
+import { useDroppable, useDragDropMonitor, useDragOperation } from '@dnd-kit/react';
+import { useSortable, isSortableOperation } from '@dnd-kit/react/sortable';
 import {
   Sun,
   Sunrise,
@@ -65,6 +51,7 @@ const smartLists = [
 
 interface SortableProjectItemProps {
   project: ProjectResponse;
+  index: number;
   userId: string | undefined;
   navLinkClass: (props: { isActive: boolean }) => string;
   onClose: () => void;
@@ -75,6 +62,7 @@ interface SortableProjectItemProps {
 
 function SortableProjectItem({
   project,
+  index,
   userId,
   navLinkClass,
   onClose,
@@ -82,28 +70,28 @@ function SortableProjectItem({
   contextMenuProjectId,
   taskCount,
 }: SortableProjectItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { ref, handleRef, isDragging } = useSortable({
     id: project.id,
+    index,
+    group: 'sidebar-projects',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group === 'sidebar-projects',
   });
   const { ref: dropRef, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  const { source } = useDragOperation();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isDraggingProject = (source as any)?.group === 'sidebar-projects';
 
   return (
-    <div ref={dropRef} className={`rounded-md ${isDropTarget ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
-    <div ref={setNodeRef} style={style} className="relative group">
+    <div ref={dropRef} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={ref} className={`relative group ${isDragging ? 'opacity-50' : ''}`}>
       <NavLink
         to={`/app/projects/${project.id}`}
         className={navLinkClass}
         onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
       >
         <span
-          {...attributes}
-          {...listeners}
+          ref={handleRef}
           className="cursor-grab active:cursor-grabbing flex-shrink-0"
         >
           <GripVertical size={16} className="hidden group-hover:block text-gray-400" />
@@ -140,8 +128,11 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
   onClose: () => void;
 }) {
   const { ref, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
+  const { source } = useDragOperation();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isDraggingProject = (source as any)?.group === 'sidebar-projects';
   return (
-    <div ref={ref} className={`relative group rounded-md ${isDropTarget ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={ref} className={`relative group rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
       <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onClose}>
         <FolderOpen size={16} style={{ color: project.color }} />
         <span className="flex-1 truncate">{project.name}</span>
@@ -184,10 +175,6 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
     ro.observe(el);
     return () => { el.removeEventListener('scroll', checkNavOverflow); ro.disconnect(); };
   }, [checkNavOverflow]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
 
   const fetchProjects = useCallback(async () => {
     const version = ++fetchVersionRef.current;
@@ -292,30 +279,44 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    // Clear the drag flag after a tick so it's still true when the post-drag click fires.
-    setTimeout(() => { dragOccurred = false; }, 0);
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
 
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  useDragDropMonitor({
+    onDragStart() {
+      dragOccurred = true;
+    },
+    onDragEnd(event) {
+      // Clear the drag flag after a tick so it's still true when the post-drag click fires.
+      setTimeout(() => { dragOccurred = false; }, 0);
 
-    const sortableProjects = projects.filter(p => !p.isInbox);
-    const oldIndex = sortableProjects.findIndex(p => p.id === active.id);
-    const newIndex = sortableProjects.findIndex(p => p.id === over.id);
-    const reordered = arrayMove(sortableProjects, oldIndex, newIndex);
+      const { operation } = event;
+      if (!isSortableOperation(operation)) return;
+      const { source, target } = operation;
+      if (!source || !target) return;
+      if (source.group !== 'sidebar-projects' || target.group !== 'sidebar-projects') return;
+      const fromIndex = source.initialIndex;
+      const toIndex = source.index;
+      if (fromIndex === toIndex) return;
 
-    const inbox = projects.find(p => p.isInbox);
-    // Invalidate any in-flight fetchProjects so the optimistic update isn't overwritten
-    fetchVersionRef.current++;
-    setProjects(inbox ? [inbox, ...reordered] : reordered);
+      const current = projectsRef.current;
+      const sortable = current.filter(p => !p.isInbox);
+      const inbox = current.find(p => p.isInbox);
 
-    try {
-      await reorderProjects(reordered.map(p => p.id));
-    } catch {
-      toast.error('Failed to save order');
-      await fetchProjects();
-    }
-  };
+      const reordered = [...sortable];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+
+      // Invalidate any in-flight fetchProjects so the optimistic update isn't overwritten
+      fetchVersionRef.current++;
+      setProjects(inbox ? [inbox, ...reordered] : reordered);
+
+      reorderProjects(reordered.map(p => p.id)).catch(() => {
+        toast.error('Failed to save order');
+        fetchProjects();
+      });
+    },
+  });
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
@@ -425,32 +426,21 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               )}
 
               {/* Sortable projects */}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragStart={() => { dragOccurred = true; }}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={sortableProjects.map(p => p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {sortableProjects.map(project => (
-                    <SortableProjectItem
-                      key={project.id}
-                      project={project}
-                      userId={user?.id}
-                      navLinkClass={navLinkClass}
-                      onClose={onClose}
-                      onContextMenu={(projectId, rect) =>
-                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, rect })
-                      }
-                      contextMenuProjectId={contextMenu?.projectId ?? null}
-                      taskCount={project.taskCount - project.completedTaskCount}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
+              {sortableProjects.map((project, index) => (
+                <SortableProjectItem
+                  key={project.id}
+                  project={project}
+                  index={index}
+                  userId={user?.id}
+                  navLinkClass={navLinkClass}
+                  onClose={onClose}
+                  onContextMenu={(projectId, rect) =>
+                    setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, rect })
+                  }
+                  contextMenuProjectId={contextMenu?.projectId ?? null}
+                  taskCount={project.taskCount - project.completedTaskCount}
+                />
+              ))}
             </>
           )}
 
