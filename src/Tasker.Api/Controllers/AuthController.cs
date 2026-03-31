@@ -12,7 +12,7 @@ namespace Tasker.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService, TaskerDbContext db) : ControllerBase
+public class AuthController(IAuthService authService, TaskerDbContext db, IWebHostEnvironment env) : ControllerBase
 {
     [HttpGet("setup-status")]
     [AllowAnonymous]
@@ -108,6 +108,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db) : Cont
         Response.Cookies.Append("refreshToken", token, new CookieOptions
         {
             HttpOnly = true,
+            Secure = !env.IsDevelopment(),
             SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddDays(365),
             Path = "/"

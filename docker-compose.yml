@@ -49,12 +49,12 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        VITE_DEBUG: "true"
+        VITE_DEBUG: "false"
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "3000:8080"
 
 volumes:
   pgdata:

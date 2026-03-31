@@ -72,6 +72,17 @@ Postpone lets family members manage their own private task lists while selective
 | HTTP Client | ky |
 | Deployment | Docker Compose, nginx |
 
+## Security
+
+- **Non-root containers** — both the API and nginx containers run as unprivileged users
+- **Security headers** — CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- **Secure cookies** — refresh tokens use HttpOnly, SameSite=Lax, and Secure (in production)
+- **Rate limiting** — auth endpoints are rate-limited (10 requests/min) to prevent brute-force
+- **Input validation** — all endpoints validated with FluentValidation
+- **No SQL injection** — Entity Framework Core parameterized queries throughout
+- **Password hashing** — BCrypt with automatic salting
+- **Token rotation** — refresh tokens are rotated on use with reuse/theft detection
+
 ## Getting Started
 
 ### Prerequisites

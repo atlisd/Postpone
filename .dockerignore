@@ -1,0 +1,6 @@
+.git/
+.env
+*.md
+media/
+scripts/
+.claude/
