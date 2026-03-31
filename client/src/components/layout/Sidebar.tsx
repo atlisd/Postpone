@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSignalR } from '../../hooks/useSignalR';
 import { listProjects, createProject, deleteProject, reorderProjects, updateProject } from '../../api/projects';
 import { listTags, createTag, updateTag, deleteTag } from '../../api/tags';
+import { getSmartList } from '../../api/tasks';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import { TagFormModal } from '../tags/TagFormModal';
 import type { ProjectResponse, TagFull } from '../../types/api';
@@ -156,6 +157,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [showCreateTagModal, setShowCreateTagModal] = useState(false);
   const [editingTag, setEditingTag] = useState<TagFull | null>(null);
   const [tagContextMenu, setTagContextMenu] = useState<{ tagId: string; rect: DOMRect } | null>(null);
+  const [hasAssignedTasks, setHasAssignedTasks] = useState<boolean | null>(null);
   const [navOverflows, setNavOverflows] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const fetchVersionRef = useRef(0);
@@ -197,14 +199,25 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
     }
   }, []);
 
+  const fetchAssignedCount = useCallback(async () => {
+    try {
+      const data = await getSmartList('assigned-to-me');
+      setHasAssignedTasks(data.length > 0);
+    } catch {
+      setHasAssignedTasks(null);
+    }
+  }, []);
+
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
+  useEffect(() => { fetchAssignedCount(); }, [fetchAssignedCount]);
   useEffect(() => { checkNavOverflow(); }, [projects, tags, checkNavOverflow]);
 
   const fetchAll = useCallback(() => {
     fetchProjects();
     fetchTags();
-  }, [fetchProjects, fetchTags]);
+    fetchAssignedCount();
+  }, [fetchProjects, fetchTags, fetchAssignedCount]);
 
   useSignalR(fetchAll);
 
@@ -387,12 +400,14 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <p className="px-3 py-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
             Smart Lists
           </p>
-          {smartLists.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+          {smartLists
+            .filter(({ to }) => to !== '/app/assigned' || hasAssignedTasks !== false)
+            .map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
+                <Icon size={18} />
+                {label}
+              </NavLink>
+            ))}
 
           <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
 
