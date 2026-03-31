@@ -489,7 +489,22 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
                   ref={tagInputRef}
                   value={tagSearch}
                   onChange={e => setTagSearch(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Escape') { setTagOpen(false); setTagSearch(''); } }}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setTagOpen(false); setTagSearch(''); return; }
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const trimmed = tagSearch.trim();
+                      if (!trimmed) return;
+                      const available = allTags
+                        .filter(t => !task.tags.some(tt => tt.id === t.id))
+                        .filter(t => t.name.toLowerCase().includes(trimmed.toLowerCase()));
+                      const exact = available.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
+                      const canCreate = !allTags.some(t => t.name.toLowerCase() === trimmed.toLowerCase());
+                      if (exact) handleAddTag(exact.id);
+                      else if (canCreate) handleCreateAndAddTag(trimmed);
+                      else if (available.length > 0) handleAddTag(available[0].id);
+                    }
+                  }}
                   onBlur={() => { setTimeout(() => { setTagOpen(false); setTagSearch(''); }, 100); }}
                   placeholder="Search or create..."
                   className="w-full px-3 py-2 text-sm bg-transparent border-b border-gray-200 dark:border-gray-700 outline-none text-gray-900 dark:text-white"

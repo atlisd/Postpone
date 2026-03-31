@@ -454,7 +454,9 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             </>
           )}
 
-          {/* Tags */}
+          {/* Tags — only shown when at least one tag has active tasks */}
+          {tags.some(t => t.taskCount > 0) && (
+            <>
           <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
           <div className="flex items-center justify-between px-3 py-1">
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -468,12 +470,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               <Plus size={16} />
             </button>
           </div>
-          {tags.filter(t => t.taskCount > 0).length === 0 ? (
-            <p className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500 italic">
-              No tags yet
-            </p>
-          ) : (
-            tags.filter(t => t.taskCount > 0).map(tag => (
+            {tags.filter(t => t.taskCount > 0).map(tag => (
               <div key={tag.id} className="relative group/tag flex items-center">
                 <NavLink
                   to={`/app/tags/${tag.id}`}
@@ -496,7 +493,8 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                   <MoreHorizontal size={14} />
                 </button>
               </div>
-            ))
+            ))}
+            </>
           )}
         </nav>
         {navOverflows && (

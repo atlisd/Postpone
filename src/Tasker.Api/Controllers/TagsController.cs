@@ -12,7 +12,7 @@ namespace Tasker.Api.Controllers;
 
 [ApiController]
 [Authorize]
-public class TagsController(TaskerDbContext db, IProjectAccessService access) : ControllerBase
+public class TagsController(TaskerDbContext db, IProjectAccessService access, ISyncService sync) : ControllerBase
 {
     [HttpGet("api/tags")]
     public async Task<IActionResult> List()
@@ -112,6 +112,9 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access) : 
 
         db.TaskTags.Add(new TaskTag { TaskId = taskId, TagId = request.TagId });
         await db.SaveChangesAsync();
+
+        var result = await db.Tasks.Where(t => t.Id == taskId).Select(TaskResponse.Projection).FirstAsync();
+        await sync.TaskUpdated(task.ProjectId, result);
         return NoContent();
     }
 
@@ -129,6 +132,9 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access) : 
 
         db.TaskTags.Remove(taskTag);
         await db.SaveChangesAsync();
+
+        var result = await db.Tasks.Where(t => t.Id == taskId).Select(TaskResponse.Projection).FirstAsync();
+        await sync.TaskUpdated(task.ProjectId, result);
         return NoContent();
     }
 }
