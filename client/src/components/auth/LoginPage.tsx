@@ -7,11 +7,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, needsSetup } = useAuth();
+  const { login, needsSetup, user } = useAuth();
   const navigate = useNavigate();
 
   if (needsSetup) {
     return <Navigate to="/setup" replace />;
+  }
+
+  if (user) {
+    return <Navigate to="/app/today" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
