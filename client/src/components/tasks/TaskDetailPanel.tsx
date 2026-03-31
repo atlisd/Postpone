@@ -359,9 +359,6 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
             </select>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={handleDelete} className="p-1.5 text-gray-400 hover:text-red-500 rounded">
-              <Trash2 size={16} />
-            </button>
             <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded">
               <X size={18} />
             </button>
@@ -576,8 +573,11 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
-          {saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(localeCode, { dateStyle: 'medium', timeStyle: 'short' })}`}
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 flex items-center justify-between">
+          <span>{saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(localeCode, { dateStyle: 'medium', timeStyle: 'short' })}`}</span>
+          <button onClick={handleDelete} className="p-1 text-gray-400 hover:text-red-500 rounded">
+            <Trash2 size={14} />
+          </button>
         </div>
       </div>
     </div>
