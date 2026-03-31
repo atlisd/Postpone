@@ -502,7 +502,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               <div key={tag.id} className="relative group/tag flex items-center">
                 <NavLink
                   to={`/app/tags/${tag.id}`}
-                  className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1 min-w-0 pr-7'}
+                  className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1 min-w-0'}
                   onClick={onClose}
                 >
                   <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
