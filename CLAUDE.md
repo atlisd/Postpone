@@ -84,6 +84,14 @@ src/Tasker.Api/
   Middleware/     # ExceptionHandlingMiddleware
 ```
 
+## Documentation
+
+Keep `README.md` up to date with any applicable changes:
+- New features → add to the Features section
+- New or changed API endpoints → update the API Endpoints tables
+- New environment variables → add to the Environment Variables table
+- Significant architectural changes → update the Architecture section
+
 ## Environment
 
 Copy `.env.example` to `.env` for Docker. For local dev, the frontend Vite config proxies `/api` and `/hubs` to `localhost:5001`.
