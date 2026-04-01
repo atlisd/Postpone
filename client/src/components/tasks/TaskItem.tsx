@@ -22,7 +22,18 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   const subtaskTotal = task.subtasks.length;
   const subtaskDone = task.subtasks.filter(s => s.isCompleted).length;
   const itemId = `${task.id}_${task.occurrenceDate ?? 'single'}`;
-  const { ref, handleRef, isDragging } = useSortable({ id: itemId, index, group: group ?? itemId });
+  // Without a shared group (smart list views), exclude this item from collision detection so
+  // it doesn't interfere with sidebar project reordering.
+  const { ref, handleRef, isDragging } = useSortable({
+    id: itemId,
+    index,
+    // Smart-list tasks (no group) share a sentinel group so OptimisticSortingPlugin's
+    // per-group index check doesn't bail out: a unique group per task puts index N at
+    // sorted-position 0, causing N !== 0 to fire and suppressing the sidebar project
+    // reorder visual on smart-list pages.
+    group: group ?? 'no-sort',
+    accept: group ? undefined : () => false,
+  });
 
   const dueLabel = task.dueDate
     ? `${formatDueDate(task.dueDate, locale)}${formatDueTime(task.dueDateTime, locale) ? ` ${formatDueTime(task.dueDateTime, locale)}` : ''}`

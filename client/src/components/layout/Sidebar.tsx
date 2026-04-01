@@ -78,7 +78,13 @@ function SortableProjectItem({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     accept: (draggable: any) => draggable?.group === 'sidebar-projects',
   });
-  const { ref: dropRef, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
+  const { ref: dropRef, isDropTarget } = useDroppable({
+    id: 'project-drop-' + project.id,
+    // Only accept task drags — sidebar project drags must land on the sortable inner div so
+    // isSortableOperation() passes in the OptimisticSortingPlugin and useDragDropMonitor.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group !== 'sidebar-projects',
+  });
   const { source } = useDragOperation();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isDraggingProject = (source as any)?.group === 'sidebar-projects';
@@ -323,13 +329,17 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       const { source, target } = operation;
       if (!source || !target) return;
       if (source.group !== 'sidebar-projects' || target.group !== 'sidebar-projects') return;
-      const fromIndex = source.initialIndex;
-      const toIndex = source.index;
-      if (fromIndex === toIndex) return;
 
       const current = projectsRef.current;
       const sortable = current.filter(p => !p.isInbox);
       const inbox = current.find(p => p.isInbox);
+
+      // source.index / source.initialIndex are reset to the original React prop value by
+      // useIsomorphicLayoutEffect in useSortable before dragend fires, so they're always 0.
+      // Use the stable source.id / target.id UUIDs to look up positions instead.
+      const fromIndex = sortable.findIndex(p => p.id === String(source.id));
+      const toIndex = sortable.findIndex(p => p.id === String(target.id));
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
 
       const reordered = [...sortable];
       const [moved] = reordered.splice(fromIndex, 1);
@@ -539,7 +549,12 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
             className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
-            style={{ top: contextMenu.rect.bottom + 4, left: contextMenu.rect.left }}
+            style={{
+              top: contextMenu.rect.bottom + 4 + 80 > window.innerHeight
+                ? contextMenu.rect.top - 80
+                : contextMenu.rect.bottom + 4,
+              left: contextMenu.rect.left,
+            }}
           >
             <button
               onClick={() => {
@@ -589,7 +604,12 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div className="fixed inset-0 z-50" onClick={() => setTagContextMenu(null)} />
           <div
             className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
-            style={{ top: tagContextMenu.rect.bottom + 4, left: tagContextMenu.rect.left }}
+            style={{
+              top: tagContextMenu.rect.bottom + 4 + 80 > window.innerHeight
+                ? tagContextMenu.rect.top - 80
+                : tagContextMenu.rect.bottom + 4,
+              left: tagContextMenu.rect.left,
+            }}
           >
             <button
               onClick={() => {
