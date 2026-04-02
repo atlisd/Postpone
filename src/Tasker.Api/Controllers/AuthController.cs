@@ -80,11 +80,17 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
     {
         var refreshToken = Request.Cookies["refreshToken"];
         if (refreshToken is null)
+        {
+            DeleteRefreshTokenCookie();
             return Unauthorized(new { message = "No refresh token" });
+        }
 
         var result = await authService.RefreshAsync(refreshToken);
         if (result is null)
+        {
+            DeleteRefreshTokenCookie();
             return Unauthorized(new { message = "Invalid or expired refresh token" });
+        }
 
         SetRefreshTokenCookie(result.RefreshToken);
         return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
@@ -111,6 +117,17 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             Secure = !env.IsDevelopment(),
             SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddDays(365),
+            Path = "/"
+        });
+    }
+
+    private void DeleteRefreshTokenCookie()
+    {
+        Response.Cookies.Delete("refreshToken", new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !env.IsDevelopment(),
+            SameSite = SameSiteMode.Lax,
             Path = "/"
         });
     }
