@@ -65,11 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedToken = getAccessToken();
       if (storedToken && !isJwtExpired(storedToken)) {
         try {
-          await refreshUser();
+          const profile = await getProfile();
+          setUser(profile);
           setIsLoading(false);
           return;
         } catch {
-          // Token might be expired — fall through to cookie refresh
+          // Any failure (expired token, network error, server error) — fall through
+          // to cookie-based refresh below rather than silently showing logged-out UI.
         }
       }
 

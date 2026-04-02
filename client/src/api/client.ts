@@ -1,4 +1,4 @@
-import ky from 'ky';
+import ky, { HTTPError } from 'ky';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 
@@ -35,9 +35,15 @@ async function refreshAccessToken(): Promise<void> {
   try {
     const response = await ky.post('/api/auth/refresh', { credentials: 'include' }).json<{ accessToken: string }>();
     setTokens(response.accessToken);
-  } catch {
-    clearTokens();
-    window.location.href = '/login';
+  } catch (err) {
+    if (err instanceof HTTPError && err.response.status === 401) {
+      // Refresh token is invalid or expired — genuine logout
+      clearTokens();
+      window.location.href = '/login';
+    }
+    // For network errors, 5xx, 429, etc. — rethrow without clearing tokens.
+    // The triggering request will fail but the session stays intact.
+    throw err;
   }
 }
 
@@ -60,7 +66,14 @@ export const api = ky.create({
               refreshPromise = null;
             });
           }
-          await refreshPromise;
+          try {
+            await refreshPromise;
+          } catch {
+            // Transient error (network, 5xx, rate limit) — return the 401 to the
+            // caller rather than propagating. Session is still valid; next request
+            // will retry the refresh.
+            return response;
+          }
 
           if (accessToken) {
             request.headers.set('Authorization', `Bearer ${accessToken}`);
