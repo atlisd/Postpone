@@ -315,41 +315,60 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
+  // Tracks the accumulating intended order during a project drag. Because
+  // OptimisticSortingPlugin moves the dragged item's droppable to the pointer
+  // position after each swap, collision detection finds the source as its own
+  // target by the time dragend fires (target.id === source.id). We therefore
+  // build the final order incrementally from onDragOver events instead.
+  const runningProjectOrderRef = useRef<ProjectResponse[] | null>(null);
 
   useDragDropMonitor({
     onDragStart() {
       dragOccurred = true;
+      runningProjectOrderRef.current = null;
+    },
+    onDragOver(event) {
+      const { operation } = event;
+      if (!isSortableOperation(operation)) return;
+      const { source, target } = operation;
+      if (!source || !target) return;
+      if (source.group !== 'sidebar-projects') return;
+      const sourceId = String(source.id);
+      const targetId = String(target.id);
+      if (sourceId === targetId) return;
+      const base = runningProjectOrderRef.current ?? projectsRef.current.filter(p => !p.isInbox);
+      const fromIndex = base.findIndex(p => p.id === sourceId);
+      const toIndex = base.findIndex(p => p.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) return;
+      const reordered = [...base];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      runningProjectOrderRef.current = reordered;
     },
     onDragEnd(event) {
       // Clear the drag flag after a tick so it's still true when the post-drag click fires.
       setTimeout(() => { dragOccurred = false; }, 0);
 
+      const intended = runningProjectOrderRef.current;
+      runningProjectOrderRef.current = null;
+      if (!intended) return;
+
       const { operation } = event;
       if (!isSortableOperation(operation)) return;
-      const { source, target } = operation;
-      if (!source || !target) return;
-      if (source.group !== 'sidebar-projects' || target.group !== 'sidebar-projects') return;
+      const { source } = operation;
+      if (!source || source.group !== 'sidebar-projects') return;
 
-      const current = projectsRef.current;
-      const sortable = current.filter(p => !p.isInbox);
-      const inbox = current.find(p => p.isInbox);
+      const sourceId = String(source.id);
+      const originalOrder = projectsRef.current.filter(p => !p.isInbox);
+      const originalPos = originalOrder.findIndex(p => p.id === sourceId);
+      const intendedPos = intended.findIndex(p => p.id === sourceId);
+      if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
 
-      // source.index / source.initialIndex are reset to the original React prop value by
-      // useIsomorphicLayoutEffect in useSortable before dragend fires, so they're always 0.
-      // Use the stable source.id / target.id UUIDs to look up positions instead.
-      const fromIndex = sortable.findIndex(p => p.id === String(source.id));
-      const toIndex = sortable.findIndex(p => p.id === String(target.id));
-      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
-
-      const reordered = [...sortable];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(toIndex, 0, moved);
-
-      // Invalidate any in-flight fetchProjects so the optimistic update isn't overwritten
+      const inbox = projectsRef.current.find(p => p.isInbox);
       fetchVersionRef.current++;
-      setProjects(inbox ? [inbox, ...reordered] : reordered);
+      setProjects(inbox ? [inbox, ...intended] : intended);
 
-      reorderProjects(reordered.map(p => p.id)).catch(() => {
+      reorderProjects(intended.map(p => p.id)).catch(() => {
         toast.error('Failed to save order');
         fetchProjects();
       });

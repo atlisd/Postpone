@@ -22,6 +22,8 @@ export function ProjectTaskList() {
   const [selectedTask, setSelectedTask] = useState<TaskResponse | null>(null);
   const selectedTaskRef = useRef(selectedTask);
   selectedTaskRef.current = selectedTask;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const fetchVersionRef = useRef(0);
@@ -57,25 +59,53 @@ export function ProjectTaskList() {
 
   useSignalR(fetchData);
 
+  // Tracks the accumulating intended order during a task drag — same fix as
+  // sidebar project reordering. OptimisticSortingPlugin moves the dragged item's
+  // droppable to the pointer position after each visual swap, so collision
+  // detection sees target.id === source.id by dragend time. We build the final
+  // order incrementally from onDragOver events instead.
+  const runningTaskOrderRef = useRef<TaskResponse[] | null>(null);
+
   useDragDropMonitor({
-    onDragEnd(event) {
+    onDragOver(event) {
       const { operation } = event;
       if (!isSortableOperation(operation)) return;
       const { source, target } = operation;
       if (!source || !target) return;
-      if (source.group !== target.group || source.group !== projectId) return;
-      const fromIndex = source.initialIndex;
-      const toIndex = source.index;
-      if (fromIndex === toIndex) return;
-
-      const reordered = [...tasks];
+      if (source.group !== projectId || target.group !== projectId) return;
+      const sourceId = String(source.id);
+      const targetId = String(target.id);
+      if (sourceId === targetId) return;
+      const base = runningTaskOrderRef.current ?? tasksRef.current;
+      const itemId = (t: TaskResponse) => `${t.id}_${t.occurrenceDate ?? 'single'}`;
+      const fromIndex = base.findIndex(t => itemId(t) === sourceId);
+      const toIndex = base.findIndex(t => itemId(t) === targetId);
+      if (fromIndex === -1 || toIndex === -1) return;
+      const reordered = [...base];
       const [moved] = reordered.splice(fromIndex, 1);
       reordered.splice(toIndex, 0, moved);
+      runningTaskOrderRef.current = reordered;
+    },
+    onDragEnd(event) {
+      const intended = runningTaskOrderRef.current;
+      runningTaskOrderRef.current = null;
+      if (!intended) return;
+
+      const { operation } = event;
+      if (!isSortableOperation(operation)) return;
+      const { source } = operation;
+      if (!source || source.group !== projectId) return;
+
+      const sourceId = String(source.id);
+      const itemId = (t: TaskResponse) => `${t.id}_${t.occurrenceDate ?? 'single'}`;
+      const originalPos = tasksRef.current.findIndex(t => itemId(t) === sourceId);
+      const intendedPos = intended.findIndex(t => itemId(t) === sourceId);
+      if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
 
       fetchVersionRef.current++;
-      setTasks(reordered);
+      setTasks(intended);
 
-      reorderTasks(projectId!, reordered.map(t => t.id)).catch(() => {
+      reorderTasks(projectId!, intended.map(t => t.id)).catch(() => {
         toast.error('Failed to save order');
         fetchData();
       });
