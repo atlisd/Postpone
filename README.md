@@ -2,7 +2,7 @@
 
 A self-hosted general purpose task manager. Built with .NET 10, React 19, and PostgreSQL.
 
-Postpone lets family members manage their own private task lists while selectively sharing projects with their household. Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate through households with invite codes.
+Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate by sharing projects with specific users or with a group via households.
 
 ## Today view
 ![Today view screenshot](media/Today.png)
@@ -29,7 +29,7 @@ Postpone lets family members manage their own private task lists while selective
 - **Dark mode** - Light or Dark mode, or Auto
 
 ### Collaboration
-- **Households** — create a household and invite family members via an 8-character invite code
+- **Households** — create a group and invite others via an 8-character invite code
 - **Shared Projects** — link a project to a household so all members can see and edit tasks
 - **Private by Default** — personal projects stay private unless explicitly shared
 - **Real-Time Sync** — changes sync instantly across devices via SignalR WebSockets
@@ -111,7 +111,7 @@ The app will be available at:
 
 ### First-Run Setup
 
-On first startup with an empty database, you'll be greeted with a setup page to create your admin account. After logging in, go to **Admin** in the sidebar to create accounts for family members.
+On first startup with an empty database, you'll be greeted with a setup page to create your admin account. After logging in, go to **Admin** in the sidebar to create accounts for other users.
 
 ### Local Development
 
@@ -288,7 +288,7 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 ## Households & Sharing
 
 1. **Create a household** from the Households page in the sidebar
-2. **Share the invite code** with family members — they enter it on the same page to join
+2. **Share the invite code** with others — they enter it on the same page to join
 3. **Create shared projects** — when creating a new project, select a household from the dropdown to make it visible to all members
 4. **Assign tasks** — in shared projects, open a task's detail panel to assign it to any household member
 
@@ -380,4 +380,4 @@ Store backup files in a location outside the Docker volume — a mounted network
 
 ## License
 
-This project is for personal/family use.
+MIT — see [LICENSE](LICENSE)
