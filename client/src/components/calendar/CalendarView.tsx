@@ -15,20 +15,22 @@ import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
 import { WeekView } from './WeekView';
 import { DayView } from './DayView';
+import { AgendaView } from './AgendaView';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { DragDropProvider } from '@dnd-kit/react';
 import { toast } from 'sonner';
 
-type CalendarViewType = 'day' | 'week' | 'workWeek' | 'month';
+type CalendarViewType = 'day' | 'week' | 'workWeek' | 'month' | 'agenda';
 
 const VIEW_LABELS: Record<CalendarViewType, string> = {
   day: 'Day',
   week: 'Week',
   workWeek: 'Work Week',
   month: 'Month',
+  agenda: 'Agenda',
 };
 
-const VIEW_ORDER: CalendarViewType[] = ['day', 'week', 'workWeek', 'month'];
+const VIEW_ORDER: CalendarViewType[] = ['day', 'week', 'workWeek', 'month', 'agenda'];
 
 function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: Date } {
   switch (view) {
@@ -51,6 +53,8 @@ function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: D
         end: endOfWeek(monthEnd, { weekStartsOn: 1 }),
       };
     }
+    case 'agenda':
+      return { start: date, end: addDays(date, 60) };
   }
 }
 
@@ -74,6 +78,8 @@ function getViewTitle(view: CalendarViewType, date: Date, locale: Locale): strin
     }
     case 'month':
       return format(date, 'LLLL yyyy', { locale });
+    case 'agenda':
+      return 'Agenda';
   }
 }
 
@@ -83,6 +89,7 @@ function navigateDate(view: CalendarViewType, date: Date, delta: 1 | -1): Date {
     case 'week':
     case 'workWeek': return addWeeks(date, delta);
     case 'month': return addMonths(date, delta);
+    case 'agenda': return date;
   }
 }
 
@@ -110,6 +117,7 @@ export function CalendarView() {
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskProjectId, setNewTaskProjectId] = useState('');
+  const [agendaTodayTrigger, setAgendaTodayTrigger] = useState(0);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -132,9 +140,10 @@ export function CalendarView() {
   }, [currentDate, viewType]);
 
   useEffect(() => {
+    if (viewType === 'agenda') return;
     setLoading(true);
     fetchTasks();
-  }, [fetchTasks]);
+  }, [fetchTasks, viewType]);
 
   useEffect(() => {
     listProjects().then(data => {
@@ -277,24 +286,34 @@ export function CalendarView() {
             {getViewTitle(viewType, currentDate, locale)}
           </h2>
           <div className="flex items-center gap-1 shrink-0">
+            {viewType !== 'agenda' && (
+              <button
+                onClick={() => setCurrentDate(navigateDate(viewType, currentDate, -1))}
+                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
             <button
-              onClick={() => setCurrentDate(navigateDate(viewType, currentDate, -1))}
-              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={() => setCurrentDate(new Date())}
+              onClick={() => {
+                if (viewType === 'agenda') {
+                  setAgendaTodayTrigger(n => n + 1);
+                } else {
+                  setCurrentDate(new Date());
+                }
+              }}
               className="px-3 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
             >
               Today
             </button>
-            <button
-              onClick={() => setCurrentDate(navigateDate(viewType, currentDate, 1))}
-              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-            >
-              <ChevronRight size={20} />
-            </button>
+            {viewType !== 'agenda' && (
+              <button
+                onClick={() => setCurrentDate(navigateDate(viewType, currentDate, 1))}
+                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
 
             {/* Project filter */}
             {projects.length > 1 && (
@@ -393,7 +412,7 @@ export function CalendarView() {
           </div>
         </div>
 
-        {loading ? (
+        {loading && viewType !== 'agenda' ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
           </div>
@@ -447,6 +466,16 @@ export function CalendarView() {
                 locale={locale}
                 onSelectTask={setSelectedTask}
                 onAddTask={setAddingToDate}
+              />
+            )}
+
+            {viewType === 'agenda' && (
+              <AgendaView
+                selectedProjectIds={selectedProjectIds}
+                onSelectTask={setSelectedTask}
+                onAddTask={setAddingToDate}
+                todayTrigger={agendaTodayTrigger}
+                locale={locale}
               />
             )}
           </DragDropProvider>
