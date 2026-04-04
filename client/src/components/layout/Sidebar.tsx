@@ -470,7 +470,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="text-gray-400 hover:text-blue-500 transition-colors"
+              className="text-gray-400 hover:text-blue-500 transition-colors -mr-1"
               title="New project"
             >
               <Plus size={16} />
@@ -521,7 +521,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             </p>
             <button
               onClick={() => setShowCreateTagModal(true)}
-              className="text-gray-400 hover:text-blue-500 transition-colors"
+              className="text-gray-400 hover:text-blue-500 transition-colors -mr-1"
               title="New tag"
             >
               <Plus size={16} />
