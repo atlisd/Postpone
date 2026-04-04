@@ -79,15 +79,18 @@ function parseInput(input: string, localeCode: string): string | null {
   return iso;
 }
 
-function getPlaceholder(localeCode: string): string {
-  // Generate placeholder from locale format
-  const parts = new Intl.DateTimeFormat(localeCode).formatToParts(new Date(2000, 0, 1));
-  return parts.map(p => {
-    if (p.type === 'day') return 'dd';
-    if (p.type === 'month') return 'mm';
-    if (p.type === 'year') return 'yyyy';
-    return p.value;
-  }).join('');
+function getPlaceholder(locale: import('date-fns').Locale): string {
+  // Derive the placeholder from date-fns (same as formatForDisplay) rather than
+  // Intl.DateTimeFormat to avoid browser inconsistencies (e.g. Chrome vs Safari
+  // disagree on locale behaviour for 'is').
+  // Test date: March 4, 2000 — year/month/day are all distinct.
+  const formatted = format(new Date(2000, 2, 4), 'P', { locale });
+  return formatted
+    .replace('2000', 'yyyy')
+    .replace('03', 'mm')
+    .replace('3', 'mm')
+    .replace('04', 'dd')
+    .replace('4', 'dd');
 }
 
 function toIso(date: Date): string {
@@ -301,7 +304,7 @@ export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDa
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        placeholder={getPlaceholder(localeCode)}
+        placeholder={getPlaceholder(locale)}
         className={className}
         style={{ flex: 1 }}
       />
