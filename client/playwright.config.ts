@@ -1,3 +1,17 @@
+import { readFileSync, existsSync } from 'fs';
+
+const envPath = './e2e/.env';
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0) {
+      const key = line.slice(0, eq).trim();
+      const val = line.slice(eq + 1).trim();
+      if (key && !process.env[key]) process.env[key] = val;
+    }
+  }
+}
+
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({

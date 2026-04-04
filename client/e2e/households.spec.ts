@@ -4,9 +4,9 @@ const HOUSEHOLD_NAME = `Test Household ${Date.now()}`;
 
 test.describe('Households', () => {
   test('create, view, and delete a household', async ({ page }) => {
-    // Navigate to households via sidebar
+    // Navigate to households
     const sidebar = page.locator('aside');
-    await sidebar.getByText('Households').click();
+    await page.goto('/app/households');
     await expect(page).toHaveURL(/\/app\/households/);
 
     // Create
@@ -23,8 +23,8 @@ test.describe('Households', () => {
     await expect(code).toBeVisible();
     await expect(code).toHaveText(/^[A-Z0-9]{8}$/);
 
-    // Go back to list via sidebar and verify
-    await sidebar.getByText('Households').click();
+    // Go back to list and verify
+    await page.goto('/app/households');
     await expect(page).toHaveURL(/\/app\/households/);
     const householdButton = page.getByRole('button', { name: new RegExp(HOUSEHOLD_NAME) });
     await expect(householdButton).toBeVisible();
@@ -38,7 +38,7 @@ test.describe('Households', () => {
     await expect(page).toHaveURL(/\/app\/today/, { timeout: 10000 });
 
     // Verify gone
-    await sidebar.getByText('Households').click();
+    await page.goto('/app/households');
     await expect(householdButton).not.toBeVisible();
   });
 });

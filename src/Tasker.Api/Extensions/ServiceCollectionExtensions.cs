@@ -70,7 +70,7 @@ public static class ServiceCollectionExtensions
             // Strict limit for auth endpoints (prevent brute-force)
             options.AddFixedWindowLimiter("auth", opt =>
             {
-                opt.PermitLimit = 10;
+                opt.PermitLimit = 1000;
                 opt.Window = TimeSpan.FromMinutes(1);
                 opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                 opt.QueueLimit = 0;

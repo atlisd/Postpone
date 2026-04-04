@@ -47,7 +47,7 @@ test.describe('Tasks', () => {
     await projectEntry.hover();
 
     page.on('dialog', dialog => dialog.accept());
-    await projectEntry.locator('button').click();
+    await projectEntry.locator('button').last().click();
     await page.getByRole('button', { name: 'Delete' }).click();
 
     await expect(page).toHaveURL(/\/app\/today/, { timeout: 10000 });
