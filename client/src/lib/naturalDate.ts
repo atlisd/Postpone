@@ -4,6 +4,7 @@ export interface ParsedDateResult {
   cleanTitle: string;
   dueDate: string;       // 'YYYY-MM-DD'
   dueDateTime?: string;  // ISO 8601 UTC string
+  hasExplicitDate: boolean; // true if a date keyword was found; false if date was inferred from time-only
 }
 
 const MONTH_MAP: Record<string, number> = {
@@ -228,5 +229,5 @@ export function parseNaturalDate(raw: string): ParsedDateResult | null {
   // Don't return a result if the clean title is empty and only keywords were typed
   // (e.g. just "tomorrow") — still return; caller decides what to do.
 
-  return { cleanTitle, dueDate, dueDateTime };
+  return { cleanTitle, dueDate, dueDateTime, hasExplicitDate: dateSpan !== null };
 }

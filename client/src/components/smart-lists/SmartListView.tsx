@@ -65,11 +65,22 @@ export function SmartListView({ type, title }: SmartListViewProps) {
     if (!inboxProjectId) return;
     try {
       let resolvedDueDate = dueDate;
+      let resolvedDueDateTime = dueDateTime;
       if (!resolvedDueDate) {
         if (type === 'today' || type === 'next7days') resolvedDueDate = format(new Date(), 'yyyy-MM-dd');
         else if (type === 'tomorrow') resolvedDueDate = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+        // When only a time was parsed (no explicit date), rebase dueDateTime onto the
+        // smart-list date instead of the default "today" that parseNaturalDate used.
+        if (resolvedDueDateTime && resolvedDueDate) {
+          const t = new Date(resolvedDueDateTime);
+          const base = parseISO(resolvedDueDate);
+          resolvedDueDateTime = new Date(
+            base.getFullYear(), base.getMonth(), base.getDate(),
+            t.getHours(), t.getMinutes()
+          ).toISOString();
+        }
       }
-      await createTask(inboxProjectId, { title, dueDate: resolvedDueDate, dueDateTime });
+      await createTask(inboxProjectId, { title, dueDate: resolvedDueDate, dueDateTime: resolvedDueDateTime });
       await fetchData();
     } catch {
       toast.error('Failed to create task');
