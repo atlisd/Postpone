@@ -5,6 +5,7 @@ import { Repeat } from 'lucide-react';
 import { getCalendarTasks } from '../../api/calendar';
 import type { TaskResponse } from '../../types/api';
 import { toast } from 'sonner';
+import { useSignalR } from '../../hooks/useSignalR';
 
 interface AgendaViewProps {
   selectedProjectIds: Set<string>;
@@ -37,6 +38,14 @@ export function AgendaView({ selectedProjectIds, onSelectTask, onAddTask, todayT
     });
   }, []);
 
+  const refetch = useCallback(() => {
+    getCalendarTasks(
+      format(windowStartRef.current, 'yyyy-MM-dd'),
+      format(windowEndRef.current, 'yyyy-MM-dd'),
+    ).then(data => setTasks(data))
+     .catch(() => toast.error('Failed to reload agenda'));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -56,6 +65,8 @@ export function AgendaView({ selectedProjectIds, onSelectTask, onAddTask, todayT
     });
     return () => { cancelled = true; };
   }, []);
+
+  useSignalR(refetch);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
@@ -151,7 +162,7 @@ export function AgendaView({ selectedProjectIds, onSelectTask, onAddTask, todayT
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-6 py-4 space-y-6">
+      <div className="px-6 py-4 space-y-6">
         {grouped.map(({ dateKey, date, tasks: dateTasks }) => {
           const isDateToday = isToday(date);
           const isDatePast = !isDateToday && isPast(date);
