@@ -2,7 +2,7 @@
 
 A self-hosted general purpose task manager. Built with .NET 10, React 19, and PostgreSQL.
 
-Each user gets their own account (created by an admin), private projects by default, and the ability to collaborate by sharing projects with specific users or with a group via households.
+Multiple user support where each user gets their own account (created by an admin), private projects by default, and the ability to collaborate by sharing projects with specific users or with a group via households.
 
 ## Today view
 ![Today view screenshot](media/Today.png)
@@ -46,10 +46,9 @@ Each user gets their own account (created by an admin), private projects by defa
 - **Deduplication** — won't send the same notification twice
 
 ### Localization
-- **9 Languages** — English, Íslenska, Dansk, Svenska, Norsk, Deutsch, Français, Español, Polski
-- **Locale-Aware Formatting** — dates, times, and numbers follow the user's locale (12-hour vs 24-hour clock, local date formats, etc.)
+- **9 Locales** — English, Íslenska, Dansk, Svenska, Norsk, Deutsch, Français, Español, Polski — locale selection controls date, time, and number formatting only (12-hour vs 24-hour clock, local date formats, etc.); the UI language is English
 - **Per-User Timezone** — smart lists and notification scheduling use each user's configured timezone
-- Set your preferred language in **Settings → Appearance**
+- Set your preferred locale in **Settings → Appearance**
 
 ### Mobile & PWA
 - **Mobile-First Design** — responsive layout with hamburger sidebar and full-screen modals on mobile
