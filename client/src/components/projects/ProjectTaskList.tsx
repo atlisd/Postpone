@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
-import { listTasks, createTask, completeTask, uncompleteTask, reorderTasks } from '../../api/tasks';
+import { listTasks, createTask, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence, reorderTasks } from '../../api/tasks';
 import { useDragDropMonitor } from '@dnd-kit/react';
 import { isSortableOperation } from '@dnd-kit/react/sortable';
 import { getProject } from '../../api/projects';
@@ -42,7 +42,10 @@ export function ProjectTaskList() {
 
       // Refresh selected task if still open
       if (selectedTaskRef.current) {
-        const updated = t.find(task => task.id === selectedTaskRef.current!.id);
+        const updated = t.find(task =>
+          task.id === selectedTaskRef.current!.id
+          && task.occurrenceDate === selectedTaskRef.current!.occurrenceDate
+        );
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }
@@ -139,10 +142,18 @@ export function ProjectTaskList() {
 
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
-      if (task.completedAt) {
-        await uncompleteTask(task.id);
+      if (task.occurrenceDate) {
+        if (task.completedAt) {
+          await uncompleteOccurrence(task.id, task.occurrenceDate);
+        } else {
+          await completeOccurrence(task.id, task.occurrenceDate);
+        }
       } else {
-        await completeTask(task.id);
+        if (task.completedAt) {
+          await uncompleteTask(task.id);
+        } else {
+          await completeTask(task.id);
+        }
       }
       await fetchData();
     } catch {
@@ -184,11 +195,11 @@ export function ProjectTaskList() {
           ) : (
             tasks.map((task, index) => (
               <TaskItem
-                key={task.id}
+                key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
                 task={task}
                 onToggleComplete={handleToggleComplete}
                 onSelect={setSelectedTask}
-                isSelected={selectedTask?.id === task.id}
+                isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
                 index={index}
                 group={projectId}
               />

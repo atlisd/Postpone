@@ -12,7 +12,7 @@ namespace Tasker.Api.Controllers;
 
 [ApiController]
 [Authorize]
-public class TagsController(TaskerDbContext db, IProjectAccessService access, ISyncService sync) : ControllerBase
+public class TagsController(TaskerDbContext db, IProjectAccessService access, ISyncService sync, IRecurrenceService recurrence) : ControllerBase
 {
     [HttpGet("api/tags")]
     public async Task<IActionResult> List()
@@ -35,13 +35,32 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access, IS
         var tag = await db.Tags.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
         if (tag is null) return NotFound();
 
-        var tasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.TaskTags.Any(tt => tt.TagId == id) && !t.IsDeleted && t.CompletedAt == null)
+        // Non-recurring tasks
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.TaskTags.Any(tt => tt.TagId == id) && !t.IsDeleted && t.CompletedAt == null && t.Rrule == null)
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
             .Select(TaskResponse.Projection)
             .ToListAsync();
+
+        // Recurring tasks with this tag: expand and pick next incomplete per series
+        var today = await GetUserTodayAsync(userId);
+        var recurringQuery = access.GetAccessibleTasks(userId)
+            .Where(t => t.TaskTags.Any(tt => tt.TagId == id) && !t.IsDeleted && t.Rrule != null);
+        var allOccurrences = await recurrence.ExpandOccurrencesAsync(
+            recurringQuery, today.AddYears(-1), today.AddDays(90));
+        var nextOccurrences = allOccurrences
+            .Where(o => o.CompletedAt == null)
+            .GroupBy(o => o.Id)
+            .Select(g => g.OrderBy(o => o.DueDate).First())
+            .ToList();
+
+        var tasks = regularTasks.Concat(nextOccurrences)
+            .OrderBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .ToList();
 
         return Ok(tasks);
     }
@@ -136,5 +155,14 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access, IS
         var result = await db.Tasks.Where(t => t.Id == taskId).Select(TaskResponse.Projection).FirstAsync();
         await sync.TaskUpdated(task.ProjectId, result);
         return NoContent();
+    }
+
+    private async Task<DateOnly> GetUserTodayAsync(Guid userId)
+    {
+        var user = await db.Users.FindAsync(userId);
+        TimeZoneInfo tz = TimeZoneInfo.Utc;
+        if (user?.Timezone is not null)
+            try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); } catch { }
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
     }
 }

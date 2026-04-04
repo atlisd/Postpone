@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { getTagTasks, listTags } from '../../api/tags';
-import { completeTask, uncompleteTask } from '../../api/tasks';
+import { completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
 import type { TaskResponse, TagFull } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
@@ -34,7 +34,10 @@ export function TagTaskList() {
       setTag(found);
       setTasks(t);
       if (selectedTaskRef.current) {
-        const updated = t.find(task => task.id === selectedTaskRef.current!.id);
+        const updated = t.find(task =>
+          task.id === selectedTaskRef.current!.id
+          && task.occurrenceDate === selectedTaskRef.current!.occurrenceDate
+        );
         if (updated) setSelectedTask(updated);
         else setSelectedTask(null);
       }
@@ -54,10 +57,18 @@ export function TagTaskList() {
 
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
-      if (task.completedAt) {
-        await uncompleteTask(task.id);
+      if (task.occurrenceDate) {
+        if (task.completedAt) {
+          await uncompleteOccurrence(task.id, task.occurrenceDate);
+        } else {
+          await completeOccurrence(task.id, task.occurrenceDate);
+        }
       } else {
-        await completeTask(task.id);
+        if (task.completedAt) {
+          await uncompleteTask(task.id);
+        } else {
+          await completeTask(task.id);
+        }
       }
       await fetchData();
     } catch {
@@ -87,11 +98,11 @@ export function TagTaskList() {
           ) : (
             tasks.map((task, index) => (
               <TaskItem
-                key={task.id}
+                key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
                 task={task}
                 onToggleComplete={handleToggleComplete}
                 onSelect={setSelectedTask}
-                isSelected={selectedTask?.id === task.id}
+                isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
                 index={index}
                 showProject
               />

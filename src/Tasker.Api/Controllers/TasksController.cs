@@ -20,14 +20,14 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         if (!await access.CanAccessProjectAsync(userId, projectId))
             return NotFound();
 
-        var query = db.Tasks
-            .Where(t => t.ProjectId == projectId && !t.IsDeleted)
-            ; // recurring masters show as single items in project list
+        // Non-recurring tasks
+        var regularQuery = db.Tasks
+            .Where(t => t.ProjectId == projectId && !t.IsDeleted && t.Rrule == null);
 
         if (!includeCompleted)
-            query = query.Where(t => t.CompletedAt == null);
+            regularQuery = regularQuery.Where(t => t.CompletedAt == null);
 
-        var tasks = await query
+        var regularTasks = await regularQuery
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
             .ThenBy(t => t.DueDate)
@@ -35,6 +35,38 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
             .ThenBy(t => t.CreatedAt)
             .Select(TaskResponse.Projection)
             .ToListAsync();
+
+        // Recurring tasks: expand to virtual instances
+        var today = await GetUserTodayAsync(userId);
+        var recurringQuery = db.Tasks
+            .Where(t => t.ProjectId == projectId && !t.IsDeleted && t.Rrule != null);
+        var allOccurrences = await recurrenceService.ExpandOccurrencesAsync(
+            recurringQuery, today.AddYears(-1), today.AddDays(90));
+
+        // Pick the next incomplete occurrence per series
+        var nextOccurrences = allOccurrences
+            .Where(o => o.CompletedAt == null)
+            .GroupBy(o => o.Id)
+            .Select(g => g.OrderBy(o => o.DueDate).First())
+            .ToList();
+
+        List<TaskResponse> completedOccurrences = [];
+        if (includeCompleted)
+        {
+            completedOccurrences = allOccurrences
+                .Where(o => o.CompletedAt != null)
+                .ToList();
+        }
+
+        var tasks = regularTasks
+            .Concat(nextOccurrences)
+            .Concat(completedOccurrences)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDate)
+            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .ToList();
 
         return Ok(tasks);
     }
@@ -325,5 +357,14 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
             .Where(t => t.Id == taskId)
             .Select(TaskResponse.Projection)
             .FirstAsync();
+    }
+
+    private async Task<DateOnly> GetUserTodayAsync(Guid userId)
+    {
+        var user = await db.Users.FindAsync(userId);
+        TimeZoneInfo tz = TimeZoneInfo.Utc;
+        if (user?.Timezone is not null)
+            try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); } catch { }
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
     }
 }
