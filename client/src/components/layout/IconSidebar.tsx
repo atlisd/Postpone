@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { CalendarDays, SquareCheck, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const taskRoutes = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/'];
+const taskRoutes = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/', '/app/tags/'];
 
 export function IconSidebar() {
   const { user, gravatarUrl } = useAuth();
@@ -54,7 +54,11 @@ const isSettingsActive = location.pathname === '/app/settings';
 
       {/* Tasks */}
       <button
-        onClick={() => navigate('/app/today')}
+        onClick={() => {
+          const saved = localStorage.getItem('last-task-route');
+          const dest = (saved && taskRoutes.some(r => saved.startsWith(r))) ? saved : '/app/today';
+          navigate(dest);
+        }}
         className={btnClass(isTasksActive)}
         title="Tasks"
       >
@@ -63,7 +67,12 @@ const isSettingsActive = location.pathname === '/app/settings';
 
       {/* Calendar */}
       <button
-        onClick={() => navigate('/app/calendar')}
+        onClick={() => {
+          if (isTasksActive) {
+            localStorage.setItem('last-task-route', location.pathname);
+          }
+          navigate('/app/calendar');
+        }}
         className={btnClass(isCalendarActive)}
         title="Calendar"
       >
