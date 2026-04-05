@@ -95,12 +95,32 @@ export function SmartListView({ type, title }: SmartListViewProps) {
           await uncompleteOccurrence(task.id, task.occurrenceDate);
         } else {
           await completeOccurrence(task.id, task.occurrenceDate);
+          toast('Task completed', {
+            duration: 15000,
+            action: {
+              label: 'Undo',
+              onClick: async () => {
+                await uncompleteOccurrence(task.id, task.occurrenceDate!);
+                await fetchData();
+              },
+            },
+          });
         }
       } else {
         if (task.completedAt) {
           await uncompleteTask(task.id);
         } else {
           await completeTask(task.id);
+          toast('Task completed', {
+            duration: 15000,
+            action: {
+              label: 'Undo',
+              onClick: async () => {
+                await uncompleteTask(task.id);
+                await fetchData();
+              },
+            },
+          });
         }
       }
       await fetchData();
