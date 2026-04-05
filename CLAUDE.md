@@ -17,6 +17,12 @@ npm run test:e2e     # Playwright E2E tests
 npm run test:e2e:ui  # Playwright with UI
 ```
 
+### Playwright Tests
+
+**Always run Playwright tests yourself using the Playwright MCP server — do not ask the user to run them.**
+
+Use the `mcp__playwright__*` tools to navigate, interact, and verify behavior directly in the browser. The dev server must be running at `http://localhost:5173` before running tests. Run tests proactively after making UI changes to verify correctness before reporting back.
+
 ### Backend (`src/Tasker.Api/`)
 ```bash
 dotnet watch run                          # Hot-reload dev server

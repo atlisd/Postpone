@@ -80,8 +80,8 @@ function SortableProjectItem({
   });
   const { ref: dropRef, isDropTarget } = useDroppable({
     id: 'project-drop-' + project.id,
-    // Only accept task drags — sidebar project drags must land on the sortable inner div so
-    // isSortableOperation() passes in the OptimisticSortingPlugin and useDragDropMonitor.
+    // Only accept task drags — sidebar project drags must use the sortable inner div so
+    // isSortableOperation() passes in onDragOver (which needs both source and target).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     accept: (draggable: any) => draggable?.group !== 'sidebar-projects',
   });
@@ -351,11 +351,16 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
       const intended = runningProjectOrderRef.current;
       runningProjectOrderRef.current = null;
+      // `intended` is non-null only if onDragOver accumulated swaps, which already proves
+      // a valid sortable drag occurred. We intentionally skip isSortableOperation() here
+      // because OptimisticSortingPlugin can leave target=null at dragend (the cursor may
+      // land in a gap between items after visual shifts), causing isSortableOperation to
+      // return false even though the swaps were valid.
       if (!intended) return;
 
       const { operation } = event;
-      if (!isSortableOperation(operation)) return;
-      const { source } = operation;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const source = operation.source as any;
       if (!source || source.group !== 'sidebar-projects') return;
 
       const sourceId = String(source.id);
