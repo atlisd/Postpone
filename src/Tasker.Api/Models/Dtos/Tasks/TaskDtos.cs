@@ -46,6 +46,7 @@ public record TaskResponse(
     bool IsRecurrenceException,
     List<SubtaskResponse> Subtasks,
     List<TagResponse> Tags,
+    List<ReminderResponse> Reminders,
     int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt)
@@ -70,6 +71,7 @@ public record TaskResponse(
         false, // IsRecurrenceException
         t.Subtasks.OrderBy(s => s.SortOrder).Select(s => new SubtaskResponse(s.Id, s.Title, s.IsCompleted, s.SortOrder)).ToList(),
         t.TaskTags.Select(tt => new TagResponse(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
+        t.Reminders.Select(r => new ReminderResponse(r.Id, r.OffsetMinutes)).ToList(),
         t.SortOrder,
         t.CreatedAt,
         t.UpdatedAt);
@@ -87,6 +89,10 @@ public record ReorderSubtasksRequest(List<SubtaskOrderItem> Items);
 public record SubtaskOrderItem(Guid Id, double SortOrder);
 
 public record TagResponse(Guid Id, string Name, string Color);
+
+public record ReminderResponse(Guid Id, int OffsetMinutes);
+
+public record AddReminderRequest(int OffsetMinutes);
 
 public record SetRecurrenceRequest(string Rrule);
 

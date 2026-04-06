@@ -28,4 +28,5 @@ public class TodoTask
     public ICollection<RecurrenceException> RecurrenceExceptions { get; set; } = [];
     public ICollection<Subtask> Subtasks { get; set; } = [];
     public ICollection<TaskTag> TaskTags { get; set; } = [];
+    public ICollection<TaskReminder> Reminders { get; set; } = [];
 }

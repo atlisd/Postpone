@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { TaskResponse } from '../types/api';
+import type { TaskResponse, ReminderResponse } from '../types/api';
 
 export async function listTasks(projectId: string, includeCompleted = false): Promise<TaskResponse[]> {
   return api.get(`api/projects/${projectId}/tasks`, {
@@ -125,6 +125,15 @@ export async function rescheduleOccurrence(taskId: string, date: string, newDate
 // Smart lists
 export async function getSmartList(name: 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me'): Promise<TaskResponse[]> {
   return api.get(`api/smart-lists/${name}`).json<TaskResponse[]>();
+}
+
+// Reminders
+export async function addReminder(taskId: string, offsetMinutes: number): Promise<ReminderResponse> {
+  return api.post(`api/tasks/${taskId}/reminders`, { json: { offsetMinutes } }).json<ReminderResponse>();
+}
+
+export async function deleteReminder(taskId: string, reminderId: string): Promise<void> {
+  await api.delete(`api/tasks/${taskId}/reminders/${reminderId}`);
 }
 
 interface SubtaskResponse {

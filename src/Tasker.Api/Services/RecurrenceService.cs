@@ -19,6 +19,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
                 .ThenInclude(e => e.SubtaskCompletions)
             .Include(t => t.Subtasks.OrderBy(s => s.SortOrder))
             .Include(t => t.TaskTags).ThenInclude(tt => tt.Tag)
+            .Include(t => t.Reminders)
             .Include(t => t.Project)
             .Include(t => t.CreatedBy)
             .Include(t => t.AssignedTo)
@@ -229,6 +230,10 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             .Select(tt => new TagResponse(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color))
             .ToList();
 
+        var reminders = master.Reminders
+            .Select(r => new ReminderResponse(r.Id, r.OffsetMinutes))
+            .ToList();
+
         return new TaskResponse(
             master.Id,
             master.ProjectId,
@@ -249,6 +254,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             exception is not null,
             subtasks,
             tags,
+            reminders,
             master.SortOrder,
             master.CreatedAt,
             master.UpdatedAt);

@@ -21,6 +21,7 @@ import { getProjectMembers, listProjects } from '../../api/projects';
 import type { ProjectMember } from '../../api/projects';
 import { PRIORITIES } from '../../lib/priorities';
 import { RecurrencePicker } from './RecurrencePicker';
+import { RemindersSection } from './RemindersSection';
 import { toast } from 'sonner';
 
 function SortableSubtask({ sub, index, group, onToggle, onDelete }: {
@@ -414,6 +415,9 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 w-28 disabled:opacity-40 disabled:cursor-not-allowed"
             />
           </div>
+
+          {/* Reminders */}
+          <RemindersSection task={task} dueTime={dueTime} onUpdate={onUpdate} />
 
           {/* Recurrence + Priority row */}
           <div className="flex items-center gap-3">

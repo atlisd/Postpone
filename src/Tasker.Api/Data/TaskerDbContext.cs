@@ -18,6 +18,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
     public DbSet<RecurrenceException> RecurrenceExceptions => Set<RecurrenceException>();
     public DbSet<ExceptionSubtaskCompletion> ExceptionSubtaskCompletions => Set<ExceptionSubtaskCompletion>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
+    public DbSet<TaskReminder> TaskReminders => Set<TaskReminder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -68,6 +68,7 @@ export interface TaskResponse {
   isRecurrenceException: boolean;
   subtasks: SubtaskResponse[];
   tags: TagResponse[];
+  reminders: ReminderResponse[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +85,11 @@ export interface TagResponse {
   id: string;
   name: string;
   color: string;
+}
+
+export interface ReminderResponse {
+  id: string;
+  offsetMinutes: number;
 }
 
 export interface TagFull {

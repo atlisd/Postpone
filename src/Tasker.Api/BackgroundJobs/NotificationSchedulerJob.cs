@@ -54,6 +54,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         // Non-recurring tasks
         var tasks = await db.Tasks
             .Include(t => t.Project)
+            .Include(t => t.Reminders)
             .Where(t => projectIds.Contains(t.ProjectId)
                 && !t.IsDeleted
                 && t.CompletedAt == null
@@ -70,7 +71,12 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         foreach (var task in tasks)
         {
             if (task.DueDateTime.HasValue)
-                await ProcessTimedNotification(db, pushover, user, task, now, tz);
+            {
+                if (task.Reminders.Count > 0)
+                    await ProcessReminderNotifications(db, pushover, user, task, now, tz);
+                else
+                    await ProcessTimedNotification(db, pushover, user, task, now, tz);
+            }
             else
                 await ProcessDateOnlyNotification(db, pushover, user, task, now, userNow);
         }
@@ -197,6 +203,75 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             logger.LogInformation("Sent recurring notification to {User} for task {Task} occurrence {Date}",
                 user.Email, instance.Title, instance.OccurrenceDate);
         }
+    }
+
+    private async Task ProcessReminderNotifications(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, TodoTask task, DateTime utcNow, TimeZoneInfo tz)
+    {
+        var dueUtc = task.DueDateTime!.Value;
+
+        foreach (var reminder in task.Reminders)
+        {
+            var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
+            var windowStart = utcNow.AddMinutes(-2);
+            if (fireUtc < windowStart || fireUtc > utcNow) continue;
+
+            var payloadHash = ComputeHash($"{user.Id}:{task.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
+            if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
+
+            var message = FormatReminderMessage(task.Title, task.Project.Name, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
+            var url = BuildTaskUrl(task.ProjectId, task.Id, null);
+            var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
+
+            var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
+            if (sent)
+            {
+                db.NotificationLogs.Add(new NotificationLog
+                {
+                    UserId = user.Id,
+                    TaskId = task.Id,
+                    Channel = "pushover",
+                    SentAt = utcNow,
+                    PayloadHash = payloadHash,
+                });
+                await db.SaveChangesAsync();
+                logger.LogInformation("Sent reminder notification to {User} for task {Task} (offset {Offset} min)",
+                    user.Email, task.Title, reminder.OffsetMinutes);
+            }
+        }
+    }
+
+    private static string FormatReminderMessage(
+        string taskTitle, string projectName, int offsetMinutes, DateTime dueUtc, TimeZoneInfo tz, string locale)
+    {
+        var dueLocal = TimeZoneInfo.ConvertTimeFromUtc(dueUtc, tz);
+        CultureInfo culture;
+        try { culture = new CultureInfo(locale); }
+        catch { culture = CultureInfo.InvariantCulture; }
+        var timeStr = dueLocal.ToString("t", culture);
+
+        string offsetLabel;
+        if (offsetMinutes == 0)
+        {
+            offsetLabel = $"due at {timeStr}";
+        }
+        else if (offsetMinutes < 60)
+        {
+            offsetLabel = $"in {offsetMinutes} minute{(offsetMinutes == 1 ? "" : "s")} at {timeStr}";
+        }
+        else if (offsetMinutes < 1440)
+        {
+            var hours = offsetMinutes / 60;
+            offsetLabel = $"in {hours} hour{(hours == 1 ? "" : "s")} at {timeStr}";
+        }
+        else
+        {
+            var days = offsetMinutes / 1440;
+            offsetLabel = $"in {days} day{(days == 1 ? "" : "s")} at {timeStr}";
+        }
+
+        return $"{taskTitle} — {projectName} ({offsetLabel})";
     }
 
     private string BuildTaskUrl(Guid projectId, Guid taskId, DateOnly? occurrenceDate)
