@@ -44,6 +44,7 @@ Multiple user support where each user gets their own account (created by an admi
 - **Pushover Integration** — receive push notifications for tasks due today, sent at a configurable hour (default 8 AM) in the user's own timezone
 - **Overdue Notifications** — optional separate notification for overdue tasks; can be toggled and scheduled independently per user
 - **Deduplication** — won't send the same notification twice
+- **Multiple Notificatios** - Set notification to be sent in advance, customizable by user.
 
 ### Localization
 - **9 Locales** — English, Íslenska, Dansk, Svenska, Norsk, Deutsch, Français, Español, Polski — locale selection controls date, time, and number formatting only (12-hour vs 24-hour clock, local date formats, etc.); the UI language is English
