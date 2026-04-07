@@ -21,6 +21,10 @@ function applyTheme(theme: ThemeMode) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const isDark = theme === 'dark' || (theme === 'auto' && prefersDark);
   document.documentElement.classList.toggle('dark', isDark);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute('content', isDark ? '#111827' : '#3b82f6');
+  }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

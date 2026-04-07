@@ -20,6 +20,15 @@
   --color-gray-950: var(--color-neutral-950);
 }
 
+html, body {
+  background-color: var(--color-gray-50);
+}
+
+html.dark, html.dark body {
+  background-color: var(--color-neutral-900);
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
