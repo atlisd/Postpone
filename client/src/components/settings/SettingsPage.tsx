@@ -22,6 +22,7 @@ export function SettingsPage() {
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [locale, setLocaleState] = useState(user?.locale ?? 'en');
   const [useGravatar, setUseGravatar] = useState(user?.useGravatar ?? false);
+  const [showAllTasksList, setShowAllTasksList] = useState(user?.showAllTasksList ?? true);
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
   const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
   const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
@@ -34,7 +35,7 @@ export function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateProfile({ displayName, timezone, locale, useGravatar });
+      await updateProfile({ displayName, timezone, locale, useGravatar, showAllTasksList });
       await refreshUser();
       toast.success('Profile updated');
     } catch {
@@ -147,6 +148,16 @@ export function SettingsPage() {
         </label>
         <p className="text-xs text-gray-500 -mt-2">Gravatar uses your email address to find a profile picture at gravatar.com</p>
 
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showAllTasksList}
+            onChange={(e) => setShowAllTasksList(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Show "All Tasks" in the sidebar</span>
+        </label>
+
         <button
           type="submit"
           disabled={saving}
@@ -185,6 +196,7 @@ export function SettingsPage() {
         <p className="text-xs text-gray-500">
           {theme === 'auto' ? 'Theme follows your system preference.' : `Using ${theme} theme.`}
         </p>
+
       </div>
 
       <hr className="border-gray-200 dark:border-gray-700" />

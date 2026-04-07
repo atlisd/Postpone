@@ -25,7 +25,7 @@ export async function getProfile(): Promise<UserProfile> {
   return api.get('api/auth/me').json<UserProfile>();
 }
 
-export async function updateProfile(data: { displayName?: string; timezone?: string; locale?: string; useGravatar?: boolean }): Promise<UserProfile> {
+export async function updateProfile(data: { displayName?: string; timezone?: string; locale?: string; useGravatar?: boolean; showAllTasksList?: boolean }): Promise<UserProfile> {
   return api.put('api/auth/me', { json: data }).json<UserProfile>();
 }
 

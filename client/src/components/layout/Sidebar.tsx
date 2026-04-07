@@ -209,11 +209,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   const fetchAssignedCount = useCallback(async () => {
     try {
-      const [today, tomorrow, next7days, all, assigned] = await Promise.all([
+      const [today, tomorrow, next7days, allTasks, assigned] = await Promise.all([
         getSmartList('today'),
         getSmartList('tomorrow'),
         getSmartList('next7days'),
-        getSmartList('all'),
+        user?.showAllTasksList ? getSmartList('all') : Promise.resolve([]),
         getSmartList('assigned-to-me'),
       ]);
       setHasAssignedTasks(assigned.length > 0);
@@ -221,13 +221,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         today: today.length,
         tomorrow: tomorrow.length,
         next7days: next7days.length,
-        all: all.length,
+        all: allTasks.length,
         assigned: assigned.length,
       });
     } catch {
       setHasAssignedTasks(null);
     }
-  }, []);
+  }, [user?.showAllTasksList]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
@@ -455,7 +455,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             Smart Lists
           </p>
           {smartLists
-            .filter(({ to }) => to !== '/app/assigned' || hasAssignedTasks !== false)
+            .filter(({ key, to }) => (key !== 'all' || user?.showAllTasksList !== false) && (to !== '/app/assigned' || hasAssignedTasks !== false))
             .map(({ to, label, icon: Icon, key }) => (
               <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
                 <Icon size={18} className="flex-shrink-0" />

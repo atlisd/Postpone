@@ -14,6 +14,7 @@ public class User
     public bool OverdueNotificationsEnabled { get; set; } = true;
     public int OverdueNotificationHour { get; set; } = 8;
     public bool UseGravatar { get; set; } = false;
+    public bool ShowAllTasksList { get; set; } = true;
     public bool IsAdmin { get; set; }
     public bool MustChangePassword { get; set; } = true;
     public string? InvitationTokenHash { get; set; }

@@ -17,6 +17,7 @@ export interface UserProfile {
   useGravatar: boolean;
   isAdmin: boolean;
   mustChangePassword: boolean;
+  showAllTasksList: boolean;
 }
 
 export interface AdminUser {
