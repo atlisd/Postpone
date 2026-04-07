@@ -20,10 +20,42 @@ import type { SubtaskResponse } from '../../types/api';
 import { getProjectMembers, listProjects } from '../../api/projects';
 import type { ProjectMember } from '../../api/projects';
 import { PRIORITIES } from '../../lib/priorities';
+import { parseUrls, isPwa } from '../../lib/urls';
 import { RecurrencePicker } from './RecurrencePicker';
 import { RemindersSection } from './RemindersSection';
 import { OccurrenceDeleteModal } from './OccurrenceDeleteModal';
 import { toast } from 'sonner';
+
+function DescriptionWithLinks({ text, onClick }: { text: string; onClick: () => void }) {
+  const segments = parseUrls(text);
+  return (
+    <div
+      onClick={onClick}
+      className="w-full text-sm text-gray-700 dark:text-gray-300 px-4 py-2 whitespace-pre-wrap break-words cursor-text"
+      style={{ minHeight: '6rem' }}
+    >
+      {segments.map((seg, i) =>
+        seg.type === 'url' ? (
+          <a
+            key={i}
+            href={seg.value}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isPwa()) window.open(seg.value, '_blank', 'noopener,noreferrer');
+            }}
+            className="text-blue-500 hover:underline break-all"
+          >
+            {seg.value}
+          </a>
+        ) : (
+          <span key={i}>{seg.value}</span>
+        )
+      )}
+    </div>
+  );
+}
 
 function SortableSubtask({ sub, index, group, onToggle, onDelete }: {
   sub: SubtaskResponse;
@@ -135,6 +167,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -352,6 +385,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   // Save on blur for title/description
   const handleBlur = () => {
+    setIsEditingDescription(false);
     if (title !== task.title || description !== task.description || priority !== task.priority || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
       handleSave();
     }
@@ -573,15 +607,26 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
           {/* Description */}
           <div className="-mx-4 border-t border-b border-gray-200 dark:border-gray-700">
-            <textarea
-              ref={descriptionRef}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={handleBlur}
-              placeholder="Add description..."
-              style={{ minHeight: '6rem' }}
-              className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border-none outline-none resize-none px-4 py-2"
-            />
+            {isEditingDescription || !description ? (
+              <textarea
+                ref={descriptionRef}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={handleBlur}
+                onFocus={() => setIsEditingDescription(true)}
+                placeholder="Add description..."
+                style={{ minHeight: '6rem' }}
+                className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border-none outline-none resize-none px-4 py-2"
+              />
+            ) : (
+              <DescriptionWithLinks
+                text={description}
+                onClick={() => {
+                  setIsEditingDescription(true);
+                  requestAnimationFrame(() => descriptionRef.current?.focus());
+                }}
+              />
+            )}
           </div>
 
           {/* Subtasks */}

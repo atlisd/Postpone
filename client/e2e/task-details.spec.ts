@@ -161,6 +161,41 @@ test.describe('Task Details', () => {
     await expect(page.getByText(taskTitle)).toBeVisible();
   });
 
+  test('description renders URLs as clickable links', async ({ page }) => {
+    await page.goto(projectUrl);
+    await openTaskDetailPanel(page, taskTitle);
+
+    // Previous test set a plain-text description, so the rendered view is shown.
+    // Click the plain-text area to enter edit mode (not a link, just text).
+    const descContainer = page.locator('div').filter({ hasText: 'This is a test description' }).last();
+    await descContainer.click();
+
+    const desc = page.getByPlaceholder('Add description...');
+    await expect(desc).toBeVisible({ timeout: 2000 });
+    await desc.fill('Check out https://example.com for more info.');
+    await desc.press('Tab');
+    await page.waitForTimeout(500);
+
+    // Rendered view should show a clickable link
+    const link = page.locator('a[href="https://example.com"]');
+    await expect(link).toBeVisible({ timeout: 3000 });
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+    // Surrounding plain text is preserved
+    await expect(page.locator('text=Check out')).toBeVisible();
+    await expect(page.locator('text=for more info.')).toBeVisible();
+
+    // Reload and re-open: link persists (saved as plain text)
+    await page.reload();
+    await openTaskDetailPanel(page, taskTitle);
+    await expect(page.locator('a[href="https://example.com"]')).toBeVisible({ timeout: 3000 });
+
+    // Clicking non-link text enters edit mode (textarea reappears)
+    await page.locator('text=Check out').click();
+    await expect(page.getByPlaceholder('Add description...')).toBeVisible({ timeout: 2000 });
+  });
+
   test('set priority to High', async ({ page }) => {
     await page.goto(projectUrl);
     await openTaskDetailPanel(page, taskTitle);
