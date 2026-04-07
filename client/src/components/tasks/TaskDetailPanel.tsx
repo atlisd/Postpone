@@ -22,6 +22,7 @@ import type { ProjectMember } from '../../api/projects';
 import { PRIORITIES } from '../../lib/priorities';
 import { RecurrencePicker } from './RecurrencePicker';
 import { RemindersSection } from './RemindersSection';
+import { OccurrenceDeleteModal } from './OccurrenceDeleteModal';
 import { toast } from 'sonner';
 
 function SortableSubtask({ sub, index, group, onToggle, onDelete }: {
@@ -134,6 +135,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [allTags, setAllTags] = useState<TagFull[]>([]);
@@ -237,20 +239,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   const handleDelete = async () => {
     if (task.occurrenceDate) {
-      // Recurring task occurrence — ask what to delete
-      const choice = prompt('Delete this occurrence or the entire series?\nType "this" or "all":', 'this');
-      if (!choice) return;
-      try {
-        if (choice.toLowerCase() === 'all') {
-          await deleteTask(task.id);
-        } else {
-          await skipOccurrence(task.id, task.occurrenceDate);
-        }
-        onUpdate();
-        onClose();
-      } catch {
-        toast.error('Failed to delete');
-      }
+      setShowDeleteModal(true);
     } else {
       if (!confirm('Delete this task?')) return;
       try {
@@ -260,6 +249,28 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
       } catch {
         toast.error('Failed to delete');
       }
+    }
+  };
+
+  const handleDeleteThisOnly = async () => {
+    setShowDeleteModal(false);
+    try {
+      await skipOccurrence(task.id, task.occurrenceDate!);
+      onUpdate();
+      onClose();
+    } catch {
+      toast.error('Failed to delete');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    setShowDeleteModal(false);
+    try {
+      await deleteTask(task.id);
+      onUpdate();
+      onClose();
+    } catch {
+      toast.error('Failed to delete');
     }
   };
 
@@ -347,6 +358,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 md:static md:z-auto md:w-96 md:border-l md:border-gray-200 md:dark:border-gray-700">
       {/* Mobile overlay */}
       <div className="absolute inset-0 bg-black/50 md:hidden" onClick={onClose} />
@@ -603,5 +615,13 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
         </div>
       </div>
     </div>
+
+    <OccurrenceDeleteModal
+      open={showDeleteModal}
+      onCancel={() => setShowDeleteModal(false)}
+      onThisOnly={handleDeleteThisOnly}
+      onAll={handleDeleteAll}
+    />
+    </>
   );
 }
