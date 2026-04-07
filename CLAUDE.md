@@ -1,10 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## What This Is
-
-**Postpone** — a self-hosted family task manager. React 19 + TypeScript frontend, .NET 10 Web API backend, PostgreSQL 17, with SignalR for real-time sync.
+**Postpone** — self-hosted family task manager. React 19 + TypeScript + Vite 8, .NET 10 Web API, PostgreSQL 17, SignalR real-time sync.
 
 ## Commands
 
@@ -13,15 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # Dev server at http://localhost:5173
 npm run build        # Production build
 npm run lint         # ESLint
-npm run test:e2e     # Playwright E2E tests
-npm run test:e2e:ui  # Playwright with UI
 ```
-
-### Playwright Tests
-
-**Always run Playwright tests yourself using the Playwright MCP server — do not ask the user to run them.**
-
-Use the `mcp__playwright__*` tools to navigate, interact, and verify behavior directly in the browser. The dev server must be running at `http://localhost:5173` before running tests. Run tests proactively after making UI changes to verify correctness before reporting back.
 
 ### Backend (`src/Tasker.Api/`)
 ```bash
@@ -35,73 +23,74 @@ docker compose up --build    # Entire stack (frontend, API, DB)
 docker compose up db -d      # Just PostgreSQL for local dev
 ```
 
-## Architecture
+### Playwright Tests
 
-### Data Flow
-1. Components call typed API functions in `client/src/api/`
-2. `client/src/lib/client.ts` (ky-based) injects JWT, handles 401 with silent token refresh
-3. Mutations trigger server-side SignalR broadcasts via `SyncService`
-4. `useSignalR` hook receives events; components refetch their data (no client-side cache)
+**Always run Playwright tests yourself using the Playwright MCP server — do not ask the user to run them.**
 
-### Real-Time Sync
-- SignalR hub at `/hubs/sync` — centralized connection in `client/src/lib/signalr.ts`
-- Lazy start: first subscriber initiates; stops when last unsubscribes
-- Auto-reconnect with backoff: [0, 1s, 2s, 5s, 10s, 30s]
-- Events: `TaskCreated`, `TaskUpdated`, `TaskDeleted`, `ProjectUpdated`, etc.
+Use the `mcp__playwright__*` tools to navigate, interact, and verify behavior directly in the browser. The dev server must be running at `http://localhost:5173` before running tests. Run tests proactively after making UI changes to verify correctness before reporting back. Test files live in `client/e2e/`, shared setup in `client/e2e/fixtures.ts`.
 
-### Auth
-- JWT access tokens (15 min) + rotating refresh tokens (30 days, httpOnly cookie)
-- `refreshPromise` deduplication prevents parallel refresh races
-- Cross-tab sync via localStorage
+## Key Conventions
 
-### Access Control (Backend)
-Three-level hierarchy enforced via `IProjectAccessService` before any operation:
-1. **Ownership** — user always sees own projects
-2. **Direct share** — `ProjectShares` table
-3. **Household membership** — projects linked to a household visible to all members
+- **No React Query** — components use direct `async/await` with `useState`/`useCallback` for data fetching. Manual `loading` state. Do NOT introduce React Query or SWR.
+- **No component library** — all UI built with Tailwind CSS v4 utility classes. No shadcn, MUI, or Radix. Icons from `lucide-react`, toasts from `sonner`.
+- **SignalR refetch pattern** — after mutations, backend calls `SyncService` which broadcasts to SignalR groups (`project:{id}`, `user:{id}`). Frontend calls `useSignalR(fetchData)` to auto-refetch. No optimistic updates, no client-side cache.
+- **Access control** — every data endpoint must check `IProjectAccessService.CanAccessProjectAsync()` or `CanEditProjectAsync()` before returning/modifying data. Three tiers: owner → direct share → household member.
+- **Soft delete** — tasks use `IsDeleted` flag. Always filter `!t.IsDeleted` in queries.
+- **Recurring tasks** — dual-query pattern: non-recurring via SQL + recurring masters expanded in-memory via `RecurrenceService.ExpandOccurrencesAsync`, then merged. Virtual instances carry `occurrenceDate`.
+- **Dark mode** — always include `dark:` Tailwind variants alongside light classes.
+- **Localization** — 9 locales (en, is, da, sv, nb, de, fr, es, pl). Use `useLocale()` for date formatting with date-fns.
 
-### Recurring Tasks
-- Virtual instance model: one master task in DB, occurrences computed on-the-fly from RRULE
-- `RecurrenceException` table stores per-occurrence modifications (skip, complete, edit, reschedule)
-- `ExceptionSubtaskCompletion` tracks per-occurrence subtask completion state
-- Smart lists and calendar expand occurrences via `RecurrenceService.ExpandOccurrencesAsync`
-- Dual-query pattern: non-recurring tasks via SQL + recurring masters expanded in-memory, then merged
+## Adding a Backend Endpoint
 
-### Background Jobs
-- **NotificationSchedulerJob** — runs every 15 minutes, sends Pushover notifications for tasks due today and overdue tasks
+1. **DTOs** — add request/response `record` types in `Models/Dtos/{Feature}/{Feature}Dtos.cs`
+2. **Validator** — add `AbstractValidator<T>` in `Validators/{Feature}Validators.cs` (auto-discovered by FluentValidation)
+3. **Entity** (if new) — create in `Models/Entities/`, add `DbSet` to `Data/TaskerDbContext.cs`, add `IEntityTypeConfiguration` in `Data/Configurations/`
+4. **Migration** (if schema changed) — `dotnet ef migrations add {Name} --project src/Tasker.Api`
+5. **Controller** — `[ApiController] [Authorize]` with primary constructor DI: `(TaskerDbContext db, IProjectAccessService access, ISyncService sync)`. Use `User.GetUserId()` extension for current user.
+6. **Sync** — after mutations, call `sync.TaskUpdated(projectId, response)` or appropriate method to broadcast via SignalR
+7. **Service** (if complex logic) — interface `I{Name}Service` + impl in `Services/`, register in `Extensions/ServiceCollectionExtensions.cs`
 
-### Key Directories
+## Adding a Frontend Feature
+
+1. **Types** — add interfaces to `types/api.ts`
+2. **API function** — add to existing file in `api/` or create new one. Pattern: `export async function getThing(): Promise<T> { return api.get('api/...').json<T>(); }` using ky client from `lib/client.ts`
+3. **Component** — in `components/{feature}/`. Use `useState` + `useCallback` for fetch, call `useSignalR(fetchData)` for real-time sync. Use `toast.error()`/`toast.success()` from sonner.
+4. **Route** (if new page) — add in `App.tsx` inside `<Route path="/app">`, wrap with `<ErrorBoundary>`. Add sidebar link in `components/layout/AppShell.tsx`.
+5. **Forms** — React Hook Form + Zod: `useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) })`
+
+## Key Directories
 ```
 client/src/
-  api/          # One file per resource (tasks.ts, projects.ts, etc.)
-  components/   # Feature-organized React components
-  contexts/     # AuthContext, ThemeContext
-  hooks/        # useSignalR, per-feature query/mutation hooks
-  lib/          # client.ts, signalr.ts, dates.ts, priorities.ts
-  types/        # TypeScript interfaces matching API DTOs
+  api/             # One file per resource, uses ky client
+  components/      # Feature-organized (auth/, calendar/, tasks/, shared/, layout/, etc.)
+  contexts/        # AuthContext, ThemeContext, LocaleContext
+  hooks/           # useSignalR
+  lib/             # client.ts (ky + JWT), signalr.ts, dates.ts, naturalDate.ts
+  types/api.ts     # Single file with all API interfaces
 
 src/Tasker.Api/
-  Controllers/    # REST endpoints (authorize at controller level)
-  Services/       # Business logic (AuthService, TokenService, SyncService, etc.)
-  Models/Entities/# EF Core entity classes
-  Data/           # DbContext + fluent configurations
-  Hubs/           # SyncHub (SignalR)
-  BackgroundJobs/ # Recurrence + notification jobs
-  Middleware/     # ExceptionHandlingMiddleware
+  Controllers/     # REST endpoints, [Authorize] at controller level
+  Models/Dtos/     # Record types in feature subfolders (Tasks/, Auth/, Projects/, etc.)
+  Models/Entities/ # EF Core entity classes
+  Data/            # TaskerDbContext + Configurations/ (IEntityTypeConfiguration per entity)
+  Services/        # Interface + impl pairs (Auth, Token, ProjectAccess, Recurrence, Sync, Pushover)
+  Validators/      # FluentValidation, auto-discovered
+  Hubs/            # SyncHub (SignalR)
+  BackgroundJobs/  # NotificationSchedulerJob (Pushover notifications)
+  Extensions/      # ServiceCollectionExtensions (DI registration)
 ```
 
-## Documentation
+## Documentation & Maintenance
 
 Keep `README.md` up to date with any applicable changes:
 - New features → add to the Features section
 - New or changed API endpoints → update the API Endpoints tables
 - New environment variables → add to the Environment Variables table
-- Significant architectural changes → update the Architecture section
+
+**Keep this CLAUDE.md current** — when adding new patterns, conventions, or architectural decisions that future work should follow, update the relevant section. If a recipe step changes (e.g., new DI pattern, new state management), update the recipe.
 
 ## Environment
 
-Copy `.env.example` to `.env` for Docker. For local dev, the frontend Vite config proxies `/api` and `/hubs` to `localhost:5001`.
+Copy `.env.example` to `.env` for Docker. For local dev, the Vite config proxies `/api` and `/hubs` to `localhost:5001`.
 
-Ports: frontend `3000` (nginx) / `5173` (dev), API `5001`, PostgreSQL `5432`.
-
-First run on empty DB triggers a setup page to create the admin user.
+Ports: frontend `3000` (nginx) / `5173` (dev), API `5001`, PostgreSQL `5432`. First run on empty DB triggers a setup page to create the admin user.
