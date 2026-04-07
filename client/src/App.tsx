@@ -54,7 +54,7 @@ export default function App() {
           <Route index element={<Navigate to="/app" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-        <Toaster position="top-right" richColors />
+        <Toaster position="bottom-center" richColors closeButton />
         </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>

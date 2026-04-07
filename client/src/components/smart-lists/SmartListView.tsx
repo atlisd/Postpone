@@ -96,7 +96,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
         } else {
           await completeOccurrence(task.id, task.occurrenceDate);
           toast('Task completed', {
-            duration: 15000,
+            duration: 5000,
             action: {
               label: 'Undo',
               onClick: async () => {
@@ -112,7 +112,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
         } else {
           await completeTask(task.id);
           toast('Task completed', {
-            duration: 15000,
+            duration: 5000,
             action: {
               label: 'Undo',
               onClick: async () => {
