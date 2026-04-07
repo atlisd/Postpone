@@ -125,7 +125,7 @@ test.describe('Task Reminders', () => {
 
     await page.getByRole('button', { name: 'Add reminder' }).click();
     await page.getByPlaceholder('0').fill('2');
-    await page.getByRole('combobox').last().selectOption('hours');
+    await page.getByRole('combobox', { name: 'Reminder unit' }).selectOption('hours');
     await page.getByRole('button', { name: 'Add', exact: true }).click();
 
     await expect(page.locator('span', { hasText: '2 hours before' })).toBeVisible({ timeout: 3000 });

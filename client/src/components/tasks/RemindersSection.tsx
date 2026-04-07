@@ -71,9 +71,23 @@ function ReminderChip({ reminder, taskId, onRemoved }: {
 
 export function RemindersSection({ task, dueTime, onUpdate }: Props) {
   const [open, setOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [customUnit, setCustomUnit] = useState<Unit>('minutes');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleOpen = () => {
+    if (open) {
+      setOpen(false);
+      setDropdownPos(null);
+    } else {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+      }
+      setOpen(true);
+    }
+  };
 
   if (!dueTime) return null;
 
@@ -85,6 +99,7 @@ export function RemindersSection({ task, dueTime, onUpdate }: Props) {
     try {
       await addReminder(task.id, offsetMinutes);
       setOpen(false);
+      setDropdownPos(null);
       onUpdate();
     } catch {
       toast.error('Failed to add reminder');
@@ -106,6 +121,7 @@ export function RemindersSection({ task, dueTime, onUpdate }: Props) {
       await addReminder(task.id, offsetMinutes);
       setCustomValue('');
       setOpen(false);
+      setDropdownPos(null);
       onUpdate();
     } catch {
       toast.error('Failed to add reminder');
@@ -122,15 +138,18 @@ export function RemindersSection({ task, dueTime, onUpdate }: Props) {
           <ReminderChip key={r.id} reminder={r} taskId={task.id} onRemoved={onUpdate} />
         ))}
       <button
-        onClick={() => setOpen(prev => !prev)}
+        onClick={handleToggleOpen}
         className="text-xs text-gray-400 hover:text-amber-500 flex items-center gap-0.5 transition-colors"
       >
         <Plus size={12} />
         Add reminder
       </button>
 
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-56">
+      {open && dropdownPos && (
+        <div
+          className="fixed z-[200] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg w-56"
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
+        >
           {availablePresets.length > 0 && (
             <div className="py-1">
               {availablePresets.map(preset => (
@@ -159,6 +178,7 @@ export function RemindersSection({ task, dueTime, onUpdate }: Props) {
               <select
                 value={customUnit}
                 onChange={e => setCustomUnit(e.target.value as Unit)}
+                aria-label="Reminder unit"
                 className="flex-1 px-1 py-1 text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded outline-none text-gray-700 dark:text-gray-300"
               >
                 <option value="minutes">min</option>
@@ -180,7 +200,7 @@ export function RemindersSection({ task, dueTime, onUpdate }: Props) {
       {open && (
         <div
           className="fixed inset-0 z-[9]"
-          onMouseDown={() => setOpen(false)}
+          onMouseDown={() => { setOpen(false); setDropdownPos(null); }}
         />
       )}
     </div>
