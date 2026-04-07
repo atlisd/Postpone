@@ -122,6 +122,15 @@ export async function rescheduleOccurrence(taskId: string, date: string, newDate
   await api.put(`api/tasks/${taskId}/occurrences/${date}/due-date`, { json: { newDate } });
 }
 
+export async function splitSeriesFrom(
+  taskId: string,
+  fromDate: string,
+  newDate: string,
+): Promise<{ updatedTask: TaskResponse; newTask: TaskResponse }> {
+  return api.post(`api/tasks/${taskId}/occurrences/${fromDate}/split-from`, { json: { newDate } })
+    .json<{ updatedTask: TaskResponse; newTask: TaskResponse }>();
+}
+
 // Smart lists
 export async function getSmartList(name: 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me'): Promise<TaskResponse[]> {
   return api.get(`api/smart-lists/${name}`).json<TaskResponse[]>();

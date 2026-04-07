@@ -9,10 +9,11 @@ import { ChevronLeft, ChevronRight, ChevronDown, Check, X } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
 import { getCalendarTasks } from '../../api/calendar';
 import { parseNaturalDate } from '../../lib/naturalDate';
-import { updateTaskDueDate, createTask, rescheduleOccurrence, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
+import { updateTaskDueDate, createTask, rescheduleOccurrence, splitSeriesFrom, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
 import { listProjects } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
+import { OccurrenceRescheduleModal } from './OccurrenceRescheduleModal';
 import { WeekView } from './WeekView';
 import { DayView } from './DayView';
 import { AgendaView } from './AgendaView';
@@ -118,6 +119,7 @@ export function CalendarView() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskProjectId, setNewTaskProjectId] = useState('');
   const [agendaTodayTrigger, setAgendaTodayTrigger] = useState(0);
+  const [pendingReschedule, setPendingReschedule] = useState<{ task: TaskResponse; newDate: string } | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -233,14 +235,41 @@ export function CalendarView() {
     const dragId = String(source.id);
     const newDate = String(target.id);
 
+    const task = tasks.find(t => `${t.id}_${t.occurrenceDate ?? 'single'}` === dragId);
+
+    if (task?.occurrenceDate) {
+      // Recurring occurrence: ask the user whether to move only this or this-and-following
+      setPendingReschedule({ task, newDate });
+      return;
+    }
+
     try {
-      const task = tasks.find(t => `${t.id}_${t.occurrenceDate ?? 'single'}` === dragId);
-      if (task?.occurrenceDate) {
-        await rescheduleOccurrence(task.id, task.occurrenceDate, newDate);
-      } else {
-        const taskId = task?.id ?? dragId;
-        await updateTaskDueDate(taskId, newDate);
-      }
+      const taskId = task?.id ?? dragId;
+      await updateTaskDueDate(taskId, newDate);
+      await fetchTasks();
+    } catch {
+      toast.error('Failed to reschedule task');
+    }
+  };
+
+  const handleRescheduleThisOnly = async () => {
+    if (!pendingReschedule) return;
+    const { task, newDate } = pendingReschedule;
+    setPendingReschedule(null);
+    try {
+      await rescheduleOccurrence(task.id, task.occurrenceDate!, newDate);
+      await fetchTasks();
+    } catch {
+      toast.error('Failed to reschedule task');
+    }
+  };
+
+  const handleRescheduleThisAndFollowing = async () => {
+    if (!pendingReschedule) return;
+    const { task, newDate } = pendingReschedule;
+    setPendingReschedule(null);
+    try {
+      await splitSeriesFrom(task.id, task.occurrenceDate!, newDate);
       await fetchTasks();
     } catch {
       toast.error('Failed to reschedule task');
@@ -490,6 +519,13 @@ export function CalendarView() {
           onToggleComplete={handleToggleComplete}
         />
       )}
+
+      <OccurrenceRescheduleModal
+        pending={pendingReschedule}
+        onCancel={() => setPendingReschedule(null)}
+        onThisOnly={handleRescheduleThisOnly}
+        onThisAndFollowing={handleRescheduleThisAndFollowing}
+      />
 
       {addingToDate && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAddingToDate(null)}>

@@ -351,6 +351,26 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         return NoContent();
     }
 
+    [HttpPost("api/tasks/{id:guid}/occurrences/{date}/split-from")]
+    public async Task<IActionResult> SplitSeriesFrom(Guid id, DateOnly date, [FromBody] SplitFromOccurrenceRequest request)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        var (original, newTask) = await recurrenceService.SplitSeriesFromAsync(id, date, request.NewDate);
+
+        var updatedTaskResponse = await GetTaskResponse(original.Id);
+        var newTaskResponse = await GetTaskResponse(newTask.Id);
+
+        await sync.TaskUpdated(task.ProjectId, updatedTaskResponse);
+        await sync.TaskCreated(task.ProjectId, newTaskResponse);
+
+        return Ok(new SplitSeriesResponse(updatedTaskResponse, newTaskResponse));
+    }
+
     private async Task<TaskResponse> GetTaskResponse(Guid taskId)
     {
         return await db.Tasks

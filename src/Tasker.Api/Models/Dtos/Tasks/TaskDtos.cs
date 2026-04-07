@@ -104,3 +104,7 @@ public record EditOccurrenceRequest(
     bool ClearAssignedTo);
 
 public record RescheduleOccurrenceRequest(DateOnly NewDate);
+
+public record SplitFromOccurrenceRequest(DateOnly NewDate);
+
+public record SplitSeriesResponse(TaskResponse UpdatedTask, TaskResponse NewTask);

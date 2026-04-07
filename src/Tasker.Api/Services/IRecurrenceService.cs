@@ -54,4 +54,13 @@ public interface IRecurrenceService
     /// </summary>
     Task ToggleOccurrenceSubtaskAsync(
         Guid seriesId, DateOnly occurrenceDate, Guid subtaskId, bool isCompleted);
+
+    /// <summary>
+    /// Split the recurring series at the given occurrence: the original series ends just before
+    /// <paramref name="fromDate"/> (UNTIL added to RRULE), and a new series is created starting
+    /// at <paramref name="newDate"/> with the same recurrence pattern.
+    /// </summary>
+    /// <returns>The updated original task and the newly created task.</returns>
+    Task<(TodoTask original, TodoTask newTask)> SplitSeriesFromAsync(
+        Guid taskId, DateOnly fromDate, DateOnly newDate);
 }

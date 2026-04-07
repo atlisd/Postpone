@@ -160,6 +160,76 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
         return exception;
     }
 
+    public async Task<(TodoTask original, TodoTask newTask)> SplitSeriesFromAsync(
+        Guid taskId, DateOnly fromDate, DateOnly newDate)
+    {
+        var original = await db.Tasks
+            .Include(t => t.Subtasks)
+            .FirstOrDefaultAsync(t => t.Id == taskId && !t.IsDeleted && t.Rrule != null)
+            ?? throw new InvalidOperationException($"Recurring task {taskId} not found.");
+
+        // Build UNTIL date (day before fromDate) in RRULE format YYYYMMDD
+        var until = fromDate.AddDays(-1).ToString("yyyyMMdd");
+
+        // Strip any existing UNTIL= or COUNT= parts, then append the new UNTIL
+        var parts = original.Rrule!.Split(';')
+            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
+                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        parts.Add($"UNTIL={until}");
+        original.Rrule = string.Join(';', parts);
+
+        // Determine DueDateTime for new series: keep time component, shift date to newDate
+        DateTime? newDueDateTime = null;
+        if (original.DueDateTime.HasValue)
+        {
+            var t = original.DueDateTime.Value;
+            newDueDateTime = new DateTime(
+                newDate.Year, newDate.Month, newDate.Day,
+                t.Hour, t.Minute, t.Second, t.Millisecond, t.Kind);
+        }
+
+        // Strip UNTIL/COUNT from the original RRULE to get a clean recurrence rule for the new series
+        var newRrule = original.Rrule!.Split(';')
+            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
+                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        // Remove the UNTIL we just added (we want the new series to be open-ended)
+        var cleanRrule = string.Join(';', original.Rrule!.Split(';')
+            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
+                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase)));
+
+        var newTask = new TodoTask
+        {
+            ProjectId = original.ProjectId,
+            CreatedById = original.CreatedById,
+            AssignedToId = original.AssignedToId,
+            Title = original.Title,
+            Description = original.Description,
+            Priority = original.Priority,
+            DueDate = newDate,
+            DueDateTime = newDueDateTime,
+            Rrule = cleanRrule,
+            SortOrder = original.SortOrder,
+        };
+
+        // Copy subtasks
+        foreach (var sub in original.Subtasks.OrderBy(s => s.SortOrder))
+        {
+            newTask.Subtasks.Add(new Subtask
+            {
+                Title = sub.Title,
+                IsCompleted = false,
+                SortOrder = sub.SortOrder,
+            });
+        }
+
+        db.Tasks.Add(newTask);
+        await db.SaveChangesAsync();
+
+        return (original, newTask);
+    }
+
     public async Task ToggleOccurrenceSubtaskAsync(
         Guid seriesId, DateOnly occurrenceDate, Guid subtaskId, bool isCompleted)
     {
