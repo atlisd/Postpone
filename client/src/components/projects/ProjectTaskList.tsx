@@ -46,8 +46,14 @@ export function ProjectTaskList() {
           task.id === selectedTaskRef.current!.id
           && task.occurrenceDate === selectedTaskRef.current!.occurrenceDate
         );
-        if (updated) setSelectedTask(updated);
-        else setSelectedTask(null);
+        if (updated) {
+          setSelectedTask(updated);
+        } else {
+          // Recurrence may have been added or removed, shifting occurrenceDate;
+          // keep the dialog open on the nearest matching task by id.
+          const anyMatch = t.find(task => task.id === selectedTaskRef.current!.id);
+          setSelectedTask(anyMatch ?? null);
+        }
       }
     } catch (error) {
       if (error instanceof HTTPError && error.response.status === 404) {
