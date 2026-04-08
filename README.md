@@ -37,7 +37,7 @@ Multiple user support where each user gets their own account (created by an admi
 
 ### User Management
 - **Admin-Created Accounts** — no public registration; the admin creates all users
-- **JWT Authentication** — access tokens (15 min) + rotating refresh tokens (1 year) with theft detection
+- **JWT Authentication** — access tokens (15 min) + rotating refresh tokens (1 year)
 - **First-Run Setup** — on first launch, create your admin account directly in the browser
 
 ### Notifications
