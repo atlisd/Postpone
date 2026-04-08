@@ -1,4 +1,4 @@
-import { Check, Flag, Repeat, GripVertical, FileText } from 'lucide-react';
+import { Check, Flag, Repeat, GripVertical, FileText, EyeOff } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
 import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
@@ -87,6 +87,9 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
           )}
           {subtaskTotal > 0 && (
             <span className="text-xs text-gray-400 flex-shrink-0">{subtaskDone}/{subtaskTotal}</span>
+          )}
+          {task.hideFromCalendar && (
+            <EyeOff size={11} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
           )}
         </div>
 
