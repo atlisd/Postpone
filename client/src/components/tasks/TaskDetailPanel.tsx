@@ -11,7 +11,10 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff } from 'lucide-react';
+import { format } from 'date-fns';
+import { parseNaturalDate } from '../../lib/naturalDate';
+import { formatDueDate } from '../../lib/dates';
+import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff, CalendarDays } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence, addTagToTask, removeTagFromTask } from '../../api/tasks';
 import { listTags, createTag } from '../../api/tags';
@@ -157,7 +160,7 @@ interface TaskDetailPanelProps {
 }
 
 export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: TaskDetailPanelProps) {
-  const { localeCode } = useLocale();
+  const { localeCode, locale } = useLocale();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [priority, setPriority] = useState(task.priority);
@@ -167,6 +170,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
   const [hideFromCalendar, setHideFromCalendar] = useState(task.hideFromCalendar);
   const [skipNotification, setSkipNotification] = useState(task.skipNotification);
+  const [naturalInput, setNaturalInput] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -389,6 +393,25 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     }
   };
 
+  const naturalParsed = parseNaturalDate(naturalInput);
+  const naturalChipLabel = naturalParsed
+    ? naturalParsed.dueDateTime
+      ? `${formatDueDate(naturalParsed.dueDate, locale)}, ${format(new Date(naturalParsed.dueDateTime), 'p', { locale })}`
+      : formatDueDate(naturalParsed.dueDate, locale)
+    : '';
+
+  const applyNaturalDate = () => {
+    if (!naturalParsed) return;
+    const newDate = naturalParsed.dueDate;
+    const newTime = naturalParsed.dueDateTime ? extractLocalTime(naturalParsed.dueDateTime) : '';
+    dueDateRef.current = newDate;
+    dueTimeRef.current = newTime;
+    setDueDate(newDate);
+    setDueTime(newTime);
+    setNaturalInput('');
+    handleBlur();
+  };
+
   // Save on blur for title/description
   const handleBlur = () => {
     setIsEditingDescription(false);
@@ -466,6 +489,29 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
               disabled={!dueDate}
               className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 w-28 disabled:opacity-40 disabled:cursor-not-allowed"
             />
+          </div>
+
+          {/* Natural date input */}
+          <div className="flex flex-col gap-1">
+            <input
+              value={naturalInput}
+              onChange={(e) => setNaturalInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); applyNaturalDate(); }
+                if (e.key === 'Escape') { e.preventDefault(); setNaturalInput(''); }
+              }}
+              placeholder='e.g. "tomorrow 4pm" or "friday"'
+              className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600"
+            />
+            {naturalParsed && naturalInput && (
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full px-2.5 py-1 font-medium">
+                  <CalendarDays size={12} />
+                  <span>{naturalChipLabel}</span>
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">Enter to apply · ESC to clear</span>
+              </div>
+            )}
           </div>
 
           {/* Notifications */}

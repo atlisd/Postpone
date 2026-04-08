@@ -313,3 +313,89 @@ test.describe('Task Details', () => {
     expect(subCIdxAfter).toBeLessThan(subAIdxAfter);
   });
 });
+
+test.describe('Natural date input', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async ({ browser }) => {
+    // Ensure the task and project from the outer describe still exist (they do; outer afterAll runs last)
+    // Nothing extra to set up.
+  });
+
+  const naturalInput = () => {
+    // Re-use the page fixture; selector is the placeholder text
+    return 'e.g. "tomorrow 4pm" or "friday"';
+  };
+
+  test('date-only: "tomorrow" sets date to tomorrow', async ({ page }) => {
+    await page.goto(projectUrl);
+    await openTaskDetailPanel(page, taskTitle);
+
+    const input = page.getByPlaceholder(naturalInput());
+    await input.fill('tomorrow');
+    // Chip preview should appear
+    await expect(page.locator('text=Tomorrow').first()).toBeVisible({ timeout: 3000 });
+
+    await input.press('Enter');
+    await page.waitForTimeout(500);
+
+    // Reload and verify the date field shows tomorrow
+    await page.reload();
+    await openTaskDetailPanel(page, taskTitle);
+    await expect(page.locator('text=Tomorrow').first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test('date + time: "tomorrow 4pm" sets date and time', async ({ page }) => {
+    await page.goto(projectUrl);
+    await openTaskDetailPanel(page, taskTitle);
+
+    const input = page.getByPlaceholder(naturalInput());
+    await input.fill('tomorrow 4pm');
+    // Chip should show "Tomorrow" and a time
+    await expect(page.locator('[class*="blue-100"], [class*="blue-900"]').filter({ hasText: 'Tomorrow' }).first()).toBeVisible({ timeout: 3000 });
+
+    await input.press('Enter');
+    await page.waitForTimeout(500);
+
+    // Reload and verify time is set (time input should have a value)
+    await page.reload();
+    await openTaskDetailPanel(page, taskTitle);
+    const timeInput = page.locator('input[class*="w-28"]');
+    const timeValue = await timeInput.inputValue();
+    expect(timeValue).toMatch(/4|16/); // 4pm in 12h or 16:00 in 24h
+  });
+
+  test('time-only: "14:00" sets today\'s date and 14:00 time', async ({ page }) => {
+    await page.goto(projectUrl);
+    await openTaskDetailPanel(page, taskTitle);
+
+    const input = page.getByPlaceholder(naturalInput());
+    await input.fill('14:00');
+    await expect(page.locator('[class*="blue-100"], [class*="blue-900"]').filter({ hasText: 'Today' }).first()).toBeVisible({ timeout: 3000 });
+
+    await input.press('Enter');
+    await page.waitForTimeout(500);
+
+    // Reload and verify
+    await page.reload();
+    await openTaskDetailPanel(page, taskTitle);
+    const timeInput = page.locator('input[class*="w-28"]');
+    const timeValue = await timeInput.inputValue();
+    expect(timeValue).toMatch(/2:00|14:00/);
+  });
+
+  test('ESC clears the natural input without applying', async ({ page }) => {
+    await page.goto(projectUrl);
+    await openTaskDetailPanel(page, taskTitle);
+
+    const input = page.getByPlaceholder(naturalInput());
+    await input.fill('next monday');
+    // Chip appears
+    await expect(page.locator('[class*="blue-100"], [class*="blue-900"]').first()).toBeVisible({ timeout: 3000 });
+
+    await input.press('Escape');
+    // Input cleared, chip gone
+    await expect(input).toHaveValue('');
+    await expect(page.locator('[class*="blue-100"], [class*="blue-900"]').filter({ hasText: /monday/i })).toHaveCount(0);
+  });
+});
