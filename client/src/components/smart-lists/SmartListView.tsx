@@ -35,8 +35,14 @@ export function SmartListView({ type, title }: SmartListViewProps) {
       if (selectedTaskRef.current) {
         const sel = selectedTaskRef.current;
         const updated = data.find(t => t.id === sel.id && t.occurrenceDate === sel.occurrenceDate);
-        if (updated) setSelectedTask(updated);
-        else setSelectedTask(null);
+        if (updated) {
+          setSelectedTask(updated);
+        } else {
+          // Recurrence may have been added or removed, shifting occurrenceDate;
+          // keep the dialog open on the nearest matching task by id.
+          const anyMatch = data.find(t => t.id === sel.id);
+          setSelectedTask(anyMatch ?? null);
+        }
       }
     } catch {
       toast.error('Failed to load tasks');
