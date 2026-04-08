@@ -70,6 +70,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         foreach (var task in tasks)
         {
+            if (task.SkipNotification) continue;
             if (task.DueDateTime.HasValue)
             {
                 if (task.Reminders.Count > 0)
@@ -90,6 +91,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         foreach (var instance in virtualInstances.Where(v => v.CompletedAt == null))
         {
+            if (instance.SkipNotification) continue;
             await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
         }
     }

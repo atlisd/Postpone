@@ -14,6 +14,7 @@ public class TodoTask
     public DateTime? CompletedAt { get; set; }
     public bool IsDeleted { get; set; }
     public bool HideFromCalendar { get; set; }
+    public bool SkipNotification { get; set; }
 
     // Recurrence
     public string? Rrule { get; set; }

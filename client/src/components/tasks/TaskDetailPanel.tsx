@@ -166,6 +166,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const dueDateRef = useRef(task.dueDate ?? '');
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
   const [hideFromCalendar, setHideFromCalendar] = useState(task.hideFromCalendar);
+  const [skipNotification, setSkipNotification] = useState(task.skipNotification);
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -191,6 +192,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     setDescription(task.description);
     setPriority(task.priority);
     setHideFromCalendar(task.hideFromCalendar);
+    setSkipNotification(task.skipNotification);
     setDueDate(task.dueDate ?? '');
     setDueTime(extractLocalTime(task.dueDateTime));
     dueDateRef.current = task.dueDate ?? '';
@@ -263,6 +265,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           dueDateTime: dueDateTimePayload,
           clearDueDateTime: clearDueDateTimePayload,
           hideFromCalendar: hideFromCalendar !== task.hideFromCalendar ? hideFromCalendar : undefined,
+          skipNotification: skipNotification !== task.skipNotification ? skipNotification : undefined,
         });
       }
       onUpdate();
@@ -389,7 +392,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   // Save on blur for title/description
   const handleBlur = () => {
     setIsEditingDescription(false);
-    if (title !== task.title || description !== task.description || priority !== task.priority || hideFromCalendar !== task.hideFromCalendar || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
+    if (title !== task.title || description !== task.description || priority !== task.priority || hideFromCalendar !== task.hideFromCalendar || skipNotification !== task.skipNotification || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
       handleSave();
     }
   };
@@ -465,8 +468,29 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
             />
           </div>
 
-          {/* Reminders */}
-          <RemindersSection task={task} dueTime={dueTime} onUpdate={onUpdate} />
+          {/* Notifications */}
+          <div className="space-y-1.5">
+            <div className={skipNotification ? 'opacity-40 pointer-events-none' : ''}>
+              <RemindersSection task={task} dueTime={dueTime} onUpdate={onUpdate} />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={skipNotification}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setSkipNotification(next);
+                  setSaving(true);
+                  updateTask(task.id, { skipNotification: next })
+                    .then(onUpdate)
+                    .catch(() => { toast.error('Failed to save'); setSkipNotification(!next); })
+                    .finally(() => setSaving(false));
+                }}
+                className="accent-amber-500"
+              />
+              Skip notification
+            </label>
+          </div>
 
           {/* Recurrence + Priority row */}
           <div className="flex items-center gap-3">

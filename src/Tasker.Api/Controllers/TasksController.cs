@@ -130,6 +130,7 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         if (request.ClearAssignedTo) task.AssignedToId = null;
         else if (request.AssignedToId.HasValue) task.AssignedToId = request.AssignedToId.Value;
         if (request.HideFromCalendar.HasValue) task.HideFromCalendar = request.HideFromCalendar.Value;
+        if (request.SkipNotification.HasValue) task.SkipNotification = request.SkipNotification.Value;
 
         await db.SaveChangesAsync();
 

@@ -69,6 +69,7 @@ export interface TaskResponse {
   occurrenceDate: string | null;
   isRecurrenceException: boolean;
   hideFromCalendar: boolean;
+  skipNotification: boolean;
   subtasks: SubtaskResponse[];
   tags: TagResponse[];
   reminders: ReminderResponse[];

@@ -323,6 +323,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             occurrenceDate,
             exception is not null,
             master.HideFromCalendar,
+            master.SkipNotification,
             subtasks,
             tags,
             reminders,

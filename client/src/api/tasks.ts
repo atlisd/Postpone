@@ -33,6 +33,7 @@ export async function updateTask(id: string, data: {
   assignedToId?: string;
   clearAssignedTo?: boolean;
   hideFromCalendar?: boolean;
+  skipNotification?: boolean;
 }): Promise<TaskResponse> {
   return api.put(`api/tasks/${id}`, { json: data }).json<TaskResponse>();
 }
