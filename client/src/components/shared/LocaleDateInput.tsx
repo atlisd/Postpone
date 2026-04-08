@@ -217,7 +217,7 @@ function CalendarPopup({ value, onSelect, onClose, locale }: CalendarPopupProps)
                 isSelected
                   ? 'bg-blue-500 text-white font-medium'
                   : isTodayDate
-                  ? 'text-blue-500 dark:text-blue-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'text-gray-900 dark:text-white font-bold ring-2 ring-blue-500 dark:ring-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                   : isCurrentMonth
                   ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
                   : 'text-gray-300 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-750',
