@@ -11,7 +11,7 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag } from 'lucide-react';
+import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence, addTagToTask, removeTagFromTask } from '../../api/tasks';
 import { listTags, createTag } from '../../api/tags';
@@ -165,6 +165,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [dueTime, setDueTime] = useState(() => extractLocalTime(task.dueDateTime));
   const dueDateRef = useRef(task.dueDate ?? '');
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
+  const [hideFromCalendar, setHideFromCalendar] = useState(task.hideFromCalendar);
   const [newSubtask, setNewSubtask] = useState('');
   const [saving, setSaving] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -189,6 +190,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     setTitle(task.title);
     setDescription(task.description);
     setPriority(task.priority);
+    setHideFromCalendar(task.hideFromCalendar);
     setDueDate(task.dueDate ?? '');
     setDueTime(extractLocalTime(task.dueDateTime));
     dueDateRef.current = task.dueDate ?? '';
@@ -260,6 +262,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           clearDueDate: clearDueDatePayload,
           dueDateTime: dueDateTimePayload,
           clearDueDateTime: clearDueDateTimePayload,
+          hideFromCalendar: hideFromCalendar !== task.hideFromCalendar ? hideFromCalendar : undefined,
         });
       }
       onUpdate();
@@ -386,7 +389,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   // Save on blur for title/description
   const handleBlur = () => {
     setIsEditingDescription(false);
-    if (title !== task.title || description !== task.description || priority !== task.priority || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
+    if (title !== task.title || description !== task.description || priority !== task.priority || hideFromCalendar !== task.hideFromCalendar || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
       handleSave();
     }
   };
@@ -482,6 +485,25 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
                 } catch { toast.error('Failed to remove recurrence'); }
               }}
             />
+            <div className="relative group/hide">
+              <button
+                onClick={() => {
+                  const next = !hideFromCalendar;
+                  setHideFromCalendar(next);
+                  setSaving(true);
+                  updateTask(task.id, { hideFromCalendar: next })
+                    .then(onUpdate)
+                    .catch(() => { toast.error('Failed to save'); setHideFromCalendar(!next); })
+                    .finally(() => setSaving(false));
+                }}
+                className={`p-1.5 rounded transition-colors ${hideFromCalendar ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              >
+                {hideFromCalendar ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs bg-gray-800 dark:bg-gray-700 text-white rounded whitespace-nowrap opacity-0 group-hover/hide:opacity-100 transition-opacity pointer-events-none z-10">
+                {hideFromCalendar ? 'Show in calendar' : 'Hide from calendar'}
+              </div>
+            </div>
             <div className="flex items-center gap-2 ml-auto">
               <Flag size={16} className="text-gray-400 flex-shrink-0" />
               <select

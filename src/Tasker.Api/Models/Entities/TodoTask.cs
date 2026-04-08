@@ -13,6 +13,7 @@ public class TodoTask
     public DateTime? DueDateTime { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool IsDeleted { get; set; }
+    public bool HideFromCalendar { get; set; }
 
     // Recurrence
     public string? Rrule { get; set; }

@@ -15,6 +15,7 @@ public class TodoTaskConfiguration : IEntityTypeConfiguration<TodoTask>
         builder.Property(t => t.Description).IsRequired().HasDefaultValue("");
         builder.Property(t => t.Priority).HasDefaultValue((short)0);
         builder.Property(t => t.IsDeleted).HasDefaultValue(false);
+        builder.Property(t => t.HideFromCalendar).HasDefaultValue(false);
         builder.Property(t => t.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(t => t.UpdatedAt).HasDefaultValueSql("now()");
 

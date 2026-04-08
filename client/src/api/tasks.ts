@@ -32,6 +32,7 @@ export async function updateTask(id: string, data: {
   clearDueDateTime?: boolean;
   assignedToId?: string;
   clearAssignedTo?: boolean;
+  hideFromCalendar?: boolean;
 }): Promise<TaskResponse> {
   return api.put(`api/tasks/${id}`, { json: data }).json<TaskResponse>();
 }

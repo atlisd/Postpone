@@ -20,7 +20,8 @@ public record UpdateTaskRequest(
     DateTime? DueDateTime,
     bool ClearDueDateTime,
     Guid? AssignedToId,
-    bool ClearAssignedTo);
+    bool ClearAssignedTo,
+    bool? HideFromCalendar);
 
 public record UpdateDueDateRequest(DateOnly? DueDate);
 
@@ -44,6 +45,7 @@ public record TaskResponse(
     string? Rrule,
     DateOnly? OccurrenceDate,
     bool IsRecurrenceException,
+    bool HideFromCalendar,
     List<SubtaskResponse> Subtasks,
     List<TagResponse> Tags,
     List<ReminderResponse> Reminders,
@@ -69,6 +71,7 @@ public record TaskResponse(
         t.Rrule,
         null, // OccurrenceDate — set for virtual instances, null for real tasks
         false, // IsRecurrenceException
+        t.HideFromCalendar,
         t.Subtasks.OrderBy(s => s.SortOrder).Select(s => new SubtaskResponse(s.Id, s.Title, s.IsCompleted, s.SortOrder)).ToList(),
         t.TaskTags.Select(tt => new TagResponse(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
         t.Reminders.Select(r => new ReminderResponse(r.Id, r.OffsetMinutes)).ToList(),

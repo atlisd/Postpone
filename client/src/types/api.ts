@@ -67,6 +67,7 @@ export interface TaskResponse {
   rrule: string | null;
   occurrenceDate: string | null;
   isRecurrenceException: boolean;
+  hideFromCalendar: boolean;
   subtasks: SubtaskResponse[];
   tags: TagResponse[];
   reminders: ReminderResponse[];

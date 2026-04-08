@@ -21,14 +21,14 @@ public class CalendarController(IProjectAccessService access, IRecurrenceService
 
         // Non-recurring tasks in date range
         var regularTasks = await access.GetAccessibleTasks(userId)
-            .Where(t => t.Rrule == null && t.DueDate >= start && t.DueDate <= end)
+            .Where(t => t.Rrule == null && !t.HideFromCalendar && t.DueDate >= start && t.DueDate <= end)
             .OrderBy(t => t.DueDate)
             .ThenByDescending(t => t.Priority)
             .Select(TaskResponse.Projection)
             .ToListAsync();
 
         // Recurring task occurrences in date range
-        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null && !t.HideFromCalendar);
         var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, start, end);
 
         var all = regularTasks.Concat(virtualInstances)

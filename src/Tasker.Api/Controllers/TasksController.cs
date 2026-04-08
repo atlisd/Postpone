@@ -129,6 +129,7 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         else if (request.DueDateTime.HasValue) task.DueDateTime = request.DueDateTime.Value;
         if (request.ClearAssignedTo) task.AssignedToId = null;
         else if (request.AssignedToId.HasValue) task.AssignedToId = request.AssignedToId.Value;
+        if (request.HideFromCalendar.HasValue) task.HideFromCalendar = request.HideFromCalendar.Value;
 
         await db.SaveChangesAsync();
 
