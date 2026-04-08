@@ -16,6 +16,7 @@ const TEST_PROJECT_PREFIXES = [
   'Drag P1 ', 'Drag P2 ', 'Drag P3 ', 'Drag Tasks ',
   'Undo Test ', 'Task Project ', 'Time Input Test ',
   'Task Detail Project ', 'Time Bug Test',
+  'Hide Cal Project ', 'HideCalTest',
 ];
 
 async function deleteAllTestProjects(request: APIRequestContext): Promise<void> {
