@@ -77,7 +77,7 @@ Multiple user support where each user gets their own account (created by an admi
 - **Non-root containers** — both the API and nginx containers run as unprivileged users
 - **Security headers** — CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
 - **Secure cookies** — refresh tokens use HttpOnly, SameSite=Lax, and Secure (in production)
-- **Rate limiting** — auth endpoints are rate-limited (10 requests/min) to prevent brute-force
+- **Rate limiting** — failed login attempts are rate-limited per IP (10 failures/min); other low-frequency auth endpoints use a global fixed-window limiter
 - **Input validation** — all endpoints validated with FluentValidation
 - **No SQL injection** — Entity Framework Core parameterized queries throughout
 - **Password hashing** — BCrypt with automatic salting

@@ -67,10 +67,11 @@ public static class ServiceCollectionExtensions
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            // Strict limit for auth endpoints (prevent brute-force)
+            // Limit for low-frequency auth endpoints (setup, reset-password, etc.)
+            // Login uses ILoginRateLimiter (failed-attempts only) instead of this policy.
             options.AddFixedWindowLimiter("auth", opt =>
             {
-                opt.PermitLimit = 1000;
+                opt.PermitLimit = 20;
                 opt.Window = TimeSpan.FromMinutes(1);
                 opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                 opt.QueueLimit = 0;
@@ -101,6 +102,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRecurrenceService, RecurrenceService>();
         services.AddScoped<ISyncService, SyncService>();
         services.AddSingleton<IPushoverClient, PushoverClient>();
+        services.AddSingleton<ILoginRateLimiter, LoginRateLimiter>();
         services.AddHttpClient();
 
         // Background jobs

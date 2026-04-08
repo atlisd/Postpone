@@ -12,7 +12,7 @@ namespace Tasker.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService, TaskerDbContext db, IWebHostEnvironment env) : ControllerBase
+public class AuthController(IAuthService authService, TaskerDbContext db, IWebHostEnvironment env, ILoginRateLimiter loginLimiter) : ControllerBase
 {
     [HttpGet("setup-status")]
     [AllowAnonymous]
@@ -62,12 +62,18 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
 
     [AllowAnonymous]
     [HttpPost("login")]
-    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        if (loginLimiter.IsBlocked(ip))
+            return StatusCode(429, new { message = "Too many failed login attempts. Try again later." });
+
         var result = await authService.LoginAsync(request);
         if (result is null)
+        {
+            loginLimiter.RecordFailure(ip);
             return Unauthorized(new { message = "Invalid email or password" });
+        }
 
         SetRefreshTokenCookie(result.RefreshToken);
         return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
@@ -75,7 +81,6 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
 
     [AllowAnonymous]
     [HttpPost("refresh")]
-    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Refresh()
     {
         var refreshToken = Request.Cookies["refreshToken"];
