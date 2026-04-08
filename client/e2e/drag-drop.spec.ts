@@ -9,7 +9,16 @@ const P2 = `Drag P2 ${TS}`;
 const P3 = `Drag P3 ${TS}`;
 const TASK_PROJECT = `Drag Tasks ${TS}`;
 
-async function deleteDragTestProjects(request: APIRequestContext): Promise<void> {
+/** Prefixes used by any e2e test spec. Kept here so drag-drop (runs first
+ *  alphabetically) can purge orphans from previous failed runs before the
+ *  sidebar gets long enough to push targets off-screen. */
+const TEST_PROJECT_PREFIXES = [
+  'Drag P1 ', 'Drag P2 ', 'Drag P3 ', 'Drag Tasks ',
+  'Undo Test ', 'Task Project ', 'Time Input Test ',
+  'Task Detail Project ', 'Time Bug Test',
+];
+
+async function deleteAllTestProjects(request: APIRequestContext): Promise<void> {
   const loginRes = await request.post('/api/auth/login', {
     data: { email: TEST_EMAIL, password: TEST_PASSWORD },
   });
@@ -21,11 +30,10 @@ async function deleteDragTestProjects(request: APIRequestContext): Promise<void>
   });
   if (!projectsRes.ok()) return;
   const projects: Array<{ id: string; name: string }> = await projectsRes.json();
-  const dragProjects = projects.filter(
-    p => p.name.startsWith('Drag P1 ') || p.name.startsWith('Drag P2 ') ||
-         p.name.startsWith('Drag P3 ') || p.name.startsWith('Drag Tasks '),
+  const testProjects = projects.filter(p =>
+    TEST_PROJECT_PREFIXES.some(prefix => p.name.startsWith(prefix)),
   );
-  for (const p of dragProjects) {
+  for (const p of testProjects) {
     await request.delete(`/api/projects/${p.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -33,6 +41,9 @@ async function deleteDragTestProjects(request: APIRequestContext): Promise<void>
 }
 
 async function performDrag(page: Page, sourceHandle: Locator, targetLocator: Locator) {
+  // Scroll target into view first, then source, so both are in the viewport before dragging
+  await targetLocator.scrollIntoViewIfNeeded();
+  await sourceHandle.scrollIntoViewIfNeeded();
   await sourceHandle.hover();
   const sourceBB = await sourceHandle.boundingBox();
   const targetBB = await targetLocator.boundingBox();
@@ -76,11 +87,11 @@ async function deleteProject(page: Page, name: string) {
 
 test.describe('Drag and Drop', () => {
   test.beforeAll(async ({ request }) => {
-    await deleteDragTestProjects(request);
+    await deleteAllTestProjects(request);
   });
 
   test.afterAll(async ({ request }) => {
-    await deleteDragTestProjects(request);
+    await deleteAllTestProjects(request);
   });
 
   test('reorder projects in sidebar while on smart list, verify animation and persistence', async ({ page }) => {
@@ -109,13 +120,21 @@ test.describe('Drag and Drop', () => {
     const p3Link = sidebar.locator('a', { hasText: P3 });
     const p1Item = p1Link.locator('..');
 
+    // Scroll P3 into view first, then P1, ensuring both are visible before the drag
+    await p3Link.scrollIntoViewIfNeeded();
+    await p1Link.scrollIntoViewIfNeeded();
+
     // Hover P1 to reveal grab handle
     await p1Link.hover();
     const p1Handle = p1Item.locator('span[class*="cursor-grab"]');
 
-    // Start drag and verify animation (opacity class on dragging item)
+    // Capture bounding boxes before the drag starts (both elements are in view)
     const p1HandleBB = await p1Handle.boundingBox();
+    const p3BB = await p3Link.boundingBox();
     if (!p1HandleBB) throw new Error('No handle bounding box');
+    if (!p3BB) throw new Error('P3 bounding box not available — element may be off-screen');
+
+    // Start drag and verify animation (opacity class on dragging item)
     await page.mouse.move(p1HandleBB.x + p1HandleBB.width / 2, p1HandleBB.y + p1HandleBB.height / 2);
     await page.mouse.down();
     await page.mouse.move(p1HandleBB.x + p1HandleBB.width / 2, p1HandleBB.y + p1HandleBB.height / 2 + 10);
@@ -124,14 +143,8 @@ test.describe('Drag and Drop', () => {
     // Use .first() because dnd-kit creates a drag overlay clone alongside the placeholder, both having opacity-50
     await expect(p1Item.first()).toHaveClass(/opacity-/, { timeout: 2000 });
 
-    // Check that other items have moved (bounding boxes differ from original)
-    const p2BB = await sidebar.locator('a', { hasText: P2 }).boundingBox();
-    const p3BB = await p3Link.boundingBox();
-
     // Complete the drag to P3's position
-    if (p3BB) {
-      await page.mouse.move(p3BB.x + p3BB.width / 2, p3BB.y + p3BB.height / 2 + 5, { steps: 30 });
-    }
+    await page.mouse.move(p3BB.x + p3BB.width / 2, p3BB.y + p3BB.height / 2 + 5, { steps: 30 });
     await page.mouse.up();
     await page.waitForTimeout(600);
 

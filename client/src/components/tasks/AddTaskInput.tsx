@@ -45,7 +45,7 @@ export function AddTaskInput({ onAdd }: AddTaskInputProps) {
     e.preventDefault();
     if (!title.trim()) return;
     if (parsedResult && !dismissed) {
-      const explicitDate = parsedResult.hasExplicitDate ? parsedResult.dueDate : undefined;
+      const explicitDate = parsedResult.dueDate;
       onAdd(parsedResult.cleanTitle || title.trim(), explicitDate, parsedResult.dueDateTime);
     } else {
       onAdd(title.trim());
