@@ -280,6 +280,11 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | POST | `/api/tasks/{id}/tags` | Add tag to task |
 | DELETE | `/api/tasks/{id}/tags/{tagId}` | Remove tag from task |
 
+### Users
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/users` | List all other users (for sharing/assignment pickers) |
+
 ### Infrastructure
 | Method | Path | Description |
 |--------|------|-------------|

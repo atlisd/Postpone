@@ -20,4 +20,5 @@ public record ProjectResponse(
     int TaskCount,
     int CompletedTaskCount,
     DateTime CreatedAt,
-    bool IsInbox);
+    bool IsInbox,
+    int ShareCount = 0);

@@ -29,8 +29,10 @@ import {
   SquareCheck,
   CalendarDays,
   User,
+  Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ProjectShareModal } from '../projects/ProjectShareModal';
 
 interface SidebarProps {
   open: boolean;
@@ -59,6 +61,7 @@ interface SortableProjectItemProps {
   onContextMenu: (projectId: string, rect: DOMRect) => void;
   contextMenuProjectId: string | null;
   taskCount: number;
+  onShareClick: (project: ProjectResponse) => void;
 }
 
 function SortableProjectItem({
@@ -70,6 +73,7 @@ function SortableProjectItem({
   onContextMenu,
   contextMenuProjectId,
   taskCount,
+  onShareClick,
 }: SortableProjectItemProps) {
   const { ref, handleRef, isDragging } = useSortable({
     id: project.id,
@@ -106,6 +110,15 @@ function SortableProjectItem({
         </span>
         <span className="flex-1 truncate">{project.name}</span>
         {project.householdId && <Users size={12} className="text-gray-400 flex-shrink-0" />}
+        {!project.householdId && project.shareCount > 0 && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShareClick(project); }}
+            className="text-gray-400 hover:text-blue-500 flex-shrink-0 transition-colors"
+            title="Shared project"
+          >
+            <Share2 size={12} />
+          </button>
+        )}
         <span className="text-xs text-gray-400 group-hover:invisible">
           {taskCount}
         </span>
@@ -159,6 +172,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string; color: string } | null>(null);
+  const [sharingProject, setSharingProject] = useState<ProjectResponse | null>(null);
   const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
   const [tags, setTags] = useState<TagFull[]>([]);
   const [showCreateTagModal, setShowCreateTagModal] = useState(false);
@@ -511,6 +525,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                   }
                   contextMenuProjectId={contextMenu?.projectId ?? null}
                   taskCount={project.taskCount - project.completedTaskCount}
+                  onShareClick={setSharingProject}
                 />
               ))}
             </>
@@ -574,8 +589,8 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div
             className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
             style={{
-              top: contextMenu.rect.bottom + 4 + 80 > window.innerHeight
-                ? contextMenu.rect.top - 80
+              top: contextMenu.rect.bottom + 4 + 115 > window.innerHeight
+                ? contextMenu.rect.top - 115
                 : contextMenu.rect.bottom + 4,
               left: contextMenu.rect.left,
             }}
@@ -593,6 +608,18 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               <Pencil size={14} />
               Edit
             </button>
+            {(() => {
+              const p = projects.find(p => p.id === contextMenu.projectId);
+              return p && !p.householdId && !p.isInbox ? (
+                <button
+                  onClick={() => { setSharingProject(p); setContextMenu(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <Share2 size={14} />
+                  Share
+                </button>
+              ) : null;
+            })()}
             <button
               onClick={() => {
                 const project = projects.find(p => p.id === contextMenu.projectId);
@@ -620,6 +647,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           onClose={() => setEditingProject(null)}
           onSubmit={handleEditProject}
           initial={{ name: editingProject.name, color: editingProject.color }}
+        />
+      )}
+
+      {sharingProject && (
+        <ProjectShareModal
+          project={sharingProject}
+          onClose={() => setSharingProject(null)}
         />
       )}
 

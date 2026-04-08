@@ -38,7 +38,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
                 p.Tasks.Count(t => !t.IsDeleted),
                 p.Tasks.Count(t => !t.IsDeleted && t.CompletedAt != null),
                 p.CreatedAt,
-                p.IsInbox))
+                p.IsInbox,
+                p.Shares.Count))
             .ToListAsync();
 
         return Ok(projects);
@@ -101,11 +102,12 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted);
         var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null);
+        var shareCount = await db.ProjectShares.CountAsync(ps => ps.ProjectId == id);
 
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt, project.IsInbox));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount));
     }
 
     [HttpPut("{id:guid}")]
@@ -129,11 +131,12 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         var taskCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted);
         var completedCount = await db.Tasks.CountAsync(t => t.ProjectId == id && !t.IsDeleted && t.CompletedAt != null);
+        var shareCount = await db.ProjectShares.CountAsync(ps => ps.ProjectId == id);
 
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt, project.IsInbox));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount));
     }
 
     [HttpPost("reorder")]
@@ -238,6 +241,10 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
             Permission = request.Permission
         });
         await db.SaveChangesAsync();
+
+        await sync.ProjectUpdated(id);
+        await sync.NotifyUsers([request.UserId], "ProjectCreated");
+
         return NoContent();
     }
 
@@ -254,6 +261,10 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
 
         db.ProjectShares.Remove(share);
         await db.SaveChangesAsync();
+
+        await sync.ProjectUpdated(id);
+        await sync.NotifyUsers([userId], "ProjectDeleted");
+
         return NoContent();
     }
 }

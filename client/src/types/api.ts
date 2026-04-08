@@ -47,6 +47,7 @@ export interface ProjectResponse {
   completedTaskCount: number;
   createdAt: string;
   isInbox: boolean;
+  shareCount: number;
 }
 
 export interface TaskResponse {
