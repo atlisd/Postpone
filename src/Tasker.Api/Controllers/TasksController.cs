@@ -269,6 +269,51 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         return Ok(result);
     }
 
+    [HttpPut("api/tasks/{id:guid}/series-time")]
+    public async Task<IActionResult> UpdateSeriesTime(Guid id, [FromBody] UpdateSeriesTimeRequest request)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        if (request.DueDateTime.HasValue)
+        {
+            var time = request.DueDateTime.Value.TimeOfDay;
+            var baseDate = task.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+            task.DueDateTime = new DateTime(baseDate.Year, baseDate.Month, baseDate.Day,
+                time.Hours, time.Minutes, time.Seconds, DateTimeKind.Utc);
+
+            // Propagate new time to all existing non-skipped exceptions
+            var exceptions = await db.RecurrenceExceptions
+                .Where(e => e.TaskId == id && !e.IsSkipped)
+                .ToListAsync();
+            foreach (var ex in exceptions)
+            {
+                var exDate = ex.OverriddenDueDate ?? ex.OriginalDate;
+                ex.OverriddenDueDateTime = new DateTime(exDate.Year, exDate.Month, exDate.Day,
+                    time.Hours, time.Minutes, time.Seconds, DateTimeKind.Utc);
+            }
+        }
+        else
+        {
+            task.DueDateTime = null;
+
+            var exceptions = await db.RecurrenceExceptions
+                .Where(e => e.TaskId == id)
+                .ToListAsync();
+            foreach (var ex in exceptions)
+                ex.OverriddenDueDateTime = null;
+        }
+
+        await db.SaveChangesAsync();
+
+        var result = await GetTaskResponse(id);
+        await sync.TaskUpdated(task.ProjectId, result);
+        return Ok(result);
+    }
+
     [HttpDelete("api/tasks/{id:guid}/recurrence")]
     public async Task<IActionResult> RemoveRecurrence(Guid id)
     {

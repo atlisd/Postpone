@@ -107,6 +107,8 @@ public record AddReminderRequest(int OffsetMinutes);
 
 public record SetRecurrenceRequest(string Rrule);
 
+public record UpdateSeriesTimeRequest(DateTime? DueDateTime);
+
 public record EditOccurrenceRequest(
     string? Title,
     string? Description,

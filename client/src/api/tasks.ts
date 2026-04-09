@@ -100,6 +100,10 @@ export async function removeRecurrence(taskId: string): Promise<TaskResponse> {
   return api.delete(`api/tasks/${taskId}/recurrence`).json<TaskResponse>();
 }
 
+export async function updateSeriesTime(taskId: string, dueDateTime: string | null): Promise<TaskResponse> {
+  return api.put(`api/tasks/${taskId}/series-time`, { json: { dueDateTime } }).json<TaskResponse>();
+}
+
 // Occurrence-specific operations (for recurring tasks)
 export async function completeOccurrence(taskId: string, date: string): Promise<void> {
   await api.post(`api/tasks/${taskId}/occurrences/${date}/complete`);
