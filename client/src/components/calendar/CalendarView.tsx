@@ -116,10 +116,14 @@ export function CalendarView() {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
+  const [addingToEndDate, setAddingToEndDate] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskProjectId, setNewTaskProjectId] = useState('');
   const [agendaTodayTrigger, setAgendaTodayTrigger] = useState(0);
   const [pendingReschedule, setPendingReschedule] = useState<{ task: TaskResponse; newDate: string } | null>(null);
+  const [rangeSelectStart, setRangeSelectStart] = useState<string | null>(null);
+  const [rangeSelectCurrent, setRangeSelectCurrent] = useState<string | null>(null);
+  const [isRangeSelecting, setIsRangeSelecting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -178,6 +182,17 @@ export function CalendarView() {
     }
   }, [tasks]);
 
+  // Cancel range selection if mouse released outside calendar
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsRangeSelecting(false);
+      setRangeSelectStart(null);
+      setRangeSelectCurrent(null);
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
+
   const handleToggleComplete = async (task: TaskResponse) => {
     try {
       if (task.occurrenceDate) {
@@ -203,9 +218,11 @@ export function CalendarView() {
       await createTask(newTaskProjectId, {
         title: effectiveTitle,
         dueDate: effectiveDueDate,
+        endDate: addingToEndDate ?? undefined,
         dueDateTime: effectiveDueDateTime,
       });
       setAddingToDate(null);
+      setAddingToEndDate(null);
       setNewTaskTitle('');
       await fetchTasks();
     } catch {
@@ -276,6 +293,31 @@ export function CalendarView() {
     }
   };
 
+  const handleCellMouseDown = useCallback((dateKey: string) => {
+    setRangeSelectStart(dateKey);
+    setRangeSelectCurrent(dateKey);
+    setIsRangeSelecting(true);
+  }, []);
+
+  const handleCellMouseEnter = useCallback((dateKey: string) => {
+    if (isRangeSelecting) setRangeSelectCurrent(dateKey);
+  }, [isRangeSelecting]);
+
+  const handleCellMouseUp = useCallback((dateKey: string) => {
+    if (!isRangeSelecting || !rangeSelectStart) {
+      setIsRangeSelecting(false);
+      return;
+    }
+    setIsRangeSelecting(false);
+    const [start, end] = rangeSelectStart <= dateKey
+      ? [rangeSelectStart, dateKey]
+      : [dateKey, rangeSelectStart];
+    setAddingToDate(start);
+    setAddingToEndDate(start !== end ? end : null);
+    setRangeSelectStart(null);
+    setRangeSelectCurrent(null);
+  }, [isRangeSelecting, rangeSelectStart]);
+
   // Compute grid days
   const { start: calStart, end: calEnd } = getViewRange(viewType, currentDate);
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
@@ -292,12 +334,19 @@ export function CalendarView() {
     ? tasks
     : tasks.filter(t => selectedProjectIds.has(t.projectId));
 
-  // Group tasks by date
+  // Group tasks by date — multi-day tasks appear on every day in their range
   const tasksByDate = new Map<string, TaskResponse[]>();
   for (const task of filteredTasks) {
     if (!task.dueDate) continue;
-    if (!tasksByDate.has(task.dueDate)) tasksByDate.set(task.dueDate, []);
-    tasksByDate.get(task.dueDate)!.push(task);
+    const taskStart = parseISO(task.dueDate);
+    const taskEnd = task.endDate ? parseISO(task.endDate) : taskStart;
+    const clampedStart = taskStart < calStart ? calStart : taskStart;
+    const clampedEnd = taskEnd > calEnd ? calEnd : taskEnd;
+    for (const day of eachDayOfInterval({ start: clampedStart, end: clampedEnd })) {
+      const key = format(day, 'yyyy-MM-dd');
+      if (!tasksByDate.has(key)) tasksByDate.set(key, []);
+      tasksByDate.get(key)!.push(task);
+    }
   }
 
   // Month view: weekday header labels
@@ -305,6 +354,14 @@ export function CalendarView() {
   const weekDayLabels = Array.from({ length: 7 }, (_, i) =>
     format(addDays(refMonday, i), 'EEE', { locale })
   );
+
+  // Range selection highlight
+  const highlightedRange = (isRangeSelecting && rangeSelectStart && rangeSelectCurrent)
+    ? {
+        start: rangeSelectStart <= rangeSelectCurrent ? rangeSelectStart : rangeSelectCurrent,
+        end: rangeSelectStart <= rangeSelectCurrent ? rangeSelectCurrent : rangeSelectStart,
+      }
+    : null;
 
   return (
     <div className="flex h-full">
@@ -469,8 +526,11 @@ export function CalendarView() {
                         tasks={tasksByDate.get(dateKey) ?? []}
                         isCurrentMonth={isSameMonth(day, currentDate)}
                         isToday={isToday(day)}
+                        isHighlighted={!!highlightedRange && dateKey >= highlightedRange.start && dateKey <= highlightedRange.end}
                         onSelectTask={setSelectedTask}
-                        onAddTask={setAddingToDate}
+                        onCellMouseDown={handleCellMouseDown}
+                        onCellMouseEnter={handleCellMouseEnter}
+                        onCellMouseUp={handleCellMouseUp}
                       />
                     );
                   })}
@@ -483,8 +543,11 @@ export function CalendarView() {
                 days={days}
                 tasksByDate={tasksByDate}
                 locale={locale}
+                highlightedRange={highlightedRange}
                 onSelectTask={setSelectedTask}
-                onAddTask={setAddingToDate}
+                onCellMouseDown={handleCellMouseDown}
+                onCellMouseEnter={handleCellMouseEnter}
+                onCellMouseUp={handleCellMouseUp}
               />
             )}
 
@@ -528,13 +591,15 @@ export function CalendarView() {
       />
 
       {addingToDate && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAddingToDate(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setAddingToDate(null); setAddingToEndDate(null); }}>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Add task — {format(parseISO(addingToDate), 'PP', { locale })}
+                {addingToEndDate
+                  ? `Add task — ${format(parseISO(addingToDate), 'PP', { locale })} → ${format(parseISO(addingToEndDate), 'PP', { locale })}`
+                  : `Add task — ${format(parseISO(addingToDate), 'PP', { locale })}`}
               </h3>
-              <button onClick={() => setAddingToDate(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <button onClick={() => { setAddingToDate(null); setAddingToEndDate(null); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X size={16} />
               </button>
             </div>
@@ -558,7 +623,7 @@ export function CalendarView() {
                 </select>
               )}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setAddingToDate(null)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                <button type="button" onClick={() => { setAddingToDate(null); setAddingToEndDate(null); }} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                   Cancel
                 </button>
                 <button type="submit" disabled={!newTaskTitle.trim()} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md font-medium">

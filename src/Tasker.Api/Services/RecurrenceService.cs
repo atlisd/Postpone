@@ -317,6 +317,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             effectiveDescription,
             effectivePriority,
             effectiveDueDate,
+            null, // EndDate — not applicable to recurring occurrences
             effectiveDueDateTime,
             exception?.CompletedAt,
             master.Rrule,

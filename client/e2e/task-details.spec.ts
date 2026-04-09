@@ -312,16 +312,8 @@ test.describe('Task Details', () => {
     const subAIdxAfter = textsAfter.findIndex(t => t.includes('Sub A'));
     expect(subCIdxAfter).toBeLessThan(subAIdxAfter);
   });
-});
 
-test.describe('Natural date input', () => {
-  test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async ({ browser }) => {
-    // Ensure the task and project from the outer describe still exist (they do; outer afterAll runs last)
-    // Nothing extra to set up.
-  });
-
+  test.describe('Natural date input', () => {
   const naturalInput = () => {
     // Re-use the page fixture; selector is the placeholder text
     return 'e.g. "tomorrow 4pm" or "friday"';
@@ -397,5 +389,6 @@ test.describe('Natural date input', () => {
     // Input cleared, chip gone
     await expect(input).toHaveValue('');
     await expect(page.locator('[class*="blue-100"], [class*="blue-900"]').filter({ hasText: /monday/i })).toHaveCount(0);
+  });
   });
 });

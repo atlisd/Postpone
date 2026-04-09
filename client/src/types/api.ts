@@ -63,6 +63,7 @@ export interface TaskResponse {
   description: string;
   priority: number;
   dueDate: string | null;
+  endDate: string | null;
   dueDateTime: string | null;
   completedAt: string | null;
   rrule: string | null;

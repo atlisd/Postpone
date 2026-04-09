@@ -23,6 +23,7 @@ Multiple user support where each user gets their own account (created by an admi
 - **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with virtual instances (no database bloat). Skip, reschedule, or edit individual occurrences without affecting the rest of the series
 - **Priority Levels** — none, low, medium, high with visual indicators
 - **Due Dates** — with optional time; overdue tasks stay pinned in the Today view under a highlighted Overdue section
+- **Multi-Day Tasks** — optionally set an end date to span a task across multiple days; the task renders as a continuous chip across each day in the calendar week view
 - **Natural Language Input** — type dates inline when creating tasks: `tomorrow 5pm`, `next friday`, `tonight`, `apr 20`, `mon 9:30` — the date is parsed out and the task title is cleaned automatically
 - **Task Assignment** — assign tasks to household members
 - **Tags** — color-coded tags to categorize tasks across projects; create and assign tags from the task detail panel; navigate to a tag to see all tagged tasks; manage tags (create, rename, recolor, delete) from the sidebar
@@ -216,9 +217,9 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/projects/{id}/tasks` | List tasks in project |
-| POST | `/api/projects/{id}/tasks` | Create task |
+| POST | `/api/projects/{id}/tasks` | Create task (accepts optional `endDate: yyyy-MM-dd`) |
 | GET | `/api/tasks/{id}` | Get task |
-| PUT | `/api/tasks/{id}` | Update task |
+| PUT | `/api/tasks/{id}` | Update task (accepts optional `endDate: yyyy-MM-dd`, `clearEndDate: bool`) |
 | DELETE | `/api/tasks/{id}` | Soft delete task |
 | POST | `/api/tasks/{id}/complete` | Mark complete |
 | POST | `/api/tasks/{id}/uncomplete` | Mark incomplete |

@@ -3,17 +3,38 @@ import type { Locale } from 'date-fns';
 import { useDroppable } from '@dnd-kit/react';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
+import type { ChipPosition } from './CalendarTaskChip';
+
+function getChipPosition(task: TaskResponse, dateKey: string): ChipPosition {
+  if (!task.endDate) return 'single';
+  if (task.dueDate === dateKey) return 'start';
+  if (task.endDate === dateKey) return 'end';
+  return 'middle';
+}
 
 interface WeekDayColumnProps {
   date: Date;
   dateKey: string;
   tasks: TaskResponse[];
   locale: Locale;
+  isHighlighted?: boolean;
   onSelectTask: (task: TaskResponse) => void;
-  onAddTask: (dateKey: string) => void;
+  onCellMouseDown: (dateKey: string) => void;
+  onCellMouseEnter: (dateKey: string) => void;
+  onCellMouseUp: (dateKey: string) => void;
 }
 
-function WeekDayColumn({ date, dateKey, tasks, locale, onSelectTask, onAddTask }: WeekDayColumnProps) {
+function WeekDayColumn({
+  date,
+  dateKey,
+  tasks,
+  locale,
+  isHighlighted,
+  onSelectTask,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onCellMouseUp,
+}: WeekDayColumnProps) {
   const { ref, isDropTarget } = useDroppable({ id: dateKey });
   const today = isToday(date);
 
@@ -26,10 +47,12 @@ function WeekDayColumn({ date, dateKey, tasks, locale, onSelectTask, onAddTask }
     >
       {/* Column header */}
       <div
-        className={`p-2 text-center border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors shrink-0 ${
+        className={`p-2 text-center border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors shrink-0 select-none ${
           today ? 'bg-blue-50/60 dark:bg-blue-900/10' : ''
         }`}
-        onClick={() => onAddTask(dateKey)}
+        onMouseDown={() => onCellMouseDown(dateKey)}
+        onMouseEnter={() => onCellMouseEnter(dateKey)}
+        onMouseUp={() => onCellMouseUp(dateKey)}
       >
         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {format(date, 'EEE', { locale })}
@@ -47,15 +70,24 @@ function WeekDayColumn({ date, dateKey, tasks, locale, onSelectTask, onAddTask }
 
       {/* Tasks */}
       <div
-        className="flex-1 p-1 space-y-0.5 overflow-y-auto cursor-pointer min-h-[120px]"
-        onClick={() => onAddTask(dateKey)}
+        className={`flex-1 p-1 space-y-0.5 overflow-y-auto cursor-pointer min-h-[120px] select-none ${
+          isHighlighted && !isDropTarget ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+        }`}
+        onMouseDown={() => onCellMouseDown(dateKey)}
+        onMouseEnter={() => onCellMouseEnter(dateKey)}
+        onMouseUp={() => onCellMouseUp(dateKey)}
       >
         {tasks.map(task => (
           <div
             key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
+            onMouseDown={e => e.stopPropagation()}
             onClick={e => e.stopPropagation()}
           >
-            <CalendarTaskChip task={task} onSelect={() => onSelectTask(task)} />
+            <CalendarTaskChip
+              task={task}
+              onSelect={() => onSelectTask(task)}
+              position={getChipPosition(task, dateKey)}
+            />
           </div>
         ))}
       </div>
@@ -67,11 +99,14 @@ interface WeekViewProps {
   days: Date[];
   tasksByDate: Map<string, TaskResponse[]>;
   locale: Locale;
+  highlightedRange: { start: string; end: string } | null;
   onSelectTask: (task: TaskResponse) => void;
-  onAddTask: (dateKey: string) => void;
+  onCellMouseDown: (dateKey: string) => void;
+  onCellMouseEnter: (dateKey: string) => void;
+  onCellMouseUp: (dateKey: string) => void;
 }
 
-export function WeekView({ days, tasksByDate, locale, onSelectTask, onAddTask }: WeekViewProps) {
+export function WeekView({ days, tasksByDate, locale, highlightedRange, onSelectTask, onCellMouseDown, onCellMouseEnter, onCellMouseUp }: WeekViewProps) {
   return (
     <div
       className="flex-1 grid min-h-0 overflow-y-auto"
@@ -79,6 +114,7 @@ export function WeekView({ days, tasksByDate, locale, onSelectTask, onAddTask }:
     >
       {days.map(day => {
         const dateKey = format(day, 'yyyy-MM-dd');
+        const isHighlighted = !!highlightedRange && dateKey >= highlightedRange.start && dateKey <= highlightedRange.end;
         return (
           <WeekDayColumn
             key={dateKey}
@@ -86,8 +122,11 @@ export function WeekView({ days, tasksByDate, locale, onSelectTask, onAddTask }:
             dateKey={dateKey}
             tasks={tasksByDate.get(dateKey) ?? []}
             locale={locale}
+            isHighlighted={isHighlighted}
             onSelectTask={onSelectTask}
-            onAddTask={onAddTask}
+            onCellMouseDown={onCellMouseDown}
+            onCellMouseEnter={onCellMouseEnter}
+            onCellMouseUp={onCellMouseUp}
           />
         );
       })}

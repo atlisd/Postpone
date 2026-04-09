@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import { useLocale } from '../../contexts/LocaleContext';
@@ -11,7 +11,7 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { format } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO } from 'date-fns';
 import { parseNaturalDate } from '../../lib/naturalDate';
 import { formatDueDate } from '../../lib/dates';
 import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff, CalendarDays } from 'lucide-react';
@@ -166,8 +166,12 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [priority, setPriority] = useState(task.priority);
   const [dueDate, setDueDate] = useState(task.dueDate ?? '');
   const [dueTime, setDueTime] = useState(() => extractLocalTime(task.dueDateTime));
+  const [endDate, setEndDate] = useState(task.endDate ?? '');
+  const [hasDuration, setHasDuration] = useState(!!task.endDate);
   const dueDateRef = useRef(task.dueDate ?? '');
   const dueTimeRef = useRef(extractLocalTime(task.dueDateTime));
+  const endDateRef = useRef(task.endDate ?? '');
+  const taskIdRef = useRef(task.id);
   const [hideFromCalendar, setHideFromCalendar] = useState(task.hideFromCalendar);
   const [skipNotification, setSkipNotification] = useState(task.skipNotification);
   const [naturalInput, setNaturalInput] = useState('');
@@ -192,6 +196,8 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   }, [description]);
 
   useEffect(() => {
+    const taskChanged = taskIdRef.current !== task.id;
+    taskIdRef.current = task.id;
     setTitle(task.title);
     setDescription(task.description);
     setPriority(task.priority);
@@ -199,8 +205,18 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     setSkipNotification(task.skipNotification);
     setDueDate(task.dueDate ?? '');
     setDueTime(extractLocalTime(task.dueDateTime));
+    setEndDate(task.endDate ?? '');
+    // Only reset hasDuration to false when switching to a different task.
+    // On same-task refreshes, preserve user intent (e.g. user opened "+Add duration"
+    // but the save hasn't completed yet, so task.endDate is still null).
+    if (task.endDate) {
+      setHasDuration(true);
+    } else if (taskChanged) {
+      setHasDuration(false);
+    }
     dueDateRef.current = task.dueDate ?? '';
     dueTimeRef.current = extractLocalTime(task.dueDateTime);
+    endDateRef.current = task.endDate ?? '';
   }, [task]);
 
   useEffect(() => {
@@ -260,12 +276,26 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           clearDueDateTimePayload = true;
         }
 
+        const endDateChanged = endDateRef.current !== (task.endDate ?? '');
+        const endDatePayload = endDateChanged && endDateRef.current ? endDateRef.current : undefined;
+        const clearEndDatePayload = endDateChanged && !endDateRef.current ? true : undefined;
+
+        const effectiveDueDate = dueDateRef.current || (task.dueDate ?? '');
+        const effectiveEndDate = endDateRef.current || (task.endDate ?? '');
+        if (effectiveDueDate && effectiveEndDate && effectiveEndDate < effectiveDueDate) {
+          toast.error('End date cannot be before the due date');
+          setSaving(false);
+          return;
+        }
+
         await updateTask(task.id, {
           title: title !== task.title ? title : undefined,
           description: description !== task.description ? description : undefined,
           priority: priority !== task.priority ? priority : undefined,
           dueDate: dueDatePayload,
           clearDueDate: clearDueDatePayload,
+          endDate: endDatePayload,
+          clearEndDate: clearEndDatePayload,
           dueDateTime: dueDateTimePayload,
           clearDueDateTime: clearDueDateTimePayload,
           hideFromCalendar: hideFromCalendar !== task.hideFromCalendar ? hideFromCalendar : undefined,
@@ -393,6 +423,12 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
     }
   };
 
+  const durationDays = useMemo(() => {
+    if (!dueDate || !endDate) return null;
+    const diff = differenceInCalendarDays(parseISO(endDate), parseISO(dueDate));
+    return diff >= 0 ? diff + 1 : null;
+  }, [dueDate, endDate]);
+
   const naturalParsed = parseNaturalDate(naturalInput);
   const naturalChipLabel = naturalParsed
     ? naturalParsed.dueDateTime
@@ -415,7 +451,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   // Save on blur for title/description
   const handleBlur = () => {
     setIsEditingDescription(false);
-    if (title !== task.title || description !== task.description || priority !== task.priority || hideFromCalendar !== task.hideFromCalendar || skipNotification !== task.skipNotification || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime) {
+    if (title !== task.title || description !== task.description || priority !== task.priority || hideFromCalendar !== task.hideFromCalendar || skipNotification !== task.skipNotification || dueDateRef.current !== (task.dueDate ?? '') || dueTimeRef.current !== originalDueTime || endDateRef.current !== (task.endDate ?? '')) {
       handleSave();
     }
   };
@@ -511,6 +547,49 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
                 </span>
                 <span className="text-xs text-gray-400 dark:text-gray-500">Enter to apply · ESC to clear</span>
               </div>
+            )}
+          </div>
+
+          {/* Duration */}
+          <div className="flex items-center gap-2">
+            {!hasDuration ? (
+              <button
+                type="button"
+                onClick={() => setHasDuration(true)}
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              >
+                + Add duration
+              </button>
+            ) : (
+              <>
+                <LocaleDateInput
+                  value={endDate}
+                  onChange={(val) => {
+                    endDateRef.current = val;
+                    setEndDate(val);
+                    handleBlur();
+                  }}
+                  onBlur={handleBlur}
+                  className="text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-700 dark:text-gray-300 flex-1"
+                />
+                {durationDays !== null && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                    {durationDays} {durationDays === 1 ? 'day' : 'days'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasDuration(false);
+                    endDateRef.current = '';
+                    setEndDate('');
+                    handleBlur();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </>
             )}
           </div>
 

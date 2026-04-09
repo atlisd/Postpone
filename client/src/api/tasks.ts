@@ -16,6 +16,7 @@ export async function createTask(projectId: string, data: {
   description?: string;
   priority?: number;
   dueDate?: string;
+  endDate?: string;
   dueDateTime?: string;
   assignedToId?: string;
 }): Promise<TaskResponse> {
@@ -28,6 +29,8 @@ export async function updateTask(id: string, data: {
   priority?: number;
   dueDate?: string;
   clearDueDate?: boolean;
+  endDate?: string;
+  clearEndDate?: boolean;
   dueDateTime?: string;
   clearDueDateTime?: boolean;
   assignedToId?: string;

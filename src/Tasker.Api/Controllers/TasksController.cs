@@ -86,6 +86,7 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
             Description = request.Description ?? "",
             Priority = request.Priority ?? 0,
             DueDate = request.DueDate,
+            EndDate = request.EndDate,
             DueDateTime = request.DueDateTime,
             AssignedToId = request.AssignedToId,
         };
@@ -125,6 +126,8 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         if (request.Priority.HasValue) task.Priority = request.Priority.Value;
         if (request.ClearDueDate) task.DueDate = null;
         else if (request.DueDate.HasValue) task.DueDate = request.DueDate.Value;
+        if (request.ClearEndDate) task.EndDate = null;
+        else if (request.EndDate.HasValue) task.EndDate = request.EndDate.Value;
         if (request.ClearDueDateTime) task.DueDateTime = null;
         else if (request.DueDateTime.HasValue) task.DueDateTime = request.DueDateTime.Value;
         if (request.ClearAssignedTo) task.AssignedToId = null;

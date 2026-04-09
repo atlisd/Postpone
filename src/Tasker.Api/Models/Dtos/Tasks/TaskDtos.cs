@@ -8,6 +8,7 @@ public record CreateTaskRequest(
     string? Description,
     short? Priority,
     DateOnly? DueDate,
+    DateOnly? EndDate,
     DateTime? DueDateTime,
     Guid? AssignedToId);
 
@@ -17,6 +18,8 @@ public record UpdateTaskRequest(
     short? Priority,
     DateOnly? DueDate,
     bool ClearDueDate,
+    DateOnly? EndDate,
+    bool ClearEndDate,
     DateTime? DueDateTime,
     bool ClearDueDateTime,
     Guid? AssignedToId,
@@ -41,6 +44,7 @@ public record TaskResponse(
     string Description,
     short Priority,
     DateOnly? DueDate,
+    DateOnly? EndDate,
     DateTime? DueDateTime,
     DateTime? CompletedAt,
     string? Rrule,
@@ -68,6 +72,7 @@ public record TaskResponse(
         t.Description,
         t.Priority,
         t.DueDate,
+        t.EndDate,
         t.DueDateTime,
         t.CompletedAt,
         t.Rrule,

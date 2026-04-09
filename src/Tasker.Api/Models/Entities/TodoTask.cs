@@ -10,6 +10,7 @@ public class TodoTask
     public string Description { get; set; } = string.Empty;
     public short Priority { get; set; } // 0=none, 1=low, 2=medium, 3=high
     public DateOnly? DueDate { get; set; }
+    public DateOnly? EndDate { get; set; }
     public DateTime? DueDateTime { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool IsDeleted { get; set; }

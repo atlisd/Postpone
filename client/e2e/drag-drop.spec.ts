@@ -55,7 +55,8 @@ async function performDrag(page: Page, sourceHandle: Locator, targetLocator: Loc
   // Small initial move to trigger drag detection
   await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2 + 5);
   // Complete drag with many steps so OptimisticSortingPlugin fires intermediate onDragOver events
-  await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height / 2, { steps: 30 });
+  // Use near-bottom of target (height - 2) to reliably pass the midpoint threshold for swapping
+  await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height - 2, { steps: 30 });
   await page.mouse.up();
   // Let React state updates and API call settle
   await page.waitForTimeout(600);

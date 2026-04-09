@@ -184,7 +184,7 @@ test.describe('Recurrence', () => {
     let clicked = false;
     for (let i = 0; i < chipCount; i++) {
       const chip = allChips.nth(i);
-      const hasLineThrough = await chip.evaluate(el => el.classList.contains('line-through'));
+      const hasLineThrough = await chip.evaluate(el => !!el.querySelector('.line-through'));
       if (!hasLineThrough && !clicked) {
         await chip.click();
         clicked = true;

@@ -2,6 +2,14 @@ import { format } from 'date-fns';
 import { useDroppable } from '@dnd-kit/react';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
+import type { ChipPosition } from './CalendarTaskChip';
+
+function getChipPosition(task: TaskResponse, dateKey: string): ChipPosition {
+  if (!task.endDate) return 'single';
+  if (task.dueDate === dateKey) return 'start';
+  if (task.endDate === dateKey) return 'end';
+  return 'middle';
+}
 
 interface CalendarDayCellProps {
   date: Date;
@@ -9,19 +17,39 @@ interface CalendarDayCellProps {
   tasks: TaskResponse[];
   isCurrentMonth: boolean;
   isToday: boolean;
+  isHighlighted?: boolean;
   onSelectTask: (task: TaskResponse) => void;
-  onAddTask?: (dateKey: string) => void;
+  onCellMouseDown?: (dateKey: string) => void;
+  onCellMouseEnter?: (dateKey: string) => void;
+  onCellMouseUp?: (dateKey: string) => void;
 }
 
-export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday, onSelectTask, onAddTask }: CalendarDayCellProps) {
+export function CalendarDayCell({
+  date,
+  dateKey,
+  tasks,
+  isCurrentMonth,
+  isToday,
+  isHighlighted,
+  onSelectTask,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onCellMouseUp,
+}: CalendarDayCellProps) {
   const { ref } = useDroppable({ id: dateKey });
 
   return (
     <div
       ref={ref}
-      onClick={() => onAddTask?.(dateKey)}
-      className={`border-b border-r border-gray-100 dark:border-gray-800 p-1 min-h-[80px] md:min-h-[100px] transition-colors cursor-pointer ${
-        !isCurrentMonth ? 'bg-gray-50/50 dark:bg-gray-900/50' : ''
+      onMouseDown={() => onCellMouseDown?.(dateKey)}
+      onMouseEnter={() => onCellMouseEnter?.(dateKey)}
+      onMouseUp={() => onCellMouseUp?.(dateKey)}
+      className={`border-b border-r border-gray-100 dark:border-gray-800 p-1 min-h-[80px] md:min-h-[100px] transition-colors cursor-pointer select-none ${
+        isHighlighted
+          ? 'bg-blue-50 dark:bg-blue-900/10'
+          : !isCurrentMonth
+          ? 'bg-gray-50/50 dark:bg-gray-900/50'
+          : ''
       }`}
     >
       <div className={`text-xs font-medium mb-1 px-1 ${
@@ -35,10 +63,15 @@ export function CalendarDayCell({ date, dateKey, tasks, isCurrentMonth, isToday,
       </div>
       <div className="space-y-0.5 overflow-y-auto max-h-[60px] md:max-h-[80px]">
         {tasks.map(task => (
-          <div key={`${task.id}_${task.occurrenceDate ?? 'single'}`} onClick={e => e.stopPropagation()}>
+          <div
+            key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+          >
             <CalendarTaskChip
               task={task}
               onSelect={() => onSelectTask(task)}
+              position={getChipPosition(task, dateKey)}
             />
           </div>
         ))}

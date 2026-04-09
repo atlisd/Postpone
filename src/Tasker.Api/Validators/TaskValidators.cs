@@ -17,6 +17,10 @@ public class CreateTaskRequestValidator : AbstractValidator<CreateTaskRequest>
 
         RuleFor(x => x.Priority)
             .Must(p => p is null or >= 0 and <= 3).WithMessage("Priority must be 0-3");
+
+        RuleFor(x => x)
+            .Must(x => x.EndDate == null || x.DueDate == null || x.EndDate >= x.DueDate)
+            .WithMessage("End date cannot be before the due date");
     }
 }
 
@@ -35,6 +39,10 @@ public class UpdateTaskRequestValidator : AbstractValidator<UpdateTaskRequest>
 
         RuleFor(x => x.Priority)
             .Must(p => p is null or >= 0 and <= 3).WithMessage("Priority must be 0-3");
+
+        RuleFor(x => x)
+            .Must(x => x.EndDate == null || x.DueDate == null || x.EndDate >= x.DueDate)
+            .WithMessage("End date cannot be before the due date");
     }
 }
 
