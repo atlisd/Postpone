@@ -55,13 +55,11 @@ export function CalendarDayCell({
       <div className={`text-xs font-medium mb-1 px-1 ${
         isToday
           ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center'
-          : isCurrentMonth
-            ? 'text-gray-700 dark:text-gray-300'
-            : 'text-gray-400 dark:text-gray-600'
+          : `h-6 flex items-center ${isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'}`
       }`}>
         {format(date, 'd')}
       </div>
-      <div className="space-y-0.5 overflow-y-auto max-h-[60px] md:max-h-[80px]">
+      <div className="space-y-0.5 overflow-y-auto max-h-[60px] md:max-h-[80px] -mx-1">
         {tasks.map(task => (
           <div
             key={`${task.id}_${task.occurrenceDate ?? 'single'}`}

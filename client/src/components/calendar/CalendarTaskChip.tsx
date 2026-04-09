@@ -32,7 +32,7 @@ export function CalendarTaskChip({ task, onSelect, position = 'single' }: Calend
         task.completedAt ? 'opacity-50' : ''
       } ${isBar ? 'mx-0' : 'px-1.5 truncate'}`}
       style={{
-        backgroundColor: isBar ? task.projectColor + '30' : task.projectColor + '20',
+        backgroundColor: task.projectColor + '20',
         color: isBar ? 'transparent' : task.projectColor,
         borderLeft: position === 'single' || position === 'start' ? `2px solid ${task.projectColor}` : undefined,
         borderRight: position === 'end' ? `2px solid ${task.projectColor}` : undefined,

@@ -57,7 +57,7 @@ function WeekDayColumn({
         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {format(date, 'EEE', { locale })}
         </div>
-        <div className="flex items-center justify-center mt-0.5">
+        <div className="flex items-center justify-center mt-0.5 h-9">
           <span className={`text-xl font-bold leading-none ${
             today
               ? 'bg-blue-600 text-white w-9 h-9 rounded-full flex items-center justify-center text-lg'
@@ -70,7 +70,7 @@ function WeekDayColumn({
 
       {/* Tasks */}
       <div
-        className={`flex-1 p-1 space-y-0.5 overflow-y-auto cursor-pointer min-h-[120px] select-none ${
+        className={`flex-1 py-1 space-y-0.5 overflow-y-auto cursor-pointer min-h-[120px] select-none -mx-1 ${
           isHighlighted && !isDropTarget ? 'bg-blue-50 dark:bg-blue-900/10' : ''
         }`}
         onMouseDown={() => onCellMouseDown(dateKey)}
