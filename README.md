@@ -72,9 +72,11 @@ Multiple user support where each user gets their own account (created by an admi
 | Drag & Drop | @dnd-kit/react |
 | HTTP Client | ky |
 | Deployment | Docker Compose, nginx |
+| Tunneling | Cloudflare Tunnel (cloudflared) |
 
 ## Security
 
+- **Cloudflare Tunnel** — production compose uses `cloudflared` for inbound traffic; no host ports are exposed and your home IP is never revealed (see [cloudflare-tunnels.md](cloudflare-tunnels.md))
 - **Non-root containers** — both the API and nginx containers run as unprivileged users
 - **Security headers** — CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
 - **Secure cookies** — refresh tokens use HttpOnly, SameSite=Lax, and Secure (in production)
@@ -91,7 +93,7 @@ Multiple user support where each user gets their own account (created by an admi
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - Or for local development: .NET 10 SDK, Node.js 22+, PostgreSQL 17
 
-### Quick Start with Docker
+### Quick Start with Docker (local / development)
 
 ```bash
 # Clone the repository
@@ -109,6 +111,19 @@ The app will be available at:
 - **Frontend**: http://localhost:3000
 - **API**: http://localhost:5001
 - **Health Check**: http://localhost:5001/health
+
+### Production Deployment with Cloudflare Tunnel
+
+`docker-compose.prod.yml` is designed for internet-facing deployments. It uses [Cloudflare Tunnel](cloudflare-tunnels.md) so **no ports need to be opened on your router or firewall** — `db` and `api` are only reachable inside the Docker network.
+
+```bash
+cp .env.example .env
+# Edit .env — set DB_PASSWORD, JWT_SECRET, ADMIN_*, APP_URL, and CLOUDFLARE_TUNNEL_TOKEN
+
+docker compose -f docker-compose.prod.yml up -d
+```
+
+See [cloudflare-tunnels.md](cloudflare-tunnels.md) for the full setup guide (creating a tunnel, configuring a public hostname, optional Cloudflare Access auth gate).
 
 ### First-Run Setup
 
@@ -147,7 +162,8 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 | `DB_PASSWORD` | PostgreSQL password | `changeme` |
 | `JWT_SECRET` | JWT signing key (min 32 chars) | dev default |
 | `PUSHOVER_API_TOKEN` | Pushover application API token | _(empty, notifications disabled)_ |
-| `APP_URL` | Public frontend URL (used in CLI-generated reset links) | `http://localhost:3000` |
+| `APP_URL` | Public frontend URL (used in password reset links and Pushover notification links) | `http://localhost:3000` |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Token from Cloudflare Zero Trust dashboard — required when using `docker-compose.prod.yml` | _(empty)_ |
 | `DEFAULT_LOCALE` | Default locale for new accounts (`en`, `is`, `da`, `sv`, `nb`, `de`, `fr`, `es`, `pl`) | `en` |
 | `DEFAULT_TIMEZONE` | Default IANA timezone for new accounts (e.g. `America/New_York`) | `UTC` |
 | `ADMIN_EMAIL` | Pre-seed the initial admin email (skips first-run browser prompt) | _(empty)_ |
@@ -156,10 +172,12 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 
 ## Architecture
 
+**Local / development** (`docker-compose.yml`):
+
 ```
 ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
 │   Browser    │────▶│   nginx     │────▶│  .NET API    │
-│  React SPA   │◀────│  (port 80)  │◀────│  (port 8080) │
+│  React SPA   │◀────│  (port 3000)│◀────│  (port 8080) │
 │              │     │             │     │              │
 │  SignalR  ◀──┼─────┼──WebSocket──┼─────┤  SyncHub     │
 └──────────────┘     └─────────────┘     │              │
@@ -169,6 +187,25 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
                                          │  Jobs:       │
                                          │  - Notify    │──▶ Pushover API
                                          └──────────────┘
+```
+
+**Production** (`docker-compose.prod.yml`) — no host ports exposed:
+
+```
+Internet ──▶ Cloudflare Edge ──▶ cloudflared container (outbound tunnel)
+                                          │
+                                          ▼  (Docker-internal network)
+                                    ┌─────────────┐     ┌──────────────┐
+                                    │   nginx     │────▶│  .NET API    │
+                                    │  (client)   │◀────│  (api)       │
+                                    │             │     │              │
+                                    │  WebSocket──┼─────┤  SyncHub     │
+                                    └─────────────┘     │              │
+                                                        │  EF Core ────┼──▶ PostgreSQL
+                                                        │  Background  │
+                                                        │  Jobs:       │
+                                                        │  - Notify    │──▶ Pushover API
+                                                        └──────────────┘
 ```
 
 **Data access is controlled by three paths:**
@@ -310,7 +347,11 @@ The dev server starts at http://localhost:5173 with API requests proxied to http
 If the admin account is locked out, generate a one-time reset link directly from the server without needing to be logged in:
 
 ```bash
+# Development
 docker compose exec api dotnet Tasker.Api.dll generate-admin-reset-link
+
+# Production
+docker compose -f docker-compose.prod.yml exec api dotnet Tasker.Api.dll generate-admin-reset-link
 ```
 
 This prints a URL valid for 24 hours. Paste it in a browser to set a new password.
@@ -340,7 +381,12 @@ dotnet ef migrations add MigrationName
 
 ## Backup & Restore
 
-Postpone ships with two shell scripts that wrap standard PostgreSQL tools. Run them from the project root (the directory containing `docker-compose.yml`).
+Postpone ships with two shell scripts that wrap standard PostgreSQL tools. Run them from the project root. They work with both the dev and production compose files — set `COMPOSE_FILE` if needed:
+
+```bash
+# Production
+export COMPOSE_FILE=docker-compose.prod.yml
+```
 
 ### Backup
 

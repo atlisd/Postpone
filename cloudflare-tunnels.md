@@ -35,7 +35,7 @@ If you don't have a domain yet, you can register one through Cloudflare Registra
 
 ## Step 2 — Create a tunnel
 
-1. In the Zero Trust dashboard, go to **Networks → Tunnels**.
+1. In the Zero Trust dashboard, go to **Networks → Connectors**.
 2. Click **Create a tunnel**.
 3. Select **Cloudflared** as the connector type, then click **Next**.
 4. Give the tunnel a name (e.g. `postpone`), then click **Save tunnel**.
