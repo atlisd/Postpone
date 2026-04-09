@@ -37,16 +37,21 @@ services:
       DEFAULT_TIMEZONE: ${TZ:-UTC}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
       ASPNETCORE_ENVIRONMENT: Production
-    ports:
-      - "5001:8080"
 
   client:
     image: ghcr.io/atlisd/postpone-client:latest
     restart: unless-stopped
     depends_on:
       - api
-    ports:
-      - "3000:8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - client
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
 
 volumes:
   pgdata:
