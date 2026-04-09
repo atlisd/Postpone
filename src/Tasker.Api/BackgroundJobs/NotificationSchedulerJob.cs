@@ -92,7 +92,10 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         foreach (var instance in virtualInstances.Where(v => v.CompletedAt == null))
         {
             if (instance.SkipNotification) continue;
-            await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
+            if (instance.DueDateTime.HasValue)
+                await ProcessRecurringTimedNotification(db, pushover, user, instance, now, tz);
+            else
+                await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
         }
     }
 
@@ -166,6 +169,48 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             });
             await db.SaveChangesAsync();
             logger.LogInformation("Sent notification to {User} for task {Task}", user.Email, task.Title);
+        }
+    }
+
+    private async Task ProcessRecurringTimedNotification(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, Models.Dtos.Tasks.TaskResponse instance, DateTime utcNow, TimeZoneInfo tz)
+    {
+        // Combine occurrence date with master's time-of-day to get correct UTC fire time
+        var masterTime = instance.DueDateTime!.Value;
+        var occurrenceDate = instance.OccurrenceDate ?? instance.DueDate!.Value;
+        var dueUtc = new DateTime(
+            occurrenceDate.Year, occurrenceDate.Month, occurrenceDate.Day,
+            masterTime.Hour, masterTime.Minute, masterTime.Second, DateTimeKind.Utc);
+
+        var windowStart = utcNow.AddMinutes(-2);
+        if (dueUtc < windowStart || dueUtc > utcNow) return;
+
+        var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence-time:{dueUtc:yyyy-MM-ddTHH:mm}");
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
+
+        var dueLocal = TimeZoneInfo.ConvertTimeFromUtc(dueUtc, tz);
+        CultureInfo culture;
+        try { culture = new CultureInfo(user.Locale); }
+        catch { culture = CultureInfo.InvariantCulture; }
+        var timeStr = dueLocal.ToString("t", culture);
+        var message = $"{instance.Title} — {instance.ProjectName} (due at {timeStr})";
+        var url = BuildTaskUrl(instance.ProjectId, instance.Id, instance.OccurrenceDate);
+
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, "Task due now", message, url);
+        if (sent)
+        {
+            db.NotificationLogs.Add(new NotificationLog
+            {
+                UserId = user.Id,
+                TaskId = instance.Id,
+                Channel = "pushover",
+                SentAt = utcNow,
+                PayloadHash = payloadHash,
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Sent timed recurring notification to {User} for task {Task} occurrence {Date}",
+                user.Email, instance.Title, instance.OccurrenceDate);
         }
     }
 
