@@ -11,7 +11,7 @@ function extractLocalTime(dueDateTimeUtc: string | null): string {
   const d = new Date(normalized);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-import { format, differenceInCalendarDays, parseISO } from 'date-fns';
+import { format, differenceInCalendarDays, parseISO, addDays } from 'date-fns';
 import { parseNaturalDate } from '../../lib/naturalDate';
 import { formatDueDate } from '../../lib/dates';
 import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff, CalendarDays } from 'lucide-react';
@@ -566,7 +566,14 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
             {!hasDuration ? (
               <button
                 type="button"
-                onClick={() => setHasDuration(true)}
+                onClick={() => {
+                  const base = dueDate ? parseISO(dueDate) : new Date();
+                  const defaultEnd = format(addDays(base, 1), 'yyyy-MM-dd');
+                  endDateRef.current = defaultEnd;
+                  setEndDate(defaultEnd);
+                  setHasDuration(true);
+                  handleBlur();
+                }}
                 className="text-xs text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
               >
                 + Add duration
