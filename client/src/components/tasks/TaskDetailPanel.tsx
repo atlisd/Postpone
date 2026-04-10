@@ -264,6 +264,12 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
             await updateSeriesTime(task.id, null);
           }
         }
+
+        // Duration (endDate) is a series-level property — apply clearing to the master
+        const endDateChanged = endDateRef.current !== (task.endDate ?? '');
+        if (endDateChanged && !endDateRef.current) {
+          await updateTask(task.id, { clearEndDate: true });
+        }
       } else {
         // Normal task or series master
         const dateChanged = dueDateRef.current !== (task.dueDate ?? '');

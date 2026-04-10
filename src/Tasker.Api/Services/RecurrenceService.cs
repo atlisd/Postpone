@@ -304,6 +304,14 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             .Select(r => new ReminderResponse(r.Id, r.OffsetMinutes))
             .ToList();
 
+        // Propagate duration: apply the same day offset from the master's DueDate→EndDate to each occurrence
+        DateOnly? occurrenceEndDate = null;
+        if (master.EndDate.HasValue && master.DueDate.HasValue)
+        {
+            var durationDays = master.EndDate.Value.DayNumber - master.DueDate.Value.DayNumber;
+            occurrenceEndDate = effectiveDueDate.AddDays(durationDays);
+        }
+
         return new TaskResponse(
             master.Id,
             master.ProjectId,
@@ -317,7 +325,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             effectiveDescription,
             effectivePriority,
             effectiveDueDate,
-            null, // EndDate — not applicable to recurring occurrences
+            occurrenceEndDate,
             effectiveDueDateTime,
             exception?.CompletedAt,
             master.Rrule,
