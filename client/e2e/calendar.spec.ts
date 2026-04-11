@@ -1,5 +1,27 @@
 import { test, expect } from './fixtures';
-import type { Browser, BrowserContext, Page } from '@playwright/test';
+import type { APIRequestContext, Browser, BrowserContext, Page } from '@playwright/test';
+
+const TEST_EMAIL = process.env.TEST_EMAIL ?? 'admin@example.com';
+const TEST_PASSWORD = process.env.TEST_PASSWORD ?? 'admin123';
+
+async function deleteOrphanedCalProjects(request: APIRequestContext): Promise<void> {
+  const loginRes = await request.post('/api/auth/login', {
+    data: { email: TEST_EMAIL, password: TEST_PASSWORD },
+  });
+  if (!loginRes.ok()) return;
+  const token: string = (await loginRes.json()).accessToken;
+
+  const projectsRes = await request.get('/api/projects', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!projectsRes.ok()) return;
+  const projects: Array<{ id: string; name: string }> = await projectsRes.json();
+  for (const p of projects.filter(p => p.name.startsWith('Cal Project '))) {
+    await request.delete(`/api/projects/${p.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -23,7 +45,10 @@ async function loginAndGetPage(browser: Browser): Promise<{ ctx: BrowserContext;
 }
 
 test.describe('Calendar', () => {
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser, request }) => {
+    // Clean up orphaned Cal Project entries from previous failed runs
+    await deleteOrphanedCalProjects(request);
+
     const { ctx, pg } = await loginAndGetPage(browser);
     const sidebar = pg.locator('aside');
 
@@ -188,7 +213,10 @@ test.describe('Calendar', () => {
 
     const tomorrowCell = allCells.nth(tomorrowCellIdx);
 
-    // Perform drag: chip → tomorrow's cell
+    // Perform drag: chip → tomorrow's cell (mirrors performDrag helper from drag-drop.spec.ts)
+    await tomorrowCell.scrollIntoViewIfNeeded();
+    await chip.scrollIntoViewIfNeeded();
+    await chip.hover();
     const chipBB = await chip.boundingBox();
     const tomorrowBB = await tomorrowCell.boundingBox();
     if (!chipBB || !tomorrowBB) throw new Error('Could not get bounding boxes for calendar drag');
@@ -196,9 +224,9 @@ test.describe('Calendar', () => {
     await page.mouse.move(chipBB.x + chipBB.width / 2, chipBB.y + chipBB.height / 2);
     await page.mouse.down();
     await page.mouse.move(chipBB.x + chipBB.width / 2, chipBB.y + chipBB.height / 2 + 5);
-    await page.mouse.move(tomorrowBB.x + tomorrowBB.width / 2, tomorrowBB.y + tomorrowBB.height / 2, { steps: 30 });
+    await page.mouse.move(tomorrowBB.x + tomorrowBB.width / 2, tomorrowBB.y + tomorrowBB.height - 2, { steps: 30 });
     await page.mouse.up();
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(1000);
 
     // Verify chip now appears in tomorrow's cell
     await expect(tomorrowCell.locator('[style*="border-left"]').filter({ hasText: CAL_TASK })).toBeVisible({ timeout: 5000 });
