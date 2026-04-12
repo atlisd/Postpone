@@ -5,6 +5,10 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || 'TestPassword123!';
 
 export const test = base.extend<{ authenticatedPage: ReturnType<typeof base['extend']> }>({
   page: async ({ page }, use) => {
+    page.on('console', msg => {
+      const t = msg.text();
+      if (t.startsWith('[DnD]')) console.log('BRW:', t);
+    });
     // Log in before each test
     await page.goto('/login');
     await page.getByLabel('Email').fill(TEST_EMAIL);
