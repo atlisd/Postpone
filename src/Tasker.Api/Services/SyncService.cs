@@ -38,4 +38,13 @@ public class SyncService(IHubContext<SyncHub> hub) : ISyncService
             await hub.Clients.Groups(groups).SendAsync(eventName);
         }
     }
+
+    public async Task FolderCreated(Guid userId)
+        => await hub.Clients.Group($"user:{userId}").SendAsync("FolderCreated");
+
+    public async Task FolderUpdated(Guid userId)
+        => await hub.Clients.Group($"user:{userId}").SendAsync("FolderUpdated");
+
+    public async Task FolderDeleted(Guid userId)
+        => await hub.Clients.Group($"user:{userId}").SendAsync("FolderDeleted");
 }

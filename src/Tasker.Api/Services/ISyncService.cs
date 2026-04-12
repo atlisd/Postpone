@@ -8,4 +8,7 @@ public interface ISyncService
     Task SubtaskUpdated(Guid projectId, Guid taskId);
     Task ProjectUpdated(Guid projectId);
     Task NotifyUsers(IEnumerable<Guid> userIds, string eventName);
+    Task FolderCreated(Guid userId);
+    Task FolderUpdated(Guid userId);
+    Task FolderDeleted(Guid userId);
 }

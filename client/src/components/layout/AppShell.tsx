@@ -16,7 +16,8 @@ export function AppShell() {
   const handleDragEnd = async (event: { operation: { source?: { id?: string | number; group?: string } | null; target?: { id?: string | number } | null } }) => {
     const { source, target } = event.operation;
     if (!source?.id || !target?.id) return;
-    if (source.group === 'sidebar-projects') return;
+    if (source.group === 'sidebar-toplevel') return;
+    if (typeof source.group === 'string' && source.group.startsWith('sidebar-folder-')) return;
     const targetId = String(target.id);
     if (!targetId.startsWith('project-drop-')) return;
     const projectId = targetId.replace('project-drop-', '');

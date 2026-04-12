@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSignalR } from '../../hooks/useSignalR';
-import { listProjects, createProject, deleteProject, reorderProjects, updateProject } from '../../api/projects';
+import { listProjects, createProject, deleteProject, updateProject } from '../../api/projects';
+import { reorderFolderProjects, reorderTopLevel, listFolders, createFolder, updateFolder, deleteFolder, addProjectToFolder, removeProjectFromFolder, setFolderCollapsed } from '../../api/folders';
 import { listTags, createTag, updateTag, deleteTag } from '../../api/tags';
 import { getSmartList } from '../../api/tasks';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import { TagFormModal } from '../tags/TagFormModal';
-import type { ProjectResponse, TagFull } from '../../types/api';
+import type { ProjectResponse, ProjectFolderResponse, TagFull } from '../../types/api';
 import { useDroppable, useDragDropMonitor, useDragOperation } from '@dnd-kit/react';
 import { useSortable, isSortableOperation } from '@dnd-kit/react/sortable';
 import {
@@ -20,12 +21,15 @@ import {
   X,
   Plus,
   FolderOpen,
+  Folder,
+  FolderPlus,
   MoreHorizontal,
   Trash2,
   Pencil,
   UserCheck,
   GripVertical,
   ChevronDown,
+  ChevronRight,
   SquareCheck,
   CalendarDays,
   User,
@@ -52,16 +56,23 @@ const smartLists = [
   { to: '/app/assigned', label: 'Assigned to Me', icon: UserCheck, key: 'assigned' },
 ];
 
+type SidebarTopLevelItem =
+  | { type: 'folder'; id: string; sortOrder: number; folder: ProjectFolderResponse }
+  | { type: 'project'; id: string; sortOrder: number; project: ProjectResponse };
+
+// ─── SortableProjectItem ─────────────────────────────────────────────────────
+
 interface SortableProjectItemProps {
   project: ProjectResponse;
   index: number;
   userId: string | undefined;
   navLinkClass: (props: { isActive: boolean }) => string;
   onClose: () => void;
-  onContextMenu: (projectId: string, rect: DOMRect) => void;
+  onContextMenu: (projectId: string, folderId: string | undefined, rect: DOMRect) => void;
   contextMenuProjectId: string | null;
   taskCount: number;
   onShareClick: (project: ProjectResponse) => void;
+  mergeTarget: string | null;
 }
 
 function SortableProjectItem({
@@ -74,24 +85,121 @@ function SortableProjectItem({
   contextMenuProjectId,
   taskCount,
   onShareClick,
+  mergeTarget,
 }: SortableProjectItemProps) {
   const { ref, handleRef, isDragging } = useSortable({
     id: project.id,
     index,
-    group: 'sidebar-projects',
+    group: 'sidebar-toplevel',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    accept: (draggable: any) => draggable?.group === 'sidebar-projects',
+    accept: (draggable: any) => draggable?.group === 'sidebar-toplevel',
   });
   const { ref: dropRef, isDropTarget } = useDroppable({
     id: 'project-drop-' + project.id,
-    // Only accept task drags — sidebar project drags must use the sortable inner div so
-    // isSortableOperation() passes in onDragOver (which needs both source and target).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    accept: (draggable: any) => draggable?.group !== 'sidebar-projects',
+    accept: (draggable: any) => draggable?.group !== 'sidebar-toplevel' && !String(draggable?.group ?? '').startsWith('sidebar-folder-'),
   });
   const { source } = useDragOperation();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isDraggingProject = (source as any)?.group === 'sidebar-projects';
+  const isDraggingProject = (source as any)?.group === 'sidebar-toplevel' || String((source as any)?.group ?? '').startsWith('sidebar-folder-');
+  const isMergeTarget = mergeTarget === project.id;
+
+  return (
+    <div ref={dropRef} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={ref} className={`relative group ${isDragging ? 'opacity-50' : ''}`}>
+      {isMergeTarget && (
+        <div className="absolute inset-0 rounded-md ring-2 ring-dashed ring-blue-400 bg-blue-50/40 dark:bg-blue-900/20 pointer-events-none z-10 flex items-center justify-center">
+          <FolderPlus size={14} className="text-blue-500" />
+        </div>
+      )}
+      <NavLink
+        to={`/app/projects/${project.id}`}
+        className={navLinkClass}
+        onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
+      >
+        <span
+          ref={handleRef}
+          className="cursor-grab active:cursor-grabbing flex-shrink-0"
+        >
+          <GripVertical size={16} className="hidden group-hover:block text-gray-400" />
+          <FolderOpen size={16} style={{ color: project.color }} className="block group-hover:hidden" />
+        </span>
+        <span className="flex-1 truncate">{project.name}</span>
+        {project.householdId && <Users size={12} className="text-gray-400 flex-shrink-0" />}
+        {!project.householdId && project.shareCount > 0 && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShareClick(project); }}
+            className="text-gray-400 hover:text-blue-500 flex-shrink-0 transition-colors"
+            title="Shared project"
+          >
+            <Share2 size={12} />
+          </button>
+        )}
+        <span className="text-xs text-gray-400 group-hover:invisible">
+          {taskCount}
+        </span>
+      </NavLink>
+      {project.ownerId === userId && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onContextMenu(project.id, undefined, rect);
+          }}
+          className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 transition-opacity ${
+            contextMenuProjectId === project.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <MoreHorizontal size={14} />
+        </button>
+      )}
+    </div>
+    </div>
+  );
+}
+
+// ─── FolderProjectItem ───────────────────────────────────────────────────────
+
+interface FolderProjectItemProps {
+  project: ProjectResponse;
+  folderId: string;
+  index: number;
+  userId: string | undefined;
+  navLinkClass: (props: { isActive: boolean }) => string;
+  onClose: () => void;
+  onContextMenu: (projectId: string, folderId: string | undefined, rect: DOMRect) => void;
+  contextMenuProjectId: string | null;
+  taskCount: number;
+  onShareClick: (project: ProjectResponse) => void;
+}
+
+function FolderProjectItem({
+  project,
+  folderId,
+  index,
+  userId,
+  navLinkClass,
+  onClose,
+  onContextMenu,
+  contextMenuProjectId,
+  taskCount,
+  onShareClick,
+}: FolderProjectItemProps) {
+  const { ref, handleRef, isDragging } = useSortable({
+    id: project.id,
+    index,
+    group: `sidebar-folder-${folderId}`,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group === `sidebar-folder-${folderId}`,
+  });
+  const { ref: dropRef, isDropTarget } = useDroppable({
+    id: 'project-drop-' + project.id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group !== 'sidebar-toplevel' && !String(draggable?.group ?? '').startsWith('sidebar-folder-'),
+  });
+  const { source } = useDragOperation();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isDraggingProject = (source as any)?.group === 'sidebar-toplevel' || String((source as any)?.group ?? '').startsWith('sidebar-folder-');
 
   return (
     <div ref={dropRef} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
@@ -128,7 +236,7 @@ function SortableProjectItem({
           onClick={(e) => {
             e.preventDefault();
             const rect = e.currentTarget.getBoundingClientRect();
-            onContextMenu(project.id, rect);
+            onContextMenu(project.id, folderId, rect);
           }}
           className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 transition-opacity ${
             contextMenuProjectId === project.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -142,6 +250,194 @@ function SortableProjectItem({
   );
 }
 
+// ─── SortableFolderItem ──────────────────────────────────────────────────────
+
+interface SortableFolderItemProps {
+  folder: ProjectFolderResponse;
+  index: number;
+  mergeTarget: string | null;
+  userId: string | undefined;
+  navLinkClass: (props: { isActive: boolean }) => string;
+  onClose: () => void;
+  onRename: (id: string, name: string) => void;
+  onFolderContextMenu: (folderId: string, rect: DOMRect) => void;
+  folderContextMenuId: string | null;
+  onProjectContextMenu: (projectId: string, folderId: string | undefined, rect: DOMRect) => void;
+  projectContextMenuId: string | null;
+  onShareClick: (project: ProjectResponse) => void;
+  onCollapseToggle: (folderId: string, isCollapsed: boolean) => void;
+  externalRenameRequest: boolean;
+  onExternalRenameHandled: () => void;
+}
+
+function SortableFolderItem({
+  folder,
+  index,
+  mergeTarget,
+  userId,
+  navLinkClass,
+  onClose,
+  onRename,
+  onFolderContextMenu,
+  folderContextMenuId,
+  onProjectContextMenu,
+  projectContextMenuId,
+  onShareClick,
+  onCollapseToggle,
+  externalRenameRequest,
+  onExternalRenameHandled,
+}: SortableFolderItemProps) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(folder.name);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const { ref, handleRef, isDragging } = useSortable({
+    id: `folder-${folder.id}`,
+    index,
+    group: 'sidebar-toplevel',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group === 'sidebar-toplevel',
+  });
+
+  const isMergeTarget = mergeTarget === `folder-${folder.id}`;
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  // Keep renameValue in sync if folder.name changes externally
+  useEffect(() => {
+    if (!isRenaming) setRenameValue(folder.name);
+  }, [folder.name, isRenaming]);
+
+  // Handle external rename request from context menu
+  useEffect(() => {
+    if (externalRenameRequest && !isRenaming) {
+      setRenameValue(folder.name);
+      setIsRenaming(true);
+      onExternalRenameHandled();
+    }
+  }, [externalRenameRequest, isRenaming, folder.name, onExternalRenameHandled]);
+
+  const commitRename = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== folder.name) {
+      onRename(folder.id, trimmed);
+    } else {
+      setRenameValue(folder.name);
+    }
+    setIsRenaming(false);
+  };
+
+  const incompleteTasks = folder.projects.reduce(
+    (sum, p) => sum + (p.taskCount - p.completedTaskCount), 0
+  );
+
+  return (
+    <div ref={ref} className={`${isDragging ? 'opacity-50' : ''}`}>
+      {/* Folder header */}
+      <div className={`relative group/folder rounded-md ${isMergeTarget ? 'ring-2 ring-blue-400 ring-inset bg-blue-50/40 dark:bg-blue-900/20' : ''}`}>
+        <div className="flex items-center gap-1 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-default select-none">
+          {/* Drag handle */}
+          <span
+            ref={handleRef}
+            className="cursor-grab active:cursor-grabbing flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical size={16} className="hidden group-hover/folder:block text-gray-400" />
+            {folder.isCollapsed
+              ? <Folder size={16} className="block group-hover/folder:hidden text-gray-400 dark:text-gray-500" />
+              : <FolderOpen size={16} className="block group-hover/folder:hidden text-gray-400 dark:text-gray-500" />
+            }
+          </span>
+
+          {/* Collapse toggle + name */}
+          <button
+            className="flex items-center gap-1 flex-1 min-w-0 text-left"
+            onClick={() => {
+              if (!isRenaming) onCollapseToggle(folder.id, !folder.isCollapsed);
+            }}
+          >
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                  if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); }
+                }}
+                onClick={e => e.stopPropagation()}
+                className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 text-sm text-gray-900 dark:text-white outline-none"
+              />
+            ) : (
+              <span
+                className="flex-1 truncate font-medium"
+                onDoubleClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
+              >
+                {folder.name}
+              </span>
+            )}
+            {!isRenaming && (
+              folder.isCollapsed
+                ? <ChevronRight size={14} className="flex-shrink-0 text-gray-400" />
+                : <ChevronDown size={14} className="flex-shrink-0 text-gray-400" />
+            )}
+          </button>
+
+          {/* Task count badge */}
+          {!isRenaming && (
+            <span className="text-xs text-gray-400 group-hover/folder:invisible flex-shrink-0">
+              {incompleteTasks > 0 ? incompleteTasks : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Context menu button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onFolderContextMenu(folder.id, rect);
+          }}
+          className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 transition-opacity ${
+            folderContextMenuId === folder.id ? 'opacity-100' : 'opacity-0 group-hover/folder:opacity-100'
+          }`}
+        >
+          <MoreHorizontal size={14} />
+        </button>
+      </div>
+
+      {/* Folder contents */}
+      {!folder.isCollapsed && (
+        <div className="ml-3 border-l border-gray-200 dark:border-gray-700 pl-1 mt-0.5 space-y-0.5">
+          {folder.projects.map((project, i) => (
+            <FolderProjectItem
+              key={project.id}
+              project={project}
+              folderId={folder.id}
+              index={i}
+              userId={userId}
+              navLinkClass={navLinkClass}
+              onClose={onClose}
+              onContextMenu={onProjectContextMenu}
+              contextMenuProjectId={projectContextMenuId}
+              taskCount={project.taskCount - project.completedTaskCount}
+              onShareClick={onShareClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── InboxProjectItem ────────────────────────────────────────────────────────
+
 function InboxProjectItem({ project, navLinkClass, onClose }: {
   project: ProjectResponse;
   navLinkClass: (props: { isActive: boolean }) => string;
@@ -150,7 +446,7 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
   const { ref, isDropTarget } = useDroppable({ id: 'project-drop-' + project.id });
   const { source } = useDragOperation();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isDraggingProject = (source as any)?.group === 'sidebar-projects';
+  const isDraggingProject = (source as any)?.group === 'sidebar-toplevel' || String((source as any)?.group ?? '').startsWith('sidebar-folder-');
   return (
     <div ref={ref} className={`relative group rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
       <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onClose}>
@@ -164,16 +460,20 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
   );
 }
 
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+
 export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) {
   const { user, gravatarUrl } = useAuth();
   const [gravatarFailed, setGravatarFailed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const [folders, setFolders] = useState<ProjectFolderResponse[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingProject, setEditingProject] = useState<{ id: string; name: string; color: string } | null>(null);
   const [sharingProject, setSharingProject] = useState<ProjectResponse | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ projectId: string; rect: DOMRect } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ projectId: string; folderId?: string; rect: DOMRect } | null>(null);
+  const [folderContextMenu, setFolderContextMenu] = useState<{ folderId: string; rect: DOMRect } | null>(null);
   const [tags, setTags] = useState<TagFull[]>([]);
   const [showCreateTagModal, setShowCreateTagModal] = useState(false);
   const [editingTag, setEditingTag] = useState<TagFull | null>(null);
@@ -181,6 +481,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [hasAssignedTasks, setHasAssignedTasks] = useState<boolean | null>(null);
   const [smartListCounts, setSmartListCounts] = useState<Record<string, number>>({});
   const [navOverflows, setNavOverflows] = useState(false);
+  // Merge intent state for drag-to-create folder
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
+  // Folder being externally triggered for rename (from context menu)
+  const [folderRenaming, setFolderRenaming] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
   const fetchVersionRef = useRef(0);
 
@@ -207,6 +511,15 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       if (fetchVersionRef.current === version) {
         setProjects(data);
       }
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const fetchFolders = useCallback(async () => {
+    try {
+      const data = await listFolders();
+      setFolders(data);
     } catch {
       // silent
     }
@@ -244,17 +557,21 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   }, [user?.showAllTasksList]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => { fetchFolders(); }, [fetchFolders]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
   useEffect(() => { fetchAssignedCount(); }, [fetchAssignedCount]);
-  useEffect(() => { checkNavOverflow(); }, [projects, tags, checkNavOverflow]);
+  useEffect(() => { checkNavOverflow(); }, [projects, folders, tags, checkNavOverflow]);
 
   const fetchAll = useCallback(() => {
     fetchProjects();
+    fetchFolders();
     fetchTags();
     fetchAssignedCount();
-  }, [fetchProjects, fetchTags, fetchAssignedCount]);
+  }, [fetchProjects, fetchFolders, fetchTags, fetchAssignedCount]);
 
   useSignalR(fetchAll);
+
+  // ── CRUD handlers ──────────────────────────────────────────────────────────
 
   const handleCreateProject = async (data: { name: string; color: string; householdId?: string }) => {
     try {
@@ -289,6 +606,44 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       await fetchProjects();
     } catch {
       toast.error('Failed to update project');
+    }
+  };
+
+  const handleRenameFolder = (id: string, name: string) => {
+    // Optimistic update
+    setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
+    updateFolder(id, name).catch(() => {
+      toast.error('Failed to rename folder');
+      fetchFolders();
+    });
+  };
+
+  const handleDeleteFolder = async (id: string) => {
+    if (!confirm('Delete this folder? Projects inside will be ungrouped.')) return;
+    try {
+      await deleteFolder(id);
+      setFolderContextMenu(null);
+      await fetchAll();
+    } catch {
+      toast.error('Failed to delete folder');
+    }
+  };
+
+  const handleCollapseToggle = (folderId: string, isCollapsed: boolean) => {
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, isCollapsed } : f));
+    setFolderCollapsed(folderId, isCollapsed).catch(() => {
+      setFolders(prev => prev.map(f => f.id === folderId ? { ...f, isCollapsed: !isCollapsed } : f));
+      toast.error('Failed to save');
+    });
+  };
+
+  const handleRemoveFromFolder = async (folderId: string, projectId: string) => {
+    try {
+      await removeProjectFromFolder(folderId, projectId);
+      setContextMenu(null);
+      await fetchAll();
+    } catch {
+      toast.error('Failed to remove from folder');
     }
   };
 
@@ -327,72 +682,253 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
     }
   };
 
+  // ── Drag-drop monitor ──────────────────────────────────────────────────────
+
+  // Stable refs for use inside drag monitor callbacks
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
-  // Tracks the accumulating intended order during a project drag. Because
-  // OptimisticSortingPlugin moves the dragged item's droppable to the pointer
-  // position after each swap, collision detection finds the source as its own
-  // target by the time dragend fires (target.id === source.id). We therefore
-  // build the final order incrementally from onDragOver events instead.
-  const runningProjectOrderRef = useRef<ProjectResponse[] | null>(null);
+  const foldersRef = useRef(folders);
+  foldersRef.current = folders;
+
+  // Derived data
+  const inboxProject = projects.find(p => p.isInbox);
+  const ungroupedProjects = projects.filter(p => !p.isInbox && p.folderId === null);
+
+  // Top-level sidebar items: folders + ungrouped projects, interleaved by sortOrder
+  const topLevelItems: SidebarTopLevelItem[] = [
+    ...folders.map(f => ({ type: 'folder' as const, id: `folder-${f.id}`, sortOrder: f.sortOrder, folder: f })),
+    ...ungroupedProjects.map(p => ({ type: 'project' as const, id: p.id, sortOrder: p.sortOrder, project: p })),
+  ].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const topLevelItemsRef = useRef(topLevelItems);
+  topLevelItemsRef.current = topLevelItems;
+
+  // Accumulates intended order during a top-level drag (folders + ungrouped projects)
+  const runningTopLevelOrderRef = useRef<SidebarTopLevelItem[] | null>(null);
+  // Accumulates intended order during a within-folder drag
+  const runningFolderOrderRef = useRef<{ folderId: string; projects: ProjectResponse[] } | null>(null);
+
+  // Merge intent state (refs for use in monitor, state for triggering visual re-render)
+  const mergeTargetIdRef = useRef<string | null>(null);
+  const mergeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mergeIntentRef = useRef(false);
+
+  const clearMergeTimer = () => {
+    if (mergeTimerRef.current) {
+      clearTimeout(mergeTimerRef.current);
+      mergeTimerRef.current = null;
+    }
+  };
 
   useDragDropMonitor({
     onDragStart() {
       dragOccurred = true;
-      runningProjectOrderRef.current = null;
+      runningTopLevelOrderRef.current = null;
+      runningFolderOrderRef.current = null;
+      clearMergeTimer();
+      mergeTargetIdRef.current = null;
+      mergeIntentRef.current = false;
+      setMergeTarget(null);
     },
+
     onDragOver(event) {
       const { operation } = event;
       if (!isSortableOperation(operation)) return;
       const { source, target } = operation;
       if (!source || !target) return;
-      if (source.group !== 'sidebar-projects') return;
+
+      const sourceGroup = String(source.group ?? '');
       const sourceId = String(source.id);
       const targetId = String(target.id);
       if (sourceId === targetId) return;
-      const base = runningProjectOrderRef.current ?? projectsRef.current.filter(p => !p.isInbox);
-      const fromIndex = base.findIndex(p => p.id === sourceId);
-      const toIndex = base.findIndex(p => p.id === targetId);
-      if (fromIndex === -1 || toIndex === -1) return;
-      const reordered = [...base];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(toIndex, 0, moved);
-      runningProjectOrderRef.current = reordered;
+
+      if (sourceGroup === 'sidebar-toplevel') {
+        // Accumulate top-level sort order (same mechanism as original project reorder)
+        const base = runningTopLevelOrderRef.current ?? topLevelItemsRef.current;
+        const fromIndex = base.findIndex(item => item.id === sourceId);
+        const toIndex = base.findIndex(item => item.id === targetId);
+        if (fromIndex !== -1 && toIndex !== -1) {
+          const reordered = [...base];
+          const [moved] = reordered.splice(fromIndex, 1);
+          reordered.splice(toIndex, 0, moved);
+          runningTopLevelOrderRef.current = reordered;
+        }
+
+        // Merge intent: only trigger when dragging an owned project (not a folder header)
+        const isSourceProject = !sourceId.startsWith('folder-');
+        if (isSourceProject) {
+          const sourceProject = projectsRef.current.find(p => p.id === sourceId);
+          const isOwnedProject = sourceProject?.ownerId === user?.id;
+
+          if (isOwnedProject) {
+            // Check if target is a project or folder we can merge with
+            const isTargetProject = !targetId.startsWith('folder-') &&
+              projectsRef.current.some(p => p.id === targetId && p.ownerId === user?.id);
+            const isTargetFolder = targetId.startsWith('folder-');
+
+            if (isTargetProject || isTargetFolder) {
+              if (targetId !== mergeTargetIdRef.current) {
+                clearMergeTimer();
+                mergeTargetIdRef.current = targetId;
+                mergeTimerRef.current = setTimeout(() => {
+                  mergeIntentRef.current = true;
+                  setMergeTarget(targetId);
+                }, 600);
+              }
+            } else {
+              clearMergeTimer();
+              mergeTargetIdRef.current = null;
+              mergeIntentRef.current = false;
+              setMergeTarget(null);
+            }
+          } else {
+            clearMergeTimer();
+          }
+        } else {
+          // Dragging a folder — no merge intent
+          clearMergeTimer();
+          mergeTargetIdRef.current = null;
+          mergeIntentRef.current = false;
+          setMergeTarget(null);
+        }
+      } else if (sourceGroup.startsWith('sidebar-folder-')) {
+        // Within-folder reorder accumulation
+        const folderId = sourceGroup.replace('sidebar-folder-', '');
+        const folder = foldersRef.current.find(f => f.id === folderId);
+        if (!folder) return;
+
+        const currentBase = runningFolderOrderRef.current?.folderId === folderId
+          ? runningFolderOrderRef.current.projects
+          : folder.projects;
+
+        const fromIndex = currentBase.findIndex(p => p.id === sourceId);
+        const toIndex = currentBase.findIndex(p => p.id === targetId);
+        if (fromIndex === -1 || toIndex === -1) return;
+
+        const reordered = [...currentBase];
+        const [moved] = reordered.splice(fromIndex, 1);
+        reordered.splice(toIndex, 0, moved);
+        runningFolderOrderRef.current = { folderId, projects: reordered };
+      }
     },
+
     onDragEnd(event) {
       // Clear the drag flag after a tick so it's still true when the post-drag click fires.
       setTimeout(() => { dragOccurred = false; }, 0);
 
-      const intended = runningProjectOrderRef.current;
-      runningProjectOrderRef.current = null;
-      // `intended` is non-null only if onDragOver accumulated swaps, which already proves
-      // a valid sortable drag occurred. We intentionally skip isSortableOperation() here
-      // because OptimisticSortingPlugin can leave target=null at dragend (the cursor may
-      // land in a gap between items after visual shifts), causing isSortableOperation to
-      // return false even though the swaps were valid.
-      if (!intended) return;
+      clearMergeTimer();
 
       const { operation } = event;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const source = operation.source as any;
-      if (!source || source.group !== 'sidebar-projects') return;
+      if (!source) {
+        runningTopLevelOrderRef.current = null;
+        runningFolderOrderRef.current = null;
+        mergeIntentRef.current = false;
+        setMergeTarget(null);
+        return;
+      }
 
+      const sourceGroup = String(source.group ?? '');
       const sourceId = String(source.id);
-      const originalOrder = projectsRef.current.filter(p => !p.isInbox);
-      const originalPos = originalOrder.findIndex(p => p.id === sourceId);
-      const intendedPos = intended.findIndex(p => p.id === sourceId);
-      if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
 
-      const inbox = projectsRef.current.find(p => p.isInbox);
-      fetchVersionRef.current++;
-      setProjects(inbox ? [inbox, ...intended] : intended);
+      // ── Merge intent: create/add to folder ──────────────────────────────────
+      if (mergeIntentRef.current && mergeTargetIdRef.current) {
+        const capturedTarget = mergeTargetIdRef.current;
+        mergeIntentRef.current = false;
+        mergeTargetIdRef.current = null;
+        setMergeTarget(null);
+        runningTopLevelOrderRef.current = null;
 
-      reorderProjects(intended.map(p => p.id)).catch(() => {
-        toast.error('Failed to save order');
-        fetchProjects();
-      });
+        if (capturedTarget.startsWith('folder-')) {
+          const folderId = capturedTarget.replace('folder-', '');
+          addProjectToFolder(folderId, sourceId)
+            .then(() => fetchAll())
+            .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
+        } else {
+          // Create new folder with the two projects
+          createFolder('New Folder', [sourceId, capturedTarget])
+            .then(() => fetchAll())
+            .catch(() => { toast.error('Failed to create folder'); fetchAll(); });
+        }
+        return;
+      }
+
+      mergeIntentRef.current = false;
+      mergeTargetIdRef.current = null;
+      setMergeTarget(null);
+
+      // ── Top-level reorder ────────────────────────────────────────────────────
+      if (sourceGroup === 'sidebar-toplevel') {
+        const intended = runningTopLevelOrderRef.current;
+        runningTopLevelOrderRef.current = null;
+        // `intended` is non-null only if onDragOver accumulated swaps.
+        // We intentionally skip isSortableOperation() here (see original comment above).
+        if (!intended) return;
+
+        const originalPos = topLevelItemsRef.current.findIndex(item => item.id === sourceId);
+        const intendedPos = intended.findIndex(item => item.id === sourceId);
+        if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
+
+        // Optimistic update: apply new sortOrders to projects and folders state
+        fetchVersionRef.current++;
+        setProjects(prev => {
+          const updated = [...prev];
+          intended.forEach((item, i) => {
+            if (item.type === 'project') {
+              const idx = updated.findIndex(p => p.id === item.project.id);
+              if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+            }
+          });
+          return updated;
+        });
+        setFolders(prev => {
+          const updated = [...prev];
+          intended.forEach((item, i) => {
+            if (item.type === 'folder') {
+              const idx = updated.findIndex(f => f.id === item.folder.id);
+              if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+            }
+          });
+          return updated;
+        });
+
+        reorderTopLevel(intended.map(item => ({
+          type: item.type,
+          id: item.type === 'folder' ? item.folder.id : item.project.id,
+        }))).catch(() => {
+          toast.error('Failed to save order');
+          fetchAll();
+        });
+        return;
+      }
+
+      // ── Within-folder reorder ────────────────────────────────────────────────
+      if (sourceGroup.startsWith('sidebar-folder-')) {
+        const folderId = sourceGroup.replace('sidebar-folder-', '');
+        const intended = runningFolderOrderRef.current;
+        runningFolderOrderRef.current = null;
+        if (!intended || intended.folderId !== folderId) return;
+
+        const folder = foldersRef.current.find(f => f.id === folderId);
+        if (!folder) return;
+
+        const originalPos = folder.projects.findIndex(p => p.id === sourceId);
+        const intendedPos = intended.projects.findIndex(p => p.id === sourceId);
+        if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
+
+        // Optimistic update
+        setFolders(prev => prev.map(f => f.id === folderId ? { ...f, projects: intended.projects } : f));
+
+        reorderFolderProjects(folderId, intended.projects.map(p => p.id)).catch(() => {
+          toast.error('Failed to save order');
+          fetchFolders();
+        });
+      }
     },
   });
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
@@ -401,8 +937,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'
     }`;
 
-  const inboxProject = projects.find(p => p.isInbox);
-  const sortableProjects = projects.filter(p => !p.isInbox);
+  const allProjects = projects; // for looking up a project by id in context menus
 
   return (
     <>
@@ -462,7 +997,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           })()}
         </div>
 
-        {/* Smart Lists */}
+        {/* Navigation */}
         <div className="flex-1 relative min-h-0">
         <nav ref={navRef} className="h-full overflow-y-auto px-3 py-3 space-y-1">
           <p className="px-3 py-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -511,23 +1046,49 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 />
               )}
 
-              {/* Sortable projects */}
-              {sortableProjects.map((project, index) => (
-                <SortableProjectItem
-                  key={project.id}
-                  project={project}
-                  index={index}
-                  userId={user?.id}
-                  navLinkClass={navLinkClass}
-                  onClose={onClose}
-                  onContextMenu={(projectId, rect) =>
-                    setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, rect })
-                  }
-                  contextMenuProjectId={contextMenu?.projectId ?? null}
-                  taskCount={project.taskCount - project.completedTaskCount}
-                  onShareClick={setSharingProject}
-                />
-              ))}
+              {/* Top-level items: interleaved folders + ungrouped projects */}
+              {topLevelItems.map((item, index) =>
+                item.type === 'folder' ? (
+                  <SortableFolderItem
+                    key={item.folder.id}
+                    folder={item.folder}
+                    index={index}
+                    mergeTarget={mergeTarget}
+                    userId={user?.id}
+                    navLinkClass={navLinkClass}
+                    onClose={onClose}
+                    onRename={handleRenameFolder}
+                    onFolderContextMenu={(folderId, rect) =>
+                      setFolderContextMenu(folderContextMenu?.folderId === folderId ? null : { folderId, rect })
+                    }
+                    folderContextMenuId={folderContextMenu?.folderId ?? null}
+                    onProjectContextMenu={(projectId, folderId, rect) =>
+                      setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect })
+                    }
+                    projectContextMenuId={contextMenu?.projectId ?? null}
+                    onShareClick={setSharingProject}
+                    onCollapseToggle={handleCollapseToggle}
+                    externalRenameRequest={folderRenaming === item.folder.id}
+                    onExternalRenameHandled={() => setFolderRenaming(null)}
+                  />
+                ) : (
+                  <SortableProjectItem
+                    key={item.project.id}
+                    project={item.project}
+                    index={index}
+                    userId={user?.id}
+                    navLinkClass={navLinkClass}
+                    onClose={onClose}
+                    onContextMenu={(projectId, folderId, rect) =>
+                      setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect })
+                    }
+                    contextMenuProjectId={contextMenu?.projectId ?? null}
+                    taskCount={item.project.taskCount - item.project.completedTaskCount}
+                    onShareClick={setSharingProject}
+                    mergeTarget={mergeTarget}
+                  />
+                )
+              )}
             </>
           )}
 
@@ -583,21 +1144,22 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
       </aside>
 
+      {/* Project context menu */}
       {contextMenu && createPortal(
         <>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[140px]"
             style={{
-              top: contextMenu.rect.bottom + 4 + 115 > window.innerHeight
-                ? contextMenu.rect.top - 115
+              top: contextMenu.rect.bottom + 4 + (contextMenu.folderId ? 140 : 115) > window.innerHeight
+                ? contextMenu.rect.top - (contextMenu.folderId ? 140 : 115)
                 : contextMenu.rect.bottom + 4,
               left: contextMenu.rect.left,
             }}
           >
             <button
               onClick={() => {
-                const project = projects.find(p => p.id === contextMenu.projectId);
+                const project = allProjects.find(p => p.id === contextMenu.projectId);
                 if (project) {
                   setEditingProject({ id: project.id, name: project.name, color: project.color });
                   setContextMenu(null);
@@ -609,7 +1171,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               Edit
             </button>
             {(() => {
-              const p = projects.find(p => p.id === contextMenu.projectId);
+              const p = allProjects.find(p => p.id === contextMenu.projectId);
               return p && !p.householdId && !p.isInbox ? (
                 <button
                   onClick={() => { setSharingProject(p); setContextMenu(null); }}
@@ -620,15 +1182,62 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 </button>
               ) : null;
             })()}
+            {contextMenu.folderId && (
+              <button
+                onClick={() => handleRemoveFromFolder(contextMenu.folderId!, contextMenu.projectId)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FolderPlus size={14} className="rotate-180" />
+                Remove from folder
+              </button>
+            )}
             <button
               onClick={() => {
-                const project = projects.find(p => p.id === contextMenu.projectId);
+                const project = allProjects.find(p => p.id === contextMenu.projectId);
                 if (project) handleDeleteProject(project.id, project.name);
               }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
             >
               <Trash2 size={14} />
               Delete
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Folder context menu */}
+      {folderContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setFolderContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[140px]"
+            style={{
+              top: folderContextMenu.rect.bottom + 4 + 80 > window.innerHeight
+                ? folderContextMenu.rect.top - 80
+                : folderContextMenu.rect.bottom + 4,
+              left: folderContextMenu.rect.left,
+            }}
+          >
+            <button
+              onClick={() => {
+                // Trigger inline rename by finding the folder and simulating double-click
+                // We signal via a rename-request state instead
+                setFolderContextMenu(null);
+                // We'll use a separate state to trigger rename
+                setFolderRenaming(folderContextMenu.folderId);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pencil size={14} />
+              Rename
+            </button>
+            <button
+              onClick={() => handleDeleteFolder(folderContextMenu.folderId)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <Trash2 size={14} />
+              Delete folder
             </button>
           </div>
         </>,

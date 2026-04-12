@@ -17,6 +17,7 @@ Multiple user support where each user gets their own account (created by an admi
 
 ### Task Management
 - **Projects** — organize tasks into color-coded projects, each with their own task list
+- **Project Folders** — group projects into collapsible folders; drag one project onto another and hold for 600 ms to create a folder (TickTick-style); drag a project onto a folder header to add it; collapse/expand folders; rename or delete folders via context menu; remove projects from folders via their context menu
 - **Smart Lists** — Today (with overdue grouping), Tomorrow, Next 7 Days, All Tasks, Assigned to Me
 - **Calendar View** — month grid with drag-and-drop to reschedule tasks
 - **Subtasks/Checklists** — break tasks into smaller steps with reordering
@@ -249,6 +250,19 @@ Internet ──▶ Cloudflare Edge ──▶ cloudflared container (outbound tun
 | GET | `/api/projects/{id}/members` | List assignable members |
 | POST | `/api/projects/{id}/share` | Share with user |
 | DELETE | `/api/projects/{id}/share/{userId}` | Unshare |
+
+### Project Folders
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/project-folders` | List folders (with nested projects) |
+| POST | `/api/project-folders` | Create folder with initial project IDs |
+| PUT | `/api/project-folders/{id}` | Rename folder |
+| DELETE | `/api/project-folders/{id}` | Delete folder (ungroups projects) |
+| POST | `/api/project-folders/{id}/add` | Add project to folder |
+| POST | `/api/project-folders/{id}/remove` | Remove project from folder |
+| POST | `/api/project-folders/{id}/reorder` | Reorder projects within folder |
+| POST | `/api/project-folders/reorder-toplevel` | Reorder top-level items (folders + ungrouped projects) |
+| PATCH | `/api/project-folders/{id}/collapse` | Set collapsed state |
 
 ### Tasks
 | Method | Path | Description |

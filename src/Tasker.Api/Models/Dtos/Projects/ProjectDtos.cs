@@ -21,4 +21,28 @@ public record ProjectResponse(
     int CompletedTaskCount,
     DateTime CreatedAt,
     bool IsInbox,
-    int ShareCount = 0);
+    int ShareCount = 0,
+    Guid? FolderId = null,
+    int SortOrder = 0);
+
+// Folder DTOs
+public record CreateFolderRequest(string Name, List<Guid> ProjectIds);
+
+public record UpdateFolderRequest(string Name);
+
+public record AddProjectToFolderRequest(Guid ProjectId);
+
+public record ReorderFolderProjectsRequest(List<Guid> OrderedIds);
+
+public record ReorderTopLevelRequest(List<TopLevelItem> Items);
+
+public record TopLevelItem(string Type, Guid Id);
+
+public record SetFolderCollapsedRequest(bool IsCollapsed);
+
+public record ProjectFolderResponse(
+    Guid Id,
+    string Name,
+    bool IsCollapsed,
+    int SortOrder,
+    List<ProjectResponse> Projects);

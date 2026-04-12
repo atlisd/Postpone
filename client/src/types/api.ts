@@ -48,6 +48,16 @@ export interface ProjectResponse {
   createdAt: string;
   isInbox: boolean;
   shareCount: number;
+  folderId: string | null;
+  sortOrder: number;
+}
+
+export interface ProjectFolderResponse {
+  id: string;
+  name: string;
+  isCollapsed: boolean;
+  sortOrder: number;
+  projects: ProjectResponse[];
 }
 
 export interface TaskResponse {

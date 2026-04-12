@@ -7,6 +7,7 @@ const SYNC_EVENTS = [
   'TaskCreated', 'TaskUpdated', 'TaskDeleted',
   'SubtaskUpdated',
   'ProjectUpdated', 'ProjectCreated', 'ProjectDeleted',
+  'FolderCreated', 'FolderUpdated', 'FolderDeleted',
 ];
 
 let connection: HubConnection | null = null;

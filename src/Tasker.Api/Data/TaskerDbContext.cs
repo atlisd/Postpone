@@ -11,6 +11,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
     public DbSet<HouseholdMember> HouseholdMembers => Set<HouseholdMember>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectShare> ProjectShares => Set<ProjectShare>();
+    public DbSet<ProjectFolder> ProjectFolders => Set<ProjectFolder>();
     public DbSet<TodoTask> Tasks => Set<TodoTask>();
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<Tag> Tags => Set<Tag>();
@@ -47,6 +48,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
                 if (entry.Entity is User u) { u.CreatedAt = now; u.UpdatedAt = now; }
                 else if (entry.Entity is Household h) { h.CreatedAt = now; h.UpdatedAt = now; }
                 else if (entry.Entity is Project p) { p.CreatedAt = now; p.UpdatedAt = now; }
+                else if (entry.Entity is ProjectFolder pf) { pf.CreatedAt = now; pf.UpdatedAt = now; }
                 else if (entry.Entity is TodoTask t) { t.CreatedAt = now; t.UpdatedAt = now; }
                 else if (entry.Entity is RecurrenceException re) { re.CreatedAt = now; re.UpdatedAt = now; }
             }
@@ -55,6 +57,7 @@ public class TaskerDbContext(DbContextOptions<TaskerDbContext> options) : DbCont
                 if (entry.Entity is User u) u.UpdatedAt = now;
                 else if (entry.Entity is Household h) h.UpdatedAt = now;
                 else if (entry.Entity is Project p) p.UpdatedAt = now;
+                else if (entry.Entity is ProjectFolder pf) pf.UpdatedAt = now;
                 else if (entry.Entity is TodoTask t) t.UpdatedAt = now;
                 else if (entry.Entity is RecurrenceException re) re.UpdatedAt = now;
             }

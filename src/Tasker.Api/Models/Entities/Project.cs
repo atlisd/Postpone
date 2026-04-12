@@ -10,11 +10,13 @@ public class Project
     public string? Icon { get; set; }
     public bool IsArchived { get; set; }
     public bool IsInbox { get; set; }
+    public Guid? FolderId { get; set; }
     public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public User Owner { get; set; } = null!;
+    public ProjectFolder? Folder { get; set; }
     public Household? Household { get; set; }
     public ICollection<ProjectShare> Shares { get; set; } = [];
     public ICollection<TodoTask> Tasks { get; set; } = [];

@@ -31,6 +31,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .WithMany(h => h.Projects)
             .HasForeignKey(p => p.HouseholdId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(p => p.Folder)
+            .WithMany(f => f.Projects)
+            .HasForeignKey(p => p.FolderId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 

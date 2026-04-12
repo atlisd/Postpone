@@ -39,7 +39,9 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
                 p.Tasks.Count(t => !t.IsDeleted && t.CompletedAt != null),
                 p.CreatedAt,
                 p.IsInbox,
-                p.Shares.Count))
+                p.Shares.Count,
+                p.FolderId,
+                p.SortOrder))
             .ToListAsync();
 
         return Ok(projects);
@@ -84,7 +86,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         var owner = await db.Users.FindAsync(userId);
         return Created($"/api/projects/{project.Id}", new ProjectResponse(
             project.Id, project.OwnerId, owner!.DisplayName, project.HouseholdId,
-            project.Name, project.Color, project.Icon, project.IsArchived, 0, 0, project.CreatedAt, project.IsInbox));
+            project.Name, project.Color, project.Icon, project.IsArchived, 0, 0, project.CreatedAt, project.IsInbox,
+            SortOrder: project.SortOrder));
     }
 
     [HttpGet("{id:guid}")]
@@ -107,7 +110,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount,
+            SortOrder: project.SortOrder));
     }
 
     [HttpPut("{id:guid}")]
@@ -136,7 +140,8 @@ public class ProjectsController(TaskerDbContext db, IProjectAccessService access
         return Ok(new ProjectResponse(
             project.Id, project.OwnerId, project.Owner.DisplayName, project.HouseholdId,
             project.Name, project.Color, project.Icon, project.IsArchived,
-            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount));
+            taskCount, completedCount, project.CreatedAt, project.IsInbox, shareCount,
+            SortOrder: project.SortOrder));
     }
 
     [HttpPost("reorder")]
