@@ -356,7 +356,7 @@ function SortableFolderItem({
     <div ref={ref} data-drag-id={`folder-${folder.id}`} className={`${isDragging ? 'opacity-50' : ''}`}>
       {/* Folder header */}
       <div className={`relative group/folder rounded-md ${isMergeTarget ? 'ring-2 ring-blue-400 ring-inset bg-blue-50/40 dark:bg-blue-900/20' : ''}`}>
-        <div className="flex items-center gap-1 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-default select-none">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-default select-none">
           {/* Drag handle */}
           <span
             ref={handleRef}
