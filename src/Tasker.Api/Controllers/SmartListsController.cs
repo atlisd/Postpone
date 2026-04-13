@@ -66,7 +66,7 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
 
         var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
         var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, tomorrow, tomorrow);
-        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null).ToList();
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null && v.DueDate == tomorrow).ToList();
 
         var all = regularTasks.Concat(filteredInstances)
             .OrderByDescending(t => t.Priority)
@@ -91,7 +91,7 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
 
         var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null);
         var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, today, endDate);
-        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null).ToList();
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null && v.DueDate >= today && v.DueDate <= endDate).ToList();
 
         var all = regularTasks.Concat(filteredInstances)
             .OrderBy(t => t.DueDate)
