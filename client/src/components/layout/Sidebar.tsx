@@ -743,30 +743,6 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   // order at drop time (see computeTopLevelDropOrder).
   const lastTargetIdRef = useRef<string | null>(null);
 
-  // Compute the final top-level sort order: move the source to the slot currently
-  // occupied by `neighborId` (the last project the cursor hovered over). If the
-  // source is being moved downward, it lands AFTER the neighbor; upward, BEFORE.
-  const computeTopLevelDropOrder = (
-    sourceId: string,
-    neighborId: string | null,
-  ): SidebarTopLevelItem[] | null => {
-    if (!neighborId) return null;
-    const items = topLevelItemsRef.current;
-    const sourceItem = items.find(i => i.id === sourceId);
-    if (!sourceItem) return null;
-    const sourceIdx = items.findIndex(i => i.id === sourceId);
-    const neighborIdx = items.findIndex(i => i.id === neighborId);
-    if (sourceIdx === -1 || neighborIdx === -1) return null;
-    // Moving down (sourceIdx < neighborIdx) → insert AFTER neighbor.
-    // Moving up  (sourceIdx > neighborIdx) → insert BEFORE neighbor.
-    const without = items.filter(i => i.id !== sourceId);
-    const withoutNeighborIdx = without.findIndex(i => i.id === neighborId);
-    if (withoutNeighborIdx === -1) return null;
-    const insertIdx = sourceIdx < neighborIdx ? withoutNeighborIdx + 1 : withoutNeighborIdx;
-    const result = [...without];
-    result.splice(insertIdx, 0, sourceItem);
-    return result;
-  };
 
   // Same idea as computeTopLevelDropOrder but for projects inside a single folder.
   const computeFolderDropOrder = (
@@ -1014,6 +990,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             : capturedLastTarget.replace('folder-dropzone-', '');
           if (targetFolderId === origFolderId) {
             // No-op move — fall through to reorder branches below.
+          } else if (isFolderHeader && origFolderId === null && runningTopLevelOrderRef.current) {
+            // Top-level source dropped near a folder header, but dnd-kit's sort has
+            // accumulated a valid top-level order. The cursor landed on the folder
+            // because it was dropped just above/below it — trust the sort and fall
+            // through to Branch 3. (Add to folder: hover 1000ms or drag into expanded dropzone.)
           } else {
             runningTopLevelOrderRef.current = null;
             runningFolderOrderRef.current = null;
@@ -1032,16 +1013,19 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
       // ── Branch 3: Top-level source (folder headers or ungrouped projects) ──
       if (origFolderId === null) {
+        // Use the progressively-accumulated order from onDragOver as the source
+        // of truth. The previous DOM-based resolver approach (lastTargetIdRef /
+        // computeTopLevelDropOrder) had an off-by-one bug: after dnd-kit
+        // visually swaps the source with a neighbor, onDragMove fires with the
+        // cursor inside the source's new visual rect. resolveTargetAtPoint would
+        // skip the source and pick the element immediately BELOW the intended
+        // landing spot, causing the item to hop one position too far. Using
+        // runningTopLevelOrderRef (updated cumulatively in onDragOver) avoids
+        // this race entirely and also handles folders in the drag path correctly.
+        const intended = runningTopLevelOrderRef.current;
         runningTopLevelOrderRef.current = null;
         runningFolderOrderRef.current = null;
 
-        // Compute the final order from the last target the DOM-based resolver
-        // picked during the drag (onDragMove's lastTargetIdRef). dnd-kit's own
-        // onDragOver target progression is unreliable for our use case.
-        const neighborId = capturedLastTarget && !capturedLastTarget.startsWith('folder-')
-          ? capturedLastTarget
-          : null;
-        const intended = computeTopLevelDropOrder(sourceId, neighborId);
         if (!intended) return;
 
         const originalPos = topLevelItemsRef.current.findIndex(item => item.id === sourceId);
