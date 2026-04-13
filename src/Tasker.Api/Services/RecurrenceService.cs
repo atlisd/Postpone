@@ -34,6 +34,18 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             {
                 var occurrences = GetOccurrences(master.Rrule!, master.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow), rangeStart, rangeEnd);
 
+                // If the series hasn't started yet (first occurrence is beyond rangeEnd),
+                // surface the master at its DueDate so it doesn't vanish from task lists.
+                if (occurrences.Count == 0)
+                {
+                    var seriesStart = master.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                    if (seriesStart > rangeEnd)
+                    {
+                        result.Add(BuildOccurrenceResponse(master, seriesStart, null));
+                    }
+                    continue;
+                }
+
                 // Build lookup of exceptions by original date
                 var exceptionsByDate = master.RecurrenceExceptions
                     .GroupBy(e => e.OriginalDate)
