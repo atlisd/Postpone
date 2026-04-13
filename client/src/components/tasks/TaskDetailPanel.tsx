@@ -185,6 +185,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [tagSearch, setTagSearch] = useState('');
   const [tagOpen, setTagOpen] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const naturalDateInputRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const isCompleted = !!task.completedAt;
 
@@ -230,6 +231,17 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   useEffect(() => {
     listTags().then(setAllTags).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (tagOpen) return;
+      if (naturalDateInputRef.current && document.activeElement === naturalDateInputRef.current) return;
+      onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, tagOpen]);
 
   const handleMoveProject = async (newProjectId: string) => {
     if (newProjectId === task.projectId) return;
@@ -547,6 +559,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           {/* Natural date input */}
           <div className="flex flex-col gap-1">
             <input
+              ref={naturalDateInputRef}
               value={naturalInput}
               onChange={(e) => setNaturalInput(e.target.value)}
               onKeyDown={(e) => {
