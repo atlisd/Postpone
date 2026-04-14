@@ -21,12 +21,23 @@ export function AppShell() {
     const targetId = String(target.id);
     if (!targetId.startsWith('project-drop-')) return;
     const projectId = targetId.replace('project-drop-', '');
+    const sourceId = String(source.id);
+    // Hide the dragged element immediately to prevent the snap-back animation
+    const el = document.querySelector(`[data-task-drag-id="${CSS.escape(sourceId)}"]`);
+    if (el instanceof HTMLElement) {
+      el.style.transition = 'none';
+      el.style.opacity = '0';
+    }
     // source.id is a compound key "taskUuid_occurrenceDate|single" — extract just the UUID
-    const taskId = String(source.id).split('_')[0];
+    const taskId = sourceId.split('_')[0];
     try {
       await moveTask(taskId, projectId);
     } catch {
       toast.error('Failed to move task');
+      if (el instanceof HTMLElement) {
+        el.style.transition = '';
+        el.style.opacity = '';
+      }
     }
   };
 

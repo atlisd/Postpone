@@ -42,6 +42,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   return (
     <div
       ref={ref}
+      data-task-drag-id={itemId}
       className={`relative group flex items-center gap-3 px-4 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-800 transition-colors ${
         isSelected
           ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'

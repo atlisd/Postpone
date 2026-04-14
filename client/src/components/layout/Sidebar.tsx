@@ -91,13 +91,16 @@ function SortableProjectItem({
     id: project.id,
     index,
     group: 'sidebar-toplevel',
-    accept: () => true,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => {
+      const g = String(draggable?.group ?? '');
+      return g === 'sidebar-toplevel' || g.startsWith('sidebar-folder-');
+    },
   });
-  // Per-project droppable — accepts tasks (existing behavior) AND project drags
-  // (for folder-create-by-hover, since sortable's collision detection always picks
-  // the source when hovering over items in the same sortable group).
   const { ref: dropRef, isDropTarget } = useDroppable({
     id: 'project-drop-' + project.id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accept: (draggable: any) => draggable?.group !== 'sidebar-toplevel' && !String(draggable?.group ?? '').startsWith('sidebar-folder-'),
   });
   const { source } = useDragOperation();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
