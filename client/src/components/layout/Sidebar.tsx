@@ -108,7 +108,7 @@ function SortableProjectItem({
   const isMergeTarget = mergeTarget === project.id;
 
   return (
-    <div ref={dropRef} data-merge-id={project.id} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={dropRef} data-merge-id={project.id} data-project-drop-id={project.id} data-project-drop-name={project.name} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
     <div ref={ref} data-drag-id={project.id} className={`relative group ${isDragging ? 'opacity-50' : ''}`}>
       {isMergeTarget && (
         <div className="absolute inset-0 rounded-md ring-2 ring-dashed ring-blue-400 bg-blue-50/40 dark:bg-blue-900/20 pointer-events-none z-10 flex items-center justify-center">
@@ -208,7 +208,7 @@ function FolderProjectItem({
   const isDraggingProject = (source as any)?.group === 'sidebar-toplevel' || String((source as any)?.group ?? '').startsWith('sidebar-folder-');
 
   return (
-    <div ref={dropRef} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={dropRef} data-project-drop-id={project.id} data-project-drop-name={project.name} className={`rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
     <div ref={ref} data-drag-id={project.id} className={`relative group ${isDragging ? 'opacity-50' : ''}`}>
       <NavLink
         to={`/app/projects/${project.id}`}
@@ -473,7 +473,7 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isDraggingProject = (source as any)?.group === 'sidebar-toplevel' || String((source as any)?.group ?? '').startsWith('sidebar-folder-');
   return (
-    <div ref={ref} className={`relative group rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+    <div ref={ref} data-project-drop-id={project.id} data-project-drop-name={project.name} className={`relative group rounded-md ${isDropTarget && !isDraggingProject ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
       <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onClose}>
         <FolderOpen size={16} style={{ color: project.color }} />
         <span className="flex-1 truncate">{project.name}</span>

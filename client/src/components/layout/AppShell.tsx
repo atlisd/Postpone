@@ -21,10 +21,17 @@ export function AppShell() {
     const targetId = String(target.id);
     if (!targetId.startsWith('project-drop-')) return;
     const projectId = targetId.replace('project-drop-', '');
+    const projectName = document.querySelector(`[data-project-drop-id="${projectId}"]`)?.getAttribute('data-project-drop-name') ?? '';
     const sourceId = String(source.id);
-    // Hide the dragged element immediately to prevent the snap-back animation
-    const el = document.querySelector(`[data-task-drag-id="${CSS.escape(sourceId)}"]`);
-    if (el instanceof HTMLElement) {
+    // Hide the dragged element immediately to prevent the snap-back animation.
+    // Skip this for smart list views: the task stays in the list after the move (due date
+    // unchanged), so React reuses the same DOM element and the opacity:0 would persist.
+    const isSmartList = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned']
+      .some(r => location.pathname.startsWith(r));
+    const el = !isSmartList
+      ? (document.querySelector(`[data-task-drag-id="${CSS.escape(sourceId)}"]`) as HTMLElement | null)
+      : null;
+    if (el) {
       el.style.transition = 'none';
       el.style.opacity = '0';
     }
@@ -32,9 +39,10 @@ export function AppShell() {
     const taskId = sourceId.split('_')[0];
     try {
       await moveTask(taskId, projectId);
+      toast(`Task moved to ${projectName}`);
     } catch {
       toast.error('Failed to move task');
-      if (el instanceof HTMLElement) {
+      if (el) {
         el.style.transition = '';
         el.style.opacity = '';
       }
