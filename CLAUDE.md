@@ -29,6 +29,10 @@ docker compose up db -d      # Just PostgreSQL for local dev
 
 Use the `mcp__playwright__*` tools to navigate, interact, and verify behavior directly in the browser. The dev server must be running at `http://localhost:5173` before running tests. Run tests proactively after making UI changes to verify correctness before reporting back. Test files live in `client/e2e/`, shared setup in `client/e2e/fixtures.ts`.
 
+## ⚠️ High-Risk Areas
+
+- **Sidebar drag-drop** — `client/src/components/layout/Sidebar.tsx` contains ~400 lines of complex drag-drop logic using @dnd-kit/react v0.3 (pre-1.0). This code has been broken and fixed 18+ times. **Read `client/src/components/layout/CLAUDE.md` before making ANY changes** to drag-drop behavior, sortable groups, or reorder logic.
+
 ## Key Conventions
 
 - **No React Query** — components use direct `async/await` with `useState`/`useCallback` for data fetching. Manual `loading` state. Do NOT introduce React Query or SWR.
