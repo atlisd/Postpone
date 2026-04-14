@@ -16,6 +16,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks: [backend]
 
   api:
     image: ghcr.io/atlisd/postpone-api:latest
@@ -37,12 +38,14 @@ services:
       DEFAULT_TIMEZONE: ${TZ:-UTC}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
       ASPNETCORE_ENVIRONMENT: Production
+    networks: [frontend, backend]
 
   client:
     image: ghcr.io/atlisd/postpone-client:latest
     restart: unless-stopped
     depends_on:
       - api
+    networks: [frontend]
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -52,6 +55,11 @@ services:
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks: [frontend]
 
 volumes:
   pgdata:
+
+networks:
+  frontend:
+  backend:
