@@ -41,6 +41,7 @@ export default function App() {
               <Route path="next7days" element={<ErrorBoundary><SmartListView type="next7days" title="Next 7 Days" /></ErrorBoundary>} />
               <Route path="all" element={<ErrorBoundary><SmartListView type="all" title="All Tasks" /></ErrorBoundary>} />
               <Route path="assigned" element={<ErrorBoundary><SmartListView type="assigned-to-me" title="Assigned to Me" /></ErrorBoundary>} />
+              <Route path="priority" element={<ErrorBoundary><SmartListView type="priority" title="Priority Tasks" /></ErrorBoundary>} />
               <Route path="projects/:id" element={<ErrorBoundary><ProjectTaskList /></ErrorBoundary>} />
               <Route path="tags/:id" element={<ErrorBoundary><TagTaskList /></ErrorBoundary>} />
               <Route path="calendar" element={<ErrorBoundary><CalendarView /></ErrorBoundary>} />

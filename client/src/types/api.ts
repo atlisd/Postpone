@@ -18,6 +18,7 @@ export interface UserProfile {
   isAdmin: boolean;
   mustChangePassword: boolean;
   showAllTasksList: boolean;
+  showPriorityTasksList: boolean;
 }
 
 export interface AdminUser {

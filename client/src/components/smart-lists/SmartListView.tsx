@@ -11,8 +11,10 @@ import { useLocale } from '../../contexts/LocaleContext';
 import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
 import { toast } from 'sonner';
+import { PRIORITIES, getPriority } from '../../lib/priorities';
+import { ChevronDown, Check, Flag } from 'lucide-react';
 
-type SmartListType = 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me';
+type SmartListType = 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me' | 'priority';
 
 interface SmartListViewProps {
   type: SmartListType;
@@ -27,6 +29,15 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   const selectedTaskRef = useRef(selectedTask);
   selectedTaskRef.current = selectedTask;
   const [loading, setLoading] = useState(true);
+  const [showPriorityFilter, setShowPriorityFilter] = useState(false);
+  const [selectedPriorities, setSelectedPriorities] = useState<Set<number>>(() => {
+    if (type !== 'priority') return new Set();
+    try {
+      const saved = localStorage.getItem('smartlist-priority-filter');
+      if (saved) return new Set(JSON.parse(saved) as number[]);
+    } catch { /* ignore */ }
+    return new Set();
+  });
 
   const fetchData = useCallback(async () => {
     try {
@@ -135,28 +146,54 @@ export function SmartListView({ type, title }: SmartListViewProps) {
     }
   };
 
-  // Group tasks for next7days by date, for all by project
+  const togglePriorityFilter = (value: number) => {
+    setSelectedPriorities(prev => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      localStorage.setItem('smartlist-priority-filter', JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const clearPriorityFilter = () => {
+    setSelectedPriorities(new Set());
+    localStorage.removeItem('smartlist-priority-filter');
+  };
+
+  const displayedTasks = type === 'priority' && selectedPriorities.size > 0
+    ? tasks.filter(t => selectedPriorities.has(t.priority))
+    : tasks;
+
+  // Group tasks for next7days by date, for all by project, for priority by priority level
   const groupTasks = (): Map<string, TaskResponse[]> => {
     const groups = new Map<string, TaskResponse[]>();
 
     if (type === 'next7days') {
-      for (const task of tasks) {
+      for (const task of displayedTasks) {
         const key = task.dueDate ? groupByDate(task.dueDate, locale) : 'No date';
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(task);
       }
     } else if (type === 'all') {
-      for (const task of tasks) {
+      for (const task of displayedTasks) {
         const key = task.projectName;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push(task);
+      }
+    } else if (type === 'priority') {
+      // Insert groups in High→Medium→Low→None order so they always appear in that order
+      const priorityOrder = [3, 2, 1];
+      for (const pv of priorityOrder) {
+        const label = getPriority(pv).label;
+        const matching = displayedTasks.filter(t => t.priority === pv);
+        if (matching.length > 0) groups.set(label, matching);
       }
     } else if (type === 'today') {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const overdue: TaskResponse[] = [];
       const todayTasks: TaskResponse[] = [];
-      for (const task of tasks) {
+      for (const task of displayedTasks) {
         if (task.dueDate && parseISO(task.dueDate) < todayStart) {
           overdue.push(task);
         } else {
@@ -166,7 +203,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
       if (overdue.length) groups.set('Overdue', overdue);
       if (todayTasks.length) groups.set('Today', todayTasks);
     } else {
-      groups.set('', tasks);
+      groups.set('', displayedTasks);
     }
 
     return groups;
@@ -192,16 +229,73 @@ export function SmartListView({ type, title }: SmartListViewProps) {
     <div className="flex h-full">
       <div className="flex-1 flex flex-col min-w-0">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
+              <p className="text-sm text-gray-500 mt-0.5">{displayedTasks.length} task{displayedTasks.length !== 1 ? 's' : ''}</p>
+            </div>
+            {type === 'priority' && (
+              <div className="relative shrink-0 mt-1">
+                <button
+                  onClick={() => setShowPriorityFilter(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors font-medium ${
+                    selectedPriorities.size > 0
+                      ? 'border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Flag size={14} />
+                  {selectedPriorities.size === 0
+                    ? 'All priorities'
+                    : selectedPriorities.size === 1
+                      ? (PRIORITIES.find(p => selectedPriorities.has(p.value))?.label ?? '1 priority')
+                      : `${selectedPriorities.size} priorities`}
+                  <ChevronDown size={14} className="text-gray-400" />
+                </button>
+                {showPriorityFilter && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowPriorityFilter(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]">
+                      <button
+                        onClick={clearPriorityFilter}
+                        className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between gap-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                          selectedPriorities.size === 0
+                            ? 'text-blue-600 dark:text-blue-400 font-medium'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        All priorities
+                        {selectedPriorities.size === 0 && <Check size={14} />}
+                      </button>
+                      <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                      {[...PRIORITIES].filter(p => p.value > 0).reverse().map(p => {
+                        const isSelected = selectedPriorities.has(p.value);
+                        return (
+                          <button
+                            key={p.value}
+                            onClick={() => togglePriorityFilter(p.value)}
+                            className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+                          >
+                            <Flag size={14} className={p.color} />
+                            <span className="flex-1">{p.label}</span>
+                            {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {inboxProjectId && <AddTaskInput onAdd={handleAdd} />}
 
         <div className="flex-1 overflow-y-auto">
-          {loading && tasks.length === 0 ? (
+          {loading && displayedTasks.length === 0 ? (
             <TaskListSkeleton />
-          ) : tasks.length === 0 ? (
+          ) : displayedTasks.length === 0 ? (
             <div className="text-center py-12 text-gray-400 dark:text-gray-500">
               <p className="text-lg">No tasks</p>
               <p className="text-sm mt-1">Nothing to show here</p>

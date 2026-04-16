@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
-  const showSidebar = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/projects/', '/app/tags/']
+  const showSidebar = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/priority', '/app/projects/', '/app/tags/']
     .some(r => location.pathname.startsWith(r));
 
   const handleDragEnd = async (event: { operation: { source?: { id?: string | number; group?: string } | null; target?: { id?: string | number } | null } }) => {
@@ -27,7 +27,7 @@ export function AppShell() {
     // Hide the dragged element immediately to prevent the snap-back animation.
     // Skip this for smart list views: the task stays in the list after the move (due date
     // unchanged), so React reuses the same DOM element and the opacity:0 would persist.
-    const isSmartList = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned']
+    const isSmartList = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/priority']
       .some(r => location.pathname.startsWith(r));
     const el = !isSmartList
       ? (document.querySelector(`[data-task-drag-id="${CSS.escape(sourceId)}"]`) as HTMLElement | null)

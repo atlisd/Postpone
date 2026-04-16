@@ -150,7 +150,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
-            user.ShowAllTasksList));
+            user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
 
     [Authorize]
@@ -167,6 +167,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         if (request.Locale is not null) user.Locale = request.Locale;
         if (request.UseGravatar is not null) user.UseGravatar = request.UseGravatar.Value;
         if (request.ShowAllTasksList is not null) user.ShowAllTasksList = request.ShowAllTasksList.Value;
+        if (request.ShowPriorityTasksList is not null) user.ShowPriorityTasksList = request.ShowPriorityTasksList.Value;
 
         await db.SaveChangesAsync();
 
@@ -175,7 +176,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
-            user.ShowAllTasksList));
+            user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
 
     [Authorize]

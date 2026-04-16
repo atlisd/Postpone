@@ -141,7 +141,7 @@ export async function splitSeriesFrom(
 }
 
 // Smart lists
-export async function getSmartList(name: 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me'): Promise<TaskResponse[]> {
+export async function getSmartList(name: 'today' | 'tomorrow' | 'next7days' | 'all' | 'assigned-to-me' | 'priority'): Promise<TaskResponse[]> {
   return api.get(`api/smart-lists/${name}`).json<TaskResponse[]>();
 }
 

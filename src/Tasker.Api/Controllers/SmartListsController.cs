@@ -129,6 +129,31 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
         return Ok(all);
     }
 
+    [HttpGet("priority")]
+    public async Task<IActionResult> Priority()
+    {
+        var userId = User.GetUserId();
+        var today = await GetUserTodayAsync(userId);
+
+        var regularTasks = await access.GetAccessibleTasks(userId)
+            .Where(t => t.Rrule == null && t.CompletedAt == null && t.Priority > 0)
+            .Select(TaskResponse.Projection)
+            .ToListAsync();
+
+        var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null && t.Priority > 0);
+        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, today, today.AddDays(90));
+        var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null && v.Priority > 0).ToList();
+
+        var all = regularTasks.Concat(filteredInstances)
+            .OrderByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDate)
+            .ThenBy(t => t.ProjectName)
+            .ToList();
+
+        return Ok(all);
+    }
+
     [HttpGet("assigned-to-me")]
     public async Task<IActionResult> AssignedToMe()
     {

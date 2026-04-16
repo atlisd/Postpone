@@ -34,6 +34,7 @@ import {
   CalendarDays,
   User,
   Share2,
+  Flag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProjectShareModal } from '../projects/ProjectShareModal';
@@ -53,6 +54,7 @@ const smartLists = [
   { to: '/app/tomorrow', label: 'Tomorrow', icon: Sunrise, key: 'tomorrow' },
   { to: '/app/next7days', label: 'Next 7 Days', icon: Calendar, key: 'next7days' },
   { to: '/app/all', label: 'All Tasks', icon: List, key: 'all' },
+  { to: '/app/priority', label: 'Priority Tasks', icon: Flag, key: 'priority' },
   { to: '/app/assigned', label: 'Assigned to Me', icon: UserCheck, key: 'assigned' },
 ];
 
@@ -565,11 +567,12 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   const fetchAssignedCount = useCallback(async () => {
     try {
-      const [today, tomorrow, next7days, allTasks, assigned] = await Promise.all([
+      const [today, tomorrow, next7days, allTasks, priorityTasks, assigned] = await Promise.all([
         getSmartList('today'),
         getSmartList('tomorrow'),
         getSmartList('next7days'),
         user?.showAllTasksList ? getSmartList('all') : Promise.resolve([]),
+        user?.showPriorityTasksList ? getSmartList('priority') : Promise.resolve([]),
         getSmartList('assigned-to-me'),
       ]);
       setHasAssignedTasks(assigned.length > 0);
@@ -578,12 +581,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         tomorrow: tomorrow.length,
         next7days: next7days.length,
         all: allTasks.length,
+        priority: priorityTasks.length,
         assigned: assigned.length,
       });
     } catch {
       setHasAssignedTasks(null);
     }
-  }, [user?.showAllTasksList]);
+  }, [user?.showAllTasksList, user?.showPriorityTasksList]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
@@ -1188,7 +1192,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             Smart Lists
           </p>
           {smartLists
-            .filter(({ key, to }) => (key !== 'all' || user?.showAllTasksList !== false) && (to !== '/app/assigned' || hasAssignedTasks !== false))
+            .filter(({ key, to }) =>
+              (key !== 'all' || user?.showAllTasksList !== false) &&
+              (key !== 'priority' || user?.showPriorityTasksList === true) &&
+              (to !== '/app/assigned' || hasAssignedTasks !== false)
+            )
             .map(({ to, label, icon: Icon, key }) => (
               <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
                 <Icon size={18} className="flex-shrink-0" />
