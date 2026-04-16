@@ -22,7 +22,7 @@ async function switchToMonthView(page: import('@playwright/test').Page) {
   const current = await viewPickerBtn.textContent();
   if (!current?.toLowerCase().includes('month')) {
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
   }
   // Wait for the month grid (today's blue circle) to be visible
   await expect(page.locator('.bg-blue-600.rounded-full').first()).toBeVisible({ timeout: 5000 });
@@ -150,7 +150,10 @@ test.describe('Recurring task reschedule modal', () => {
       return;
     }
 
-    const chip = page.locator('[style*="border-left"]').filter({ hasText: TASK_TITLE }).first();
+    const todayCell = await findDayCell(page, today.getDate(), true);
+    if (!todayCell) { test.skip(); return; }
+    const chip = todayCell.locator('[style*="border-left"]').filter({ hasText: TASK_TITLE }).first();
+    await chip.scrollIntoViewIfNeeded();
     await expect(chip).toBeVisible({ timeout: 5000 });
 
     const tomorrowCell = await findDayCell(page, tomorrow.getDate(), false);

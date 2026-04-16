@@ -108,7 +108,7 @@ test.describe('Recurrence', () => {
     // Switch to Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(500);
 
     // Task chips use border-left style from project color — verify multiple appear on the calendar
@@ -149,7 +149,7 @@ test.describe('Recurrence', () => {
     // Switch to Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(500);
 
     // Today's occurrence should be struck out (completed)
@@ -168,7 +168,7 @@ test.describe('Recurrence', () => {
 
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(500);
 
     // Find tomorrow's chip and click it to open detail panel

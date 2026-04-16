@@ -112,7 +112,7 @@ test.describe('Calendar', () => {
     // Open view picker and select Month
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
 
     // Today's cell has a blue circle for the day number
     const todayCircle = page.locator('.bg-blue-600.rounded-full');
@@ -129,7 +129,7 @@ test.describe('Calendar', () => {
     // Ensure Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(300);
 
     // Click today's cell (the outer div with cursor-pointer)
@@ -141,7 +141,8 @@ test.describe('Calendar', () => {
     const todayCell = page.locator('div[class*="cursor-pointer"][class*="min-h"]').filter({
       has: page.locator('.bg-blue-600.rounded-full'),
     }).first();
-    await todayCell.click();
+    // Click top-left (day-number area) to avoid clicking an existing chip in the cell
+    await todayCell.click({ position: { x: 10, y: 10 } });
 
     // "Add task" modal should appear
     const titleInput = page.getByPlaceholder('Task title');
@@ -170,7 +171,7 @@ test.describe('Calendar', () => {
     // Ensure Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(300);
 
     // Find the task chip (has inline border-left style from project color)

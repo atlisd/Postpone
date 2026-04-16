@@ -52,14 +52,15 @@ test.describe('Hide from calendar', () => {
     // Ensure Month view
     const viewPickerBtn = pg.locator('button').filter({ has: pg.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await pg.getByRole('button', { name: 'Month' }).last().click();
+    await pg.getByRole('button', { name: 'Month', exact: true }).last().click();
     await pg.waitForTimeout(300);
 
     // Click today's cell
     const todayCell = pg.locator('div[class*="cursor-pointer"][class*="min-h"]').filter({
       has: pg.locator('.bg-blue-600.rounded-full'),
     }).first();
-    await todayCell.click();
+    // Click top-left (day-number area) to avoid clicking an existing chip in the cell
+    await todayCell.click({ position: { x: 10, y: 10 } });
 
     const titleInput = pg.getByPlaceholder('Task title');
     await expect(titleInput).toBeVisible({ timeout: 5000 });
@@ -99,7 +100,7 @@ test.describe('Hide from calendar', () => {
     // Switch to Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(400);
 
     // Task chip should be visible on today's cell
@@ -134,7 +135,7 @@ test.describe('Hide from calendar', () => {
     // Switch to Month view
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(400);
 
     // Task chip should NOT be visible
@@ -157,7 +158,7 @@ test.describe('Hide from calendar', () => {
     await page.goto('/app/calendar');
     const viewPickerBtn = page.locator('button').filter({ has: page.locator('svg') }).filter({ hasText: /month|week|day/i }).first();
     await viewPickerBtn.click();
-    await page.getByRole('button', { name: 'Month' }).last().click();
+    await page.getByRole('button', { name: 'Month', exact: true }).last().click();
     await page.waitForTimeout(400);
 
     const chip = page.locator('[class*="cursor-pointer"]', { hasText: TASK_TITLE }).first();
