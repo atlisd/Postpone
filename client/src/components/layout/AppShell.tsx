@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { IconSidebar } from './IconSidebar';
+import { ConnectionStatus } from '../shared/ConnectionStatus';
 import { DragDropProvider } from '@dnd-kit/react';
 import { moveTask } from '../../api/tasks';
 import { toast } from 'sonner';
@@ -51,6 +52,7 @@ export function AppShell() {
 
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
+    <ConnectionStatus />
     <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
       <IconSidebar />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} desktopVisible={showSidebar} />
