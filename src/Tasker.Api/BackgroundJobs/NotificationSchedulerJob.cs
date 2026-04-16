@@ -39,6 +39,16 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             {
                 await ProcessUserNotifications(db, pushover, access, user);
             }
+
+            var logCutoff = DateTime.UtcNow.AddDays(-90);
+            await db.NotificationLogs
+                .Where(n => n.SentAt < logCutoff)
+                .ExecuteDeleteAsync();
+
+            var tokenCutoff = DateTime.UtcNow.AddDays(-1);
+            await db.RefreshTokens
+                .Where(t => t.ExpiresAt < tokenCutoff || t.RevokedAt != null)
+                .ExecuteDeleteAsync();
         }
         catch (Exception ex)
         {
