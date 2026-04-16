@@ -24,7 +24,7 @@ interface WeekDayColumnProps {
   onCellMouseUp: (dateKey: string) => void;
 }
 
-function WeekDayColumn({
+export function WeekDayColumn({
   date,
   dateKey,
   tasks,

@@ -15,23 +15,25 @@ import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { CalendarDayCell } from './CalendarDayCell';
 import { OccurrenceRescheduleModal } from './OccurrenceRescheduleModal';
 import { WeekView } from './WeekView';
+import { TwoWeekView } from './TwoWeekView';
 import { DayView } from './DayView';
 import { AgendaView } from './AgendaView';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
 import { DragDropProvider } from '@dnd-kit/react';
 import { toast } from 'sonner';
 
-type CalendarViewType = 'day' | 'week' | 'workWeek' | 'month' | 'agenda';
+type CalendarViewType = 'day' | 'week' | 'twoWeek' | 'workWeek' | 'month' | 'agenda';
 
 const VIEW_LABELS: Record<CalendarViewType, string> = {
   day: 'Day',
   week: 'Week',
+  twoWeek: '2 Weeks',
   workWeek: 'Work Week',
   month: 'Month',
   agenda: 'Agenda',
 };
 
-const VIEW_ORDER: CalendarViewType[] = ['day', 'week', 'workWeek', 'month', 'agenda'];
+const VIEW_ORDER: CalendarViewType[] = ['day', 'week', 'twoWeek', 'workWeek', 'month', 'agenda'];
 
 function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: Date } {
   switch (view) {
@@ -42,6 +44,10 @@ function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: D
         start: startOfWeek(date, { weekStartsOn: 1 }),
         end: endOfWeek(date, { weekStartsOn: 1 }),
       };
+    case 'twoWeek': {
+      const monday = startOfWeek(date, { weekStartsOn: 1 });
+      return { start: monday, end: endOfWeek(addWeeks(monday, 1), { weekStartsOn: 1 }) };
+    }
     case 'workWeek': {
       const monday = startOfWeek(date, { weekStartsOn: 1 });
       return { start: monday, end: addDays(monday, 4) };
@@ -70,6 +76,13 @@ function getViewTitle(view: CalendarViewType, date: Date, locale: Locale): strin
         ? `${format(start, 'MMM d', { locale })} – ${format(end, 'd, yyyy', { locale })}`
         : `${format(start, 'MMM d', { locale })} – ${format(end, 'MMM d, yyyy', { locale })}`;
     }
+    case 'twoWeek': {
+      const start = startOfWeek(date, { weekStartsOn: 1 });
+      const end = endOfWeek(addWeeks(start, 1), { weekStartsOn: 1 });
+      return isSameMonth(start, end)
+        ? `${format(start, 'MMM d', { locale })} – ${format(end, 'd, yyyy', { locale })}`
+        : `${format(start, 'MMM d', { locale })} – ${format(end, 'MMM d, yyyy', { locale })}`;
+    }
     case 'workWeek': {
       const start = startOfWeek(date, { weekStartsOn: 1 });
       const end = addDays(start, 4);
@@ -89,6 +102,7 @@ function navigateDate(view: CalendarViewType, date: Date, delta: 1 | -1): Date {
     case 'day': return addDays(date, delta);
     case 'week':
     case 'workWeek': return addWeeks(date, delta);
+    case 'twoWeek': return addWeeks(date, delta * 2);
     case 'month': return addMonths(date, delta);
     case 'agenda': return date;
   }
@@ -536,6 +550,19 @@ export function CalendarView() {
                   })}
                 </div>
               </div>
+            )}
+
+            {viewType === 'twoWeek' && (
+              <TwoWeekView
+                days={days}
+                tasksByDate={tasksByDate}
+                locale={locale}
+                highlightedRange={highlightedRange}
+                onSelectTask={setSelectedTask}
+                onCellMouseDown={handleCellMouseDown}
+                onCellMouseEnter={handleCellMouseEnter}
+                onCellMouseUp={handleCellMouseUp}
+              />
             )}
 
             {(viewType === 'week' || viewType === 'workWeek') && (
