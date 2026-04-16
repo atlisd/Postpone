@@ -22,7 +22,7 @@ export function ConnectionStatus() {
 
   if (showReconnected) {
     return (
-      <div className="fixed top-0 inset-x-0 z-50 flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 dark:bg-green-600 text-white text-sm font-medium">
+      <div className="fixed bottom-0 inset-x-0 z-50 flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 dark:bg-green-600 text-white text-sm font-medium">
         <Wifi size={14} />
         Reconnected
       </div>
@@ -30,7 +30,7 @@ export function ConnectionStatus() {
   }
 
   return (
-    <div className="fixed top-0 inset-x-0 z-50 flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500 dark:bg-amber-600 text-white text-sm font-medium">
+    <div className="fixed bottom-0 inset-x-0 z-50 flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500 dark:bg-amber-600 text-white text-sm font-medium">
       <WifiOff size={14} />
       {status === 'connecting' ? 'Reconnecting…' : 'Connection lost — reconnecting…'}
     </div>
