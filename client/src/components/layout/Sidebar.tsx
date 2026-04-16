@@ -1340,6 +1340,12 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         )}
         </div>
 
+        <div className="pb-3 pt-1 text-center">
+          <p className="text-xs text-gray-300 dark:text-gray-600 select-none">
+            v{__APP_VERSION__}
+          </p>
+        </div>
+
       </aside>
 
       {/* Project context menu */}
