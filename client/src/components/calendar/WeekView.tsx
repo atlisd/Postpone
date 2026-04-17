@@ -1,9 +1,13 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { format, isToday } from 'date-fns';
 import type { Locale } from 'date-fns';
 import { useDroppable } from '@dnd-kit/react';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
 import type { ChipPosition } from './CalendarTaskChip';
+import { DayTasksOverlay } from './DayTasksOverlay';
+
+const MORE_BUTTON_HEIGHT = 24;
 
 function getChipPosition(task: TaskResponse, dateKey: string): ChipPosition {
   if (!task.endDate) return 'single';
@@ -36,7 +40,48 @@ export function WeekDayColumn({
   onCellMouseUp,
 }: WeekDayColumnProps) {
   const { ref, isDropTarget } = useDroppable({ id: dateKey });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hiddenCount, setHiddenCount] = useState(0);
+  const [overlayAnchor, setOverlayAnchor] = useState<DOMRect | null>(null);
   const today = isToday(date);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || tasks.length === 0) {
+      setHiddenCount(0);
+      return;
+    }
+    const containerH = container.clientHeight;
+    // Layout not settled yet (flex height unresolved)
+    if (containerH === 0) return;
+
+    const chips = container.querySelectorAll<HTMLElement>('[data-task-chip]');
+    if (chips.length === 0) {
+      setHiddenCount(0);
+      return;
+    }
+
+    const containerTop = container.getBoundingClientRect().top;
+    const lastChipRect = chips[chips.length - 1].getBoundingClientRect();
+    const lastChipBottom = lastChipRect.bottom - containerTop;
+
+    if (lastChipBottom <= containerH) {
+      setHiddenCount(0);
+      return;
+    }
+
+    const effectiveH = containerH - MORE_BUTTON_HEIGHT;
+    let visibleCount = 0;
+    for (let i = 0; i < chips.length; i++) {
+      const chipBottom = chips[i].getBoundingClientRect().bottom - containerTop;
+      if (chipBottom <= effectiveH) {
+        visibleCount = i + 1;
+      } else {
+        break;
+      }
+    }
+    setHiddenCount(tasks.length - Math.max(1, visibleCount));
+  }, [tasks]);
 
   return (
     <div
@@ -70,27 +115,59 @@ export function WeekDayColumn({
 
       {/* Tasks */}
       <div
-        className={`flex-1 py-1 space-y-0.5 overflow-y-auto cursor-pointer min-h-[120px] select-none -mx-1 ${
-          isHighlighted && !isDropTarget ? 'bg-blue-50 dark:bg-blue-900/10' : ''
-        }`}
+        className="flex-1 flex flex-col min-h-0"
         onMouseDown={() => onCellMouseDown(dateKey)}
         onMouseEnter={() => onCellMouseEnter(dateKey)}
         onMouseUp={() => onCellMouseUp(dateKey)}
       >
-        {tasks.map(task => (
+        <div
+          ref={containerRef}
+          className={`flex-1 py-1 space-y-0.5 overflow-hidden cursor-pointer min-h-[120px] select-none -mx-1 ${
+            isHighlighted && !isDropTarget ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+          }`}
+        >
+          {tasks.map(task => (
+            <div
+              key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
+              data-task-chip=""
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+            >
+              <CalendarTaskChip
+                task={task}
+                onSelect={() => onSelectTask(task)}
+                position={getChipPosition(task, dateKey)}
+              />
+            </div>
+          ))}
+        </div>
+        {hiddenCount > 0 && (
           <div
-            key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
+            className="-mx-1 shrink-0"
             onMouseDown={e => e.stopPropagation()}
-            onClick={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              setOverlayAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+            }}
           >
-            <CalendarTaskChip
-              task={task}
-              onSelect={() => onSelectTask(task)}
-              position={getChipPosition(task, dateKey)}
-            />
+            <button
+              type="button"
+              className="w-full text-left text-xs font-medium text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-1.5 py-1 transition-colors"
+            >
+              +{hiddenCount} more
+            </button>
           </div>
-        ))}
+        )}
       </div>
+      {overlayAnchor && (
+        <DayTasksOverlay
+          date={date}
+          tasks={tasks}
+          anchorRect={overlayAnchor}
+          onClose={() => setOverlayAnchor(null)}
+          onSelectTask={onSelectTask}
+        />
+      )}
     </div>
   );
 }
