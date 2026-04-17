@@ -1340,12 +1340,6 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         )}
         </div>
 
-        <div className="pb-3 pt-1 text-center">
-          <p className="text-xs text-gray-300 dark:text-gray-600 select-none">
-            {import.meta.env.VITE_APP_VERSION ? `build ${import.meta.env.VITE_APP_VERSION}` : 'v0.0.0'}
-          </p>
-        </div>
-
       </aside>
 
       {/* Project context menu */}
