@@ -35,3 +35,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+input, textarea, select {
+  font-size: max(16px, 1em);
+}
