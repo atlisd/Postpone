@@ -107,6 +107,10 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             else
                 await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
         }
+
+        // Grouped today notification — sent once per day covering all date-only tasks due today
+        if (user.TodayNotificationsEnabled && user.TodayNotificationsGrouped)
+            await ProcessTodayGroupedNotification(db, pushover, recurrenceService, user, now, userNow, today, projectIds);
     }
 
     private async Task ProcessTimedNotification(
@@ -152,10 +156,18 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var dueDate = task.DueDate!.Value;
         var isOverdue = dueDate < DateOnly.FromDateTime(userNow);
         var isDueToday = dueDate == DateOnly.FromDateTime(userNow);
-        var isMorning = userNow.Hour >= 8 && userNow.Hour < 9;
 
         if (!isDueToday && !isOverdue) return;
-        if (isDueToday && !isMorning) return;
+
+        if (isDueToday)
+        {
+            if (!user.TodayNotificationsEnabled) return;
+            if (user.TodayNotificationsGrouped) return;
+            var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+            var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
+            if (userNow.Hour != targetHour) return;
+        }
+
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
         if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
 
@@ -231,10 +243,18 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var dueDate = instance.DueDate!.Value;
         var isOverdue = dueDate < DateOnly.FromDateTime(userNow);
         var isDueToday = dueDate == DateOnly.FromDateTime(userNow);
-        var isMorning = userNow.Hour >= 8 && userNow.Hour < 9;
 
         if (!isDueToday && !isOverdue) return;
-        if (isDueToday && !isMorning) return;
+
+        if (isDueToday)
+        {
+            if (!user.TodayNotificationsEnabled) return;
+            if (user.TodayNotificationsGrouped) return;
+            var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+            var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
+            if (userNow.Hour != targetHour) return;
+        }
+
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
         if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
 
@@ -259,6 +279,56 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             await db.SaveChangesAsync();
             logger.LogInformation("Sent recurring notification to {User} for task {Task} occurrence {Date}",
                 user.Email, instance.Title, instance.OccurrenceDate);
+        }
+    }
+
+    private async Task ProcessTodayGroupedNotification(
+        TaskerDbContext db, IPushoverClient pushover, RecurrenceService recurrenceService,
+        User user, DateTime utcNow, DateTime userNow, DateOnly today, IEnumerable<Guid> projectIds)
+    {
+        var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
+        if (userNow.Hour != targetHour) return;
+
+        var payloadHash = ComputeHash($"{user.Id}:today-grouped:{today}");
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
+
+        var nonRecurring = await db.Tasks
+            .Include(t => t.Project)
+            .Where(t => projectIds.Contains(t.ProjectId)
+                && !t.IsDeleted
+                && t.CompletedAt == null
+                && !t.SkipNotification
+                && t.DueDate == today
+                && !t.DueDateTime.HasValue
+                && t.Rrule == null)
+            .ToListAsync();
+
+        var recurringQuery = db.Tasks.Where(t => projectIds.Contains(t.ProjectId) && !t.IsDeleted && t.Rrule != null);
+        var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today);
+        var recurringToday = virtualInstances
+            .Where(v => v.CompletedAt == null && !v.SkipNotification && !v.DueDateTime.HasValue)
+            .ToList();
+
+        var lines = nonRecurring.Select(t => $"• {t.Title} — {t.Project.Name}")
+            .Concat(recurringToday.Select(v => $"• {v.Title} — {v.ProjectName}"))
+            .ToList();
+
+        if (lines.Count == 0) return;
+
+        var message = string.Join("\n", lines);
+        var sent = await pushover.SendAsync(user.PushoverUserKey!, "Tasks for today", message, null);
+        if (sent)
+        {
+            db.NotificationLogs.Add(new NotificationLog
+            {
+                UserId = user.Id,
+                Channel = "pushover",
+                SentAt = utcNow,
+                PayloadHash = payloadHash,
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Sent grouped today notification to {User} ({Count} tasks)", user.Email, lines.Count);
         }
     }
 

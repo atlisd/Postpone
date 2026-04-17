@@ -12,7 +12,13 @@ public record UpdateProfileRequest(string? DisplayName, string? Timezone, string
 
 public record SetPushoverKeyRequest(string? UserKey);
 
-public record SetNotificationPreferencesRequest(bool? OverdueNotificationsEnabled, int? OverdueNotificationHour);
+public record SetNotificationPreferencesRequest(
+    bool? OverdueNotificationsEnabled,
+    int? OverdueNotificationHour,
+    bool? TodayNotificationsEnabled,
+    int? TodayNotificationHour,
+    int? TodayNotificationWeekendHour,
+    bool? TodayNotificationsGrouped);
 
 public record SetupRequest(string Email, string Password, string DisplayName);
 
@@ -34,6 +40,10 @@ public record UserProfileResponse(
     string? PushoverUserKey,
     bool OverdueNotificationsEnabled,
     int OverdueNotificationHour,
+    bool TodayNotificationsEnabled,
+    int TodayNotificationHour,
+    int TodayNotificationWeekendHour,
+    bool TodayNotificationsGrouped,
     bool UseGravatar,
     bool IsAdmin,
     bool MustChangePassword,

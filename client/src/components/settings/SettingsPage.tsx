@@ -27,6 +27,10 @@ export function SettingsPage() {
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
   const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
   const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
+  const [todayNotificationsEnabled, setTodayNotificationsEnabled] = useState(user?.todayNotificationsEnabled ?? true);
+  const [todayNotificationHour, setTodayNotificationHour] = useState(user?.todayNotificationHour ?? 8);
+  const [todayNotificationWeekendHour, setTodayNotificationWeekendHour] = useState(user?.todayNotificationWeekendHour ?? 8);
+  const [todayNotificationsGrouped, setTodayNotificationsGrouped] = useState(user?.todayNotificationsGrouped ?? false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,7 +64,14 @@ export function SettingsPage() {
   const handleSaveNotificationPreferences = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await setNotificationPreferences({ overdueNotificationsEnabled, overdueNotificationHour });
+      await setNotificationPreferences({
+        overdueNotificationsEnabled,
+        overdueNotificationHour,
+        todayNotificationsEnabled,
+        todayNotificationHour,
+        todayNotificationWeekendHour,
+        todayNotificationsGrouped,
+      });
       await refreshUser();
       toast.success('Notification preferences saved');
     } catch {
@@ -301,6 +312,66 @@ export function SettingsPage() {
               <option key={h} value={h}>{formatHour(h)}</option>
             ))}
           </select>
+        </div>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Today's task notifications</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">Applies only to tasks with a date but no set time.</p>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={todayNotificationsEnabled}
+            onChange={(e) => setTodayNotificationsEnabled(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Notify me about tasks for today</span>
+        </label>
+
+        <div className={todayNotificationsEnabled ? 'space-y-3' : 'space-y-3 opacity-50 pointer-events-none'}>
+          <div className="flex gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weekdays</label>
+              <select
+                value={todayNotificationHour}
+                onChange={(e) => setTodayNotificationHour(Number(e.target.value))}
+                disabled={!todayNotificationsEnabled}
+                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{formatHour(h)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weekends</label>
+              <select
+                value={todayNotificationWeekendHour}
+                onChange={(e) => setTodayNotificationWeekendHour(Number(e.target.value))}
+                disabled={!todayNotificationsEnabled}
+                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{formatHour(h)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={todayNotificationsGrouped}
+              onChange={(e) => setTodayNotificationsGrouped(e.target.checked)}
+              disabled={!todayNotificationsEnabled}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Group into a single notification
+              <span className="block text-xs text-gray-500 dark:text-gray-400 font-normal">Send one summary instead of one notification per task</span>
+            </span>
+          </label>
         </div>
 
         <button type="submit" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">

@@ -14,6 +14,10 @@ export interface UserProfile {
   pushoverUserKey: string | null;
   overdueNotificationsEnabled: boolean;
   overdueNotificationHour: number;
+  todayNotificationsEnabled: boolean;
+  todayNotificationHour: number;
+  todayNotificationWeekendHour: number;
+  todayNotificationsGrouped: boolean;
   useGravatar: boolean;
   isAdmin: boolean;
   mustChangePassword: boolean;

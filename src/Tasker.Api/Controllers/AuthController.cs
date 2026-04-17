@@ -149,6 +149,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
+            user.TodayNotificationsEnabled, user.TodayNotificationHour,
+            user.TodayNotificationWeekendHour, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
@@ -175,6 +177,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
             user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
+            user.TodayNotificationsEnabled, user.TodayNotificationHour,
+            user.TodayNotificationWeekendHour, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
@@ -260,6 +264,28 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
                 return BadRequest(new { message = "Hour must be between 0 and 23" });
             user.OverdueNotificationHour = hour;
         }
+
+        if (request.TodayNotificationsEnabled.HasValue)
+            user.TodayNotificationsEnabled = request.TodayNotificationsEnabled.Value;
+
+        if (request.TodayNotificationHour.HasValue)
+        {
+            var hour = request.TodayNotificationHour.Value;
+            if (hour < 0 || hour > 23)
+                return BadRequest(new { message = "Hour must be between 0 and 23" });
+            user.TodayNotificationHour = hour;
+        }
+
+        if (request.TodayNotificationWeekendHour.HasValue)
+        {
+            var hour = request.TodayNotificationWeekendHour.Value;
+            if (hour < 0 || hour > 23)
+                return BadRequest(new { message = "Hour must be between 0 and 23" });
+            user.TodayNotificationWeekendHour = hour;
+        }
+
+        if (request.TodayNotificationsGrouped.HasValue)
+            user.TodayNotificationsGrouped = request.TodayNotificationsGrouped.Value;
 
         await db.SaveChangesAsync();
         return NoContent();
