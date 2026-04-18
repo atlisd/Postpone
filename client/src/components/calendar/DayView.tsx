@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import type { Locale } from 'date-fns';
-import { useDroppable } from '@dnd-kit/react';
+import { useDroppable } from '@dnd-kit/core';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
 
@@ -14,10 +14,10 @@ interface DayViewProps {
 
 export function DayView({ date, tasks, locale, onSelectTask, onAddTask }: DayViewProps) {
   const dateKey = format(date, 'yyyy-MM-dd');
-  const { ref } = useDroppable({ id: dateKey });
+  const { setNodeRef } = useDroppable({ id: dateKey, data: { type: 'calendar-day' } });
 
   return (
-    <div ref={ref} className="flex-1 p-6 overflow-y-auto">
+    <div ref={setNodeRef} className="flex-1 p-6 overflow-y-auto">
       {tasks.length === 0 ? (
         <div
           className="flex items-center justify-center h-40 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"

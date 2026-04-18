@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { useDroppable } from '@dnd-kit/react';
+import { useDroppable } from '@dnd-kit/core';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
 import type { ChipPosition } from './CalendarTaskChip';
@@ -40,7 +40,7 @@ export function CalendarDayCell({
   onCellMouseEnter,
   onCellMouseUp,
 }: CalendarDayCellProps) {
-  const { ref: dropRef } = useDroppable({ id: dateKey });
+  const { setNodeRef: dropRef, isOver } = useDroppable({ id: dateKey, data: { type: 'calendar-day' } });
   const containerRef = useRef<HTMLDivElement>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
   const [overlayAnchor, setOverlayAnchor] = useState<DOMRect | null>(null);
@@ -93,7 +93,9 @@ export function CalendarDayCell({
       onMouseEnter={() => onCellMouseEnter?.(dateKey)}
       onMouseUp={() => onCellMouseUp?.(dateKey)}
       className={`border-b border-r border-gray-100 dark:border-gray-800 p-1 min-h-[80px] md:min-h-[100px] transition-colors cursor-pointer select-none ${
-        isHighlighted
+        isOver
+          ? 'bg-blue-100 dark:bg-blue-900/30'
+          : isHighlighted
           ? 'bg-blue-50 dark:bg-blue-900/10'
           : !isCurrentMonth
           ? 'bg-gray-50/50 dark:bg-gray-900/50'

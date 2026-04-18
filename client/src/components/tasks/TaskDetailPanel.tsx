@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { DragDropProvider } from '@dnd-kit/react';
-import { useSortable } from '@dnd-kit/react/sortable';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useLocale } from '../../contexts/LocaleContext';
 import { LocaleDateInput } from '../shared/LocaleDateInput';
 import { LocaleTimeInput } from '../shared/LocaleTimeInput';
@@ -60,19 +61,23 @@ function DescriptionWithLinks({ text, onClick }: { text: string; onClick: () => 
   );
 }
 
-function SortableSubtask({ sub, index, group, onToggle, onDelete }: {
+function SortableSubtask({ sub, onToggle, onDelete }: {
   sub: SubtaskResponse;
-  index: number;
-  group: string;
   onToggle: (id: string, isCompleted: boolean) => void;
   onDelete: (id: string) => void;
 }) {
-  const { ref, handleRef, isDragging } = useSortable({ id: sub.id, index, group });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: sub.id });
   return (
-    <div ref={ref} className={`relative flex items-center gap-2 group ${isDragging ? 'opacity-40' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`relative flex items-center gap-2 group ${isDragging ? 'opacity-40' : ''}`}
+    >
       <span
-        ref={handleRef}
-        className="absolute -left-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        className="absolute -left-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity touch-none"
       >
         <GripVertical size={12} className="text-gray-300 dark:text-gray-600" />
       </span>
@@ -106,49 +111,49 @@ function SubtaskDragContainer({ taskId, subtasks, onToggle, onDelete, onUpdate }
   onDelete: (id: string) => void;
   onUpdate: () => void;
 }) {
-  const subtaskGroup = taskId + '-subtasks';
   const [localSubtasks, setLocalSubtasks] = useState<SubtaskResponse[]>(subtasks);
-  const localSubtasksRef = useRef(localSubtasks);
-  localSubtasksRef.current = localSubtasks;
 
   useEffect(() => {
     setLocalSubtasks(subtasks);
   }, [subtasks]);
 
-  const handleDragEnd = useCallback((event: { operation: { source: unknown } }) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const source = event.operation.source as any;
-    if (!source) return;
-    const fromIndex: number = source.initialIndex;
-    const toIndex: number = source.index;
-    if (fromIndex == null || toIndex == null || fromIndex === toIndex) return;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
 
-    const reordered = [...localSubtasksRef.current];
-    const [moved] = reordered.splice(fromIndex, 1);
-    reordered.splice(toIndex, 0, moved);
-    setLocalSubtasks(reordered);
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    reorderSubtasks(taskId, reordered.map((s, i) => ({ id: s.id, sortOrder: i }))).catch(() => {
-      toast.error('Failed to save subtask order');
-      onUpdate();
+    setLocalSubtasks(current => {
+      const oldIndex = current.findIndex(s => s.id === active.id);
+      const newIndex = current.findIndex(s => s.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return current;
+      const reordered = arrayMove(current, oldIndex, newIndex);
+      reorderSubtasks(taskId, reordered.map((s, i) => ({ id: s.id, sortOrder: i }))).catch(() => {
+        toast.error('Failed to save subtask order');
+        onUpdate();
+      });
+      return reordered;
     });
   }, [taskId, onUpdate]);
 
   return (
-    <DragDropProvider onDragEnd={handleDragEnd}>
-      <div className="space-y-1">
-        {localSubtasks.map((sub, index) => (
-          <SortableSubtask
-            key={sub.id}
-            sub={sub}
-            index={index}
-            group={subtaskGroup}
-            onToggle={onToggle}
-            onDelete={onDelete}
-          />
-        ))}
-      </div>
-    </DragDropProvider>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={localSubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-1">
+          {localSubtasks.map(sub => (
+            <SortableSubtask
+              key={sub.id}
+              sub={sub}
+              onToggle={onToggle}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 }
 

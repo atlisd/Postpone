@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
-import { useDragDropMonitor } from '@dnd-kit/react';
+import { useDndMonitor } from '@dnd-kit/core';
 import type { TaskResponse } from '../../types/api';
 import { useLocale } from '../../contexts/LocaleContext';
 import { CalendarTaskChip } from './CalendarTaskChip';
@@ -30,7 +30,7 @@ function OverlayContent({ date, tasks, anchorRect, onClose, onSelectTask }: DayT
   }, [onClose]);
 
   // Close when a drag starts so the chip can be dropped on calendar cells
-  useDragDropMonitor({
+  useDndMonitor({
     onDragStart: () => onClose(),
   });
 

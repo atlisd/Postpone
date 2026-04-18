@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { format, isToday } from 'date-fns';
 import type { Locale } from 'date-fns';
-import { useDroppable } from '@dnd-kit/react';
+import { useDroppable } from '@dnd-kit/core';
 import type { TaskResponse } from '../../types/api';
 import { CalendarTaskChip } from './CalendarTaskChip';
 import type { ChipPosition } from './CalendarTaskChip';
@@ -39,7 +39,7 @@ export function WeekDayColumn({
   onCellMouseEnter,
   onCellMouseUp,
 }: WeekDayColumnProps) {
-  const { ref, isDropTarget } = useDroppable({ id: dateKey });
+  const { setNodeRef: ref, isOver: isDropTarget } = useDroppable({ id: dateKey, data: { type: 'calendar-day' } });
   const containerRef = useRef<HTMLDivElement>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
   const [overlayAnchor, setOverlayAnchor] = useState<DOMRect | null>(null);

@@ -19,7 +19,7 @@ import { TwoWeekView } from './TwoWeekView';
 import { DayView } from './DayView';
 import { AgendaView } from './AgendaView';
 import { TaskDetailPanel } from '../tasks/TaskDetailPanel';
-import { DragDropProvider } from '@dnd-kit/react';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, type DragEndEvent } from '@dnd-kit/core';
 import { toast } from 'sonner';
 
 type CalendarViewType = 'day' | 'week' | 'twoWeek' | 'workWeek' | 'month' | 'agenda';
@@ -259,12 +259,14 @@ export function CalendarView() {
     localStorage.setItem('calendar-project-filter', JSON.stringify([]));
   };
 
-  const handleDragEnd = async (event: { operation: { source?: { id?: string | number } | null; target?: { id?: string | number } | null } }) => {
-    const { source, target } = event.operation;
-    if (!source?.id || !target?.id) return;
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!active?.id || !over?.id) return;
+    if (active.data.current?.type !== 'calendar-chip') return;
+    if (over.data.current?.type !== 'calendar-day') return;
 
-    const dragId = String(source.id);
-    const newDate = String(target.id);
+    const dragId = String(active.id);
+    const newDate = String(over.id);
 
     const task = tasks.find(t => `${t.id}_${t.occurrenceDate ?? 'single'}` === dragId);
 
@@ -376,6 +378,11 @@ export function CalendarView() {
         end: rangeSelectStart <= rangeSelectCurrent ? rangeSelectCurrent : rangeSelectStart,
       }
     : null;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
 
   return (
     <div className="flex h-full">
@@ -517,7 +524,7 @@ export function CalendarView() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
           </div>
         ) : (
-          <DragDropProvider onDragEnd={handleDragEnd}>
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
             {viewType === 'month' && (
               <div className="flex-1 flex flex-col">
                 {/* Weekday headers */}
@@ -597,7 +604,7 @@ export function CalendarView() {
                 locale={locale}
               />
             )}
-          </DragDropProvider>
+          </DndContext>
         )}
       </div>
 
