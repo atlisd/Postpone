@@ -267,4 +267,75 @@ test.describe('Drag and Drop', () => {
     // Cleanup
     await deleteProject(page, TASK_PROJECT);
   });
+
+  test('drag task from project list onto a different sidebar project moves it', async ({ page }) => {
+    const sidebar = page.locator('aside');
+    page.on('dialog', dialog => dialog.accept());
+
+    const sourceName = `${TASK_PROJECT} source`;
+    const destName = `${TASK_PROJECT} dest`;
+
+    await createProject(page, sourceName);
+    const taskInput = page.getByPlaceholder('Add a task...');
+    await taskInput.fill('Moving Task');
+    await taskInput.press('Enter');
+    await expect(page.getByText('Moving Task')).toBeVisible();
+
+    await createProject(page, destName);
+    // Navigate back to the source project so the task is visible in the main pane.
+    await sidebar.locator('a', { hasText: sourceName }).click();
+    await expect(page.getByText('Moving Task')).toBeVisible({ timeout: 5000 });
+
+    const taskRow = page.locator('.group', { hasText: 'Moving Task' }).first();
+    await taskRow.hover();
+    const taskHandle = taskRow.locator('span[class*="cursor-grab"]');
+    const destLink = sidebar.locator('a', { hasText: destName });
+
+    // Cross-tree drag: the app-level DndContext in AppShell routes task-item
+    // drags dropped on a sidebar-project target through moveTask().
+    await performDrag(page, taskHandle, destLink);
+
+    // After the move the task should be gone from the source project.
+    await expect(page.getByText('Moving Task')).toHaveCount(0, { timeout: 5000 });
+
+    // And it should appear under the destination project.
+    await destLink.click();
+    await expect(page).toHaveURL(/\/app\/projects\//);
+    await expect(page.getByText('Moving Task')).toBeVisible({ timeout: 5000 });
+
+    // Cleanup
+    await deleteProject(page, destName);
+    await sidebar.locator('a', { hasText: sourceName }).click();
+    await deleteProject(page, sourceName);
+  });
+
+  test('clicking a project name after a completed drag still navigates', async ({ page }) => {
+    const sidebar = page.locator('aside');
+    page.on('dialog', dialog => dialog.accept());
+
+    const a = `Drag P1 click-after ${TS}`;
+    const b = `Drag P2 click-after ${TS}`;
+    await createProject(page, a);
+    await createProject(page, b);
+    await page.goto('/app/today');
+    await expect(sidebar.getByText(b)).toBeVisible({ timeout: 5000 });
+
+    // Reorder A below B, then immediately click A — the dragOccurred flag must
+    // be cleared by the next tick so the NavLink click isn't swallowed.
+    const aLink = sidebar.locator('a', { hasText: a });
+    const bLink = sidebar.locator('a', { hasText: b });
+    const aItem = aLink.locator('..');
+    await aLink.hover();
+    const aHandle = aItem.locator('span[class*="cursor-grab"]');
+    await performDrag(page, aHandle, bLink);
+
+    // Post-drag click — must navigate, not be swallowed.
+    await sidebar.locator('a', { hasText: a }).click();
+    await expect(page).toHaveURL(/\/app\/projects\//, { timeout: 5000 });
+
+    // Cleanup
+    await deleteProject(page, a);
+    await sidebar.locator('a', { hasText: b }).click();
+    await deleteProject(page, b);
+  });
 });
