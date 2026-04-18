@@ -307,7 +307,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var recurringQuery = db.Tasks.Where(t => projectIds.Contains(t.ProjectId) && !t.IsDeleted && t.Rrule != null);
         var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today);
         var recurringToday = virtualInstances
-            .Where(v => v.CompletedAt == null && !v.SkipNotification && !v.DueDateTime.HasValue)
+            .Where(v => v.OccurrenceDate == today && v.CompletedAt == null && !v.SkipNotification && !v.DueDateTime.HasValue)
             .ToList();
 
         var lines = nonRecurring.Select(t => $"• {t.Title} — {t.Project.Name}")
