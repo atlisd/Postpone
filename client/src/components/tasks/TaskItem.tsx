@@ -3,7 +3,8 @@ import type { TaskResponse } from '../../types/api';
 import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
 import { useLocale } from '../../contexts/LocaleContext';
-import { useSortable } from '@dnd-kit/react/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TaskItemProps {
   task: TaskResponse;
@@ -11,28 +12,26 @@ interface TaskItemProps {
   onSelect: (task: TaskResponse) => void;
   isSelected?: boolean;
   showProject?: boolean;
-  index: number;
-  group?: string;
 }
 
-export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showProject, index, group }: TaskItemProps) {
+export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showProject }: TaskItemProps) {
   const { locale } = useLocale();
   const isCompleted = !!task.completedAt;
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
   const subtaskDone = task.subtasks.filter(s => s.isCompleted).length;
   const itemId = `${task.id}_${task.occurrenceDate ?? 'single'}`;
-  // Without a shared group (smart list views), exclude this item from collision detection so
-  // it doesn't interfere with sidebar project reordering.
-  const { ref, handleRef, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: itemId,
-    index,
-    // Smart-list tasks (no group) share a sentinel group so OptimisticSortingPlugin's
-    // per-group index check doesn't bail out: a unique group per task puts index N at
-    // sorted-position 0, causing N !== 0 to fire and suppressing the sidebar project
-    // reorder visual on smart-list pages.
-    group: group ?? 'no-sort',
-    accept: group ? undefined : () => false,
+    data: { type: 'task-item', taskId: task.id, occurrenceDate: task.occurrenceDate },
   });
 
   const dueLabel = task.dueDate
@@ -41,8 +40,13 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
 
   return (
     <div
-      ref={ref}
+      ref={setNodeRef}
       data-task-drag-id={itemId}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : undefined,
+      }}
       className={`relative group flex items-center gap-3 px-4 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-800 transition-colors ${
         isSelected
           ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'
@@ -52,8 +56,10 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
     >
       {/* Drag handle */}
       <span
-        ref={handleRef}
-        className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity touch-none"
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical size={14} className="text-gray-300 dark:text-gray-600" />

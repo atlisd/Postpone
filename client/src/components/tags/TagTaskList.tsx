@@ -116,14 +116,13 @@ export function TagTaskList() {
               <p className="text-lg">No tasks with this tag</p>
             </div>
           ) : (
-            tasks.map((task, index) => (
+            tasks.map(task => (
               <TaskItem
                 key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
                 task={task}
                 onToggleComplete={handleToggleComplete}
                 onSelect={setSelectedTask}
                 isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
-                index={index}
                 showProject
               />
             ))

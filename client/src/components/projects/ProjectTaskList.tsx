@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { listTasks, createTask, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence, reorderTasks } from '../../api/tasks';
-import { useDragDropMonitor } from '@dnd-kit/react';
-import { isSortableOperation } from '@dnd-kit/react/sortable';
+import { useDndMonitor, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { getProject } from '../../api/projects';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
 import { TaskItem } from '../tasks/TaskItem';
@@ -68,58 +68,28 @@ export function ProjectTaskList() {
 
   useSignalR(fetchData);
 
-  // Tracks the accumulating intended order during a task drag — same fix as
-  // sidebar project reordering. OptimisticSortingPlugin moves the dragged item's
-  // droppable to the pointer position after each visual swap, so collision
-  // detection sees target.id === source.id by dragend time. We build the final
-  // order incrementally from onDragOver events instead.
-  const runningTaskOrderRef = useRef<TaskResponse[] | null>(null);
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (active.data.current?.type !== 'task-item') return;
+    if (over.data.current?.type !== 'task-item') return;
 
-  useDragDropMonitor({
-    onDragOver(event) {
-      const { operation } = event;
-      if (!isSortableOperation(operation)) return;
-      const { source, target } = operation;
-      if (!source || !target) return;
-      if (source.group !== projectId || target.group !== projectId) return;
-      const sourceId = String(source.id);
-      const targetId = String(target.id);
-      if (sourceId === targetId) return;
-      const base = runningTaskOrderRef.current ?? tasksRef.current;
-      const itemId = (t: TaskResponse) => `${t.id}_${t.occurrenceDate ?? 'single'}`;
-      const fromIndex = base.findIndex(t => itemId(t) === sourceId);
-      const toIndex = base.findIndex(t => itemId(t) === targetId);
-      if (fromIndex === -1 || toIndex === -1) return;
-      const reordered = [...base];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(toIndex, 0, moved);
-      runningTaskOrderRef.current = reordered;
-    },
-    onDragEnd(event) {
-      const intended = runningTaskOrderRef.current;
-      runningTaskOrderRef.current = null;
-      if (!intended) return;
+    const itemId = (t: TaskResponse) => `${t.id}_${t.occurrenceDate ?? 'single'}`;
+    const oldIndex = tasksRef.current.findIndex(t => itemId(t) === active.id);
+    const newIndex = tasksRef.current.findIndex(t => itemId(t) === over.id);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
 
-      const { operation } = event;
-      if (!isSortableOperation(operation)) return;
-      const { source } = operation;
-      if (!source || source.group !== projectId) return;
+    const reordered = arrayMove(tasksRef.current, oldIndex, newIndex);
+    fetchVersionRef.current++;
+    setTasks(reordered);
 
-      const sourceId = String(source.id);
-      const itemId = (t: TaskResponse) => `${t.id}_${t.occurrenceDate ?? 'single'}`;
-      const originalPos = tasksRef.current.findIndex(t => itemId(t) === sourceId);
-      const intendedPos = intended.findIndex(t => itemId(t) === sourceId);
-      if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
+    reorderTasks(projectId!, reordered.map(t => t.id)).catch(() => {
+      toast.error('Failed to save order');
+      fetchData();
+    });
+  }, [projectId, fetchData]);
 
-      fetchVersionRef.current++;
-      setTasks(intended);
-
-      reorderTasks(projectId!, intended.map(t => t.id)).catch(() => {
-        toast.error('Failed to save order');
-        fetchData();
-      });
-    }
-  });
+  useDndMonitor({ onDragEnd: handleDragEnd });
 
   useEffect(() => {
     setSelectedTask(null);
@@ -219,17 +189,20 @@ export function ProjectTaskList() {
               <p className="text-sm mt-1">Add your first task above</p>
             </div>
           ) : (
-            tasks.map((task, index) => (
-              <TaskItem
-                key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
-                task={task}
-                onToggleComplete={handleToggleComplete}
-                onSelect={setSelectedTask}
-                isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
-                index={index}
-                group={projectId}
-              />
-            ))
+            <SortableContext
+              items={tasks.map(t => `${t.id}_${t.occurrenceDate ?? 'single'}`)}
+              strategy={verticalListSortingStrategy}
+            >
+              {tasks.map(task => (
+                <TaskItem
+                  key={`${task.id}_${task.occurrenceDate ?? 'single'}`}
+                  task={task}
+                  onToggleComplete={handleToggleComplete}
+                  onSelect={setSelectedTask}
+                  isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
+                />
+              ))}
+            </SortableContext>
           )}
         </div>
       </div>

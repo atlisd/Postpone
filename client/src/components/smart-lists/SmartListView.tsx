@@ -212,19 +212,6 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   const groups = groupTasks();
   const showProject = type !== 'all'; // already grouped by project in 'all' view
 
-  // Pre-compute globally sequential indices across all groups so every task in the
-  // shared 'no-sort' group has a unique index. OptimisticSortingPlugin sorts members
-  // by index and checks member.index === sorted-position; duplicate per-group indices
-  // (each sub-group restarts at 0) cause that check to fail and suppress the sidebar
-  // project drag animation on smart-list pages.
-  const taskIndexMap = new Map<string, number>();
-  let globalTaskIndex = 0;
-  for (const gtasks of groups.values()) {
-    for (const task of gtasks) {
-      taskIndexMap.set(`${task.id}_${task.occurrenceDate ?? 'single'}`, globalTaskIndex++);
-    }
-  }
-
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col min-w-0">
@@ -318,7 +305,6 @@ export function SmartListView({ type, title }: SmartListViewProps) {
                     onSelect={setSelectedTask}
                     isSelected={selectedTask?.id === task.id && selectedTask?.occurrenceDate === task.occurrenceDate}
                     showProject={showProject}
-                    index={taskIndexMap.get(`${task.id}_${task.occurrenceDate ?? 'single'}`) ?? 0}
                   />
                 ))}
               </div>
