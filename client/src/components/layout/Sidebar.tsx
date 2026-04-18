@@ -749,28 +749,18 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   // detect the "dropped on folder header" shortcut and to compute the final sort
   // order at drop time (see computeTopLevelDropOrder).
   const lastTargetIdRef = useRef<string | null>(null);
+  // Whether the pointer was above or below the target's vertical midpoint at
+  // the last onDragMove. Captured alongside lastTargetIdRef so cross-container
+  // drops can insert before/after the neighbor instead of always appending.
+  const lastTargetPosRef = useRef<'before' | 'after' | null>(null);
 
-
-  // Same idea as computeTopLevelDropOrder but for projects inside a single folder.
-  const computeFolderDropOrder = (
-    folder: ProjectFolderResponse,
-    sourceId: string,
-    neighborId: string | null,
-  ): ProjectResponse[] | null => {
-    if (!neighborId) return null;
-    const sourceProject = folder.projects.find(p => p.id === sourceId);
-    if (!sourceProject) return null;
-    const sourceIdx = folder.projects.findIndex(p => p.id === sourceId);
-    const neighborIdx = folder.projects.findIndex(p => p.id === neighborId);
-    if (sourceIdx === -1 || neighborIdx === -1) return null;
-    const without = folder.projects.filter(p => p.id !== sourceId);
-    const withoutNeighborIdx = without.findIndex(p => p.id === neighborId);
-    if (withoutNeighborIdx === -1) return null;
-    const insertIdx = sourceIdx < neighborIdx ? withoutNeighborIdx + 1 : withoutNeighborIdx;
-    const result = [...without];
-    result.splice(insertIdx, 0, sourceProject);
+  // Insert an item into a list before or after a given neighbor index.
+  function insertAt<T>(list: T[], item: T, neighborIdx: number, pos: 'before' | 'after'): T[] {
+    const idx = pos === 'before' ? neighborIdx : neighborIdx + 1;
+    const result = [...list];
+    result.splice(idx, 0, item);
     return result;
-  };
+  }
 
   // Find the sidebar draggable target nearest a given screen point, skipping
   // the source's own element. If the point is inside a non-source element's rect,
@@ -825,6 +815,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       runningFolderOrderRef.current = null;
       cancelMerge();
       lastTargetIdRef.current = null;
+      lastTargetPosRef.current = null;
       // No native pointermove listener here — it races with dnd-kit's optimistic
       // sort swap (target element moves after each onDragOver, so the cursor ends up
       // outside its new rect even though the user hasn't moved). dnd-kit's own
@@ -889,11 +880,19 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       if (!pos) return;
       const targetId = resolveTargetAtPoint(pos.x, pos.y, sourceId);
 
-      if (targetId === lastTargetIdRef.current) return;
       // null target ≠ cancellation — keep any armed merge target alive during
       // transient "no hover" frames.
       if (targetId == null) return;
 
+      // Always refresh the before/after hint: even if the target id hasn't
+      // changed since the last frame, the pointer may have crossed its midpoint.
+      const el = document.querySelector(`[data-drag-id="${CSS.escape(targetId)}"]`) as HTMLElement | null;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        lastTargetPosRef.current = pos.y < (r.top + r.bottom) / 2 ? 'before' : 'after';
+      }
+
+      if (targetId === lastTargetIdRef.current) return;
       lastTargetIdRef.current = targetId;
 
       const isTargetDropzone = targetId.startsWith('folder-dropzone-');
@@ -941,8 +940,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       const mergeLatched = mergeIntentRef.current;
       const capturedMergeTarget = mergeTargetIdRef.current;
       const capturedLastTarget = lastTargetIdRef.current;
+      const capturedLastPos = lastTargetPosRef.current ?? 'after';
       cancelMerge();
       lastTargetIdRef.current = null;
+      lastTargetPosRef.current = null;
 
       const { operation } = event;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -958,6 +959,53 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       const origFolderId = sourceProject?.folderId ?? null;
       const isSourceFolder = sourceId.startsWith('folder-');
 
+      try {
+
+      // ── Folder-source branch: folders only participate in top-level reorder.
+      // Isolated from the project branches so folder drags can never null-deref
+      // on sourceProject or fall into merge/cross-container logic.
+      if (isSourceFolder) {
+        const intended = runningTopLevelOrderRef.current;
+        runningTopLevelOrderRef.current = null;
+        runningFolderOrderRef.current = null;
+        if (!intended) return;
+
+        const originalPos = topLevelItemsRef.current.findIndex(item => item.id === sourceId);
+        const intendedPos = intended.findIndex(item => item.id === sourceId);
+        if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
+
+        fetchVersionRef.current++;
+        setFolders(prev => {
+          const updated = [...prev];
+          intended.forEach((item, i) => {
+            if (item.type === 'folder') {
+              const idx = updated.findIndex(f => f.id === item.folder.id);
+              if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+            }
+          });
+          return updated;
+        });
+        setProjects(prev => {
+          const updated = [...prev];
+          intended.forEach((item, i) => {
+            if (item.type === 'project') {
+              const idx = updated.findIndex(p => p.id === item.project.id);
+              if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+            }
+          });
+          return updated;
+        });
+        setLayoutVersion(v => v + 1);
+
+        reorderTopLevel(intended.map(item => ({
+          type: item.type,
+          id: item.type === 'folder' ? item.folder.id : item.project.id,
+        })))
+          .then(() => fetchAll())
+          .catch(() => { toast.error('Failed to save order'); fetchAll(); });
+        return;
+      }
+
       // ── Branch 1: Merge intent latched (hover timer fired) ──────────────────
       if (mergeLatched && capturedMergeTarget && !isSourceFolder) {
         runningTopLevelOrderRef.current = null;
@@ -971,8 +1019,35 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         if (capturedMergeTarget.startsWith('folder-') && !capturedMergeTarget.startsWith('folder-dropzone-')) {
           const targetFolderId = capturedMergeTarget.replace('folder-', '');
           if (targetFolderId === origFolderId) { fetchAll(); return; }
+
+          const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
+          if (!targetFolder || !sourceProject) {
+            doRemoveFromOrig
+              .then(() => addProjectToFolder(targetFolderId, sourceId))
+              .then(() => fetchAll())
+              .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
+            return;
+          }
+
+          // Place at TOP of folder — user explicitly hovered on the header.
+          const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolderId };
+          const newOrderInFolder = [movedProject, ...targetFolder.projects];
+
+          fetchVersionRef.current++;
+          setProjects(prev => prev.map(p =>
+            p.id === sourceId ? { ...p, folderId: targetFolderId } : p
+          ));
+          setFolders(prev => prev.map(f => {
+            if (f.id === targetFolderId) return { ...f, projects: newOrderInFolder };
+            if (origFolderId && f.id === origFolderId) {
+              return { ...f, projects: f.projects.filter(p => p.id !== sourceId) };
+            }
+            return f;
+          }));
+
           doRemoveFromOrig
             .then(() => addProjectToFolder(targetFolderId, sourceId))
+            .then(() => reorderFolderProjects(targetFolderId, newOrderInFolder.map(p => p.id)))
             .then(() => fetchAll())
             .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
         } else {
@@ -997,20 +1072,45 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             : capturedLastTarget.replace('folder-dropzone-', '');
           if (targetFolderId === origFolderId) {
             // No-op move — fall through to reorder branches below.
-          } else if (isFolderHeader && origFolderId === null && runningTopLevelOrderRef.current) {
-            // Top-level source dropped near a folder header, but dnd-kit's sort has
-            // accumulated a valid top-level order. The cursor landed on the folder
-            // because it was dropped just above/below it — trust the sort and fall
-            // through to Branch 3. (Add to folder: hover 1000ms or drag into expanded dropzone.)
           } else {
+            const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
+            if (!targetFolder || !sourceProject) return;
+
+            // Intended order inside the target folder:
+            // - Folder header drop → place at TOP (most intuitive when dropping on the header itself)
+            // - Dropzone (expanded empty area below children) → place at END
+            const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolderId };
+            const newOrderInFolder = isFolderHeader
+              ? [movedProject, ...targetFolder.projects]
+              : [...targetFolder.projects, movedProject];
+
+            // Optimistic state: flip folderId and rewrite both folders' project lists
+            // so the phantom at-root render and the "bottom of folder" flash are gone.
+            fetchVersionRef.current++;
+            setProjects(prev => prev.map(p =>
+              p.id === sourceId ? { ...p, folderId: targetFolderId } : p
+            ));
+            setFolders(prev => prev.map(f => {
+              if (f.id === targetFolderId) return { ...f, projects: newOrderInFolder };
+              if (origFolderId && f.id === origFolderId) {
+                return { ...f, projects: f.projects.filter(p => p.id !== sourceId) };
+              }
+              return f;
+            }));
+
             runningTopLevelOrderRef.current = null;
             runningFolderOrderRef.current = null;
             setLayoutVersion(v => v + 1);
+
             const doRemove = origFolderId
               ? removeProjectFromFolder(origFolderId, sourceId)
               : Promise.resolve();
             doRemove
               .then(() => addProjectToFolder(targetFolderId, sourceId))
+              // Only reorder if our intended position differs from the server default (end).
+              .then(() => isFolderHeader
+                ? reorderFolderProjects(targetFolderId, newOrderInFolder.map(p => p.id))
+                : Promise.resolve())
               .then(() => fetchAll())
               .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
             return;
@@ -1018,8 +1118,9 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         }
       }
 
-      // ── Branch 3: Top-level source (folder headers or ungrouped projects) ──
-      if (origFolderId === null) {
+      // ── Branch 3: Top-level source — ungrouped projects (folders are
+      // handled by the folder-source branch above). ─────────────────────────
+      if (origFolderId === null && !isSourceFolder && sourceProject) {
         // Use the progressively-accumulated order from onDragOver as the source
         // of truth. The previous DOM-based resolver approach (lastTargetIdRef /
         // computeTopLevelDropOrder) had an off-by-one bug: after dnd-kit
@@ -1076,42 +1177,164 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       }
 
       // ── Branch 4: Folder-interior source ───────────────────────────────────
-      if (origFolderId) {
-        runningFolderOrderRef.current = null;
-        runningTopLevelOrderRef.current = null;
+      if (origFolderId && sourceProject) {
+        // Priority 1: within-folder reorder via the accumulated swap order from
+        // onDragOver (mirrors Branch 3). This is the reliable path — it's
+        // immune to the transient "pointer outside any rect" gaps that cause
+        // lastTargetIdRef to lie, which historically caused the project to
+        // eject from its folder on a pure reorder.
+        const accumulated = runningFolderOrderRef.current;
+        const usingAccumulated =
+          accumulated?.folderId === origFolderId &&
+          accumulated.projects.some(p => p.id === sourceId);
 
-        // If the last target was a sibling inside the same folder, reorder within folder.
-        const lastTargetInSameFolder = capturedLastTarget
-          && !capturedLastTarget.startsWith('folder-')
-          && foldersRef.current
-              .find(f => f.id === origFolderId)?.projects.some(p => p.id === capturedLastTarget);
-
-        if (lastTargetInSameFolder) {
+        if (usingAccumulated) {
           const folder = foldersRef.current.find(f => f.id === origFolderId);
+          runningFolderOrderRef.current = null;
+          runningTopLevelOrderRef.current = null;
           if (!folder) return;
-          const intended = computeFolderDropOrder(folder, sourceId, capturedLastTarget);
-          if (!intended) return;
+          const intended = accumulated.projects;
           const originalPos = folder.projects.findIndex(p => p.id === sourceId);
           const intendedPos = intended.findIndex(p => p.id === sourceId);
           if (originalPos === -1 || intendedPos === -1 || originalPos === intendedPos) return;
 
           setFolders(prev => prev.map(f => f.id === origFolderId ? { ...f, projects: intended } : f));
           setLayoutVersion(v => v + 1);
-          reorderFolderProjects(origFolderId, intended.map(p => p.id)).catch(() => {
-            toast.error('Failed to save order');
-            fetchFolders();
-          });
+          reorderFolderProjects(origFolderId, intended.map(p => p.id))
+            .then(() => fetchAll())
+            .catch(() => { toast.error('Failed to save order'); fetchFolders(); });
           return;
         }
 
-        // Dropped outside the source folder (and not onto a folder header — branches 1/2
-        // would have fired) → remove from folder; project becomes ungrouped.
-        if (capturedLastTarget && capturedLastTarget !== sourceId) {
+        runningFolderOrderRef.current = null;
+        runningTopLevelOrderRef.current = null;
+
+        // Source was in a folder and dropped outside it (folder header case is
+        // already handled by Branch 2). Decide where to place it based on what
+        // the DOM-hit-test last saw as the neighbor.
+        if (!capturedLastTarget || capturedLastTarget === sourceId) return;
+
+        const neighborId = capturedLastTarget;
+        const rootProjects = projectsRef.current.filter(p => p.folderId === null && !p.isInbox);
+        const neighborRootIdx = rootProjects.findIndex(p => p.id === neighborId);
+        const neighborFolderMatch = foldersRef.current.find(f =>
+          f.id !== origFolderId && f.projects.some(p => p.id === neighborId)
+        );
+        const originFolder = foldersRef.current.find(f => f.id === origFolderId);
+        const neighborInOrigFolder = originFolder?.projects.some(p => p.id === neighborId);
+
+        // Safeguard: neighbor is a sibling in the SAME folder. This is reached
+        // when onDragOver never fired (e.g. a flick-drag that didn't cross a
+        // sortable rect) but the DOM-hit-test still saw a valid sibling. Treat
+        // this as a within-folder reorder — NEVER eject.
+        if (originFolder && neighborInOrigFolder) {
+          const neighborIdx = originFolder.projects.findIndex(p => p.id === neighborId);
+          if (neighborIdx === -1) return;
+          const without = originFolder.projects.filter(p => p.id !== sourceId);
+          const withoutNeighborIdx = without.findIndex(p => p.id === neighborId);
+          if (withoutNeighborIdx === -1) return;
+          const intended = insertAt(without, sourceProject, withoutNeighborIdx, capturedLastPos);
+          const originalPos = originFolder.projects.findIndex(p => p.id === sourceId);
+          const intendedPos = intended.findIndex(p => p.id === sourceId);
+          if (originalPos === intendedPos) return;
+
+          setFolders(prev => prev.map(f => f.id === origFolderId ? { ...f, projects: intended } : f));
           setLayoutVersion(v => v + 1);
+          reorderFolderProjects(origFolderId, intended.map(p => p.id))
+            .then(() => fetchAll())
+            .catch(() => { toast.error('Failed to save order'); fetchFolders(); });
+          return;
+        }
+
+        // Case A: Neighbor is a root-level project → move to root at that position.
+        if (neighborRootIdx !== -1) {
+          const currentTopLevel = topLevelItemsRef.current.filter(it =>
+            !(it.type === 'project' && it.project.id === sourceId)
+          );
+          const neighborTopIdx = currentTopLevel.findIndex(it =>
+            it.type === 'project' && it.project.id === neighborId
+          );
+          if (neighborTopIdx === -1) return;
+
+          const movedProject: ProjectResponse = { ...sourceProject, folderId: null };
+          const movedTopItem: SidebarTopLevelItem = {
+            type: 'project',
+            id: movedProject.id,
+            sortOrder: 0,
+            project: movedProject,
+          };
+          const newTopLevel = insertAt(currentTopLevel, movedTopItem, neighborTopIdx, capturedLastPos);
+
+          fetchVersionRef.current++;
+          setProjects(prev => prev.map(p => p.id === sourceId ? { ...p, folderId: null } : p));
+          setFolders(prev => prev.map(f => f.id === origFolderId
+            ? { ...f, projects: f.projects.filter(p => p.id !== sourceId) }
+            : f));
+          setLayoutVersion(v => v + 1);
+
           removeProjectFromFolder(origFolderId, sourceId)
+            .then(() => reorderTopLevel(newTopLevel.map(it => ({
+              type: it.type,
+              id: it.type === 'folder' ? it.folder.id : it.project.id,
+            }))))
             .then(() => fetchAll())
             .catch(() => { toast.error('Failed to remove from folder'); fetchAll(); });
+          return;
         }
+
+        // Case B: Neighbor is a project inside a DIFFERENT folder → cross-folder
+        // move at that specific position.
+        if (neighborFolderMatch) {
+          const targetFolder = neighborFolderMatch;
+          const neighborIdx = targetFolder.projects.findIndex(p => p.id === neighborId);
+          if (neighborIdx === -1) return;
+          const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolder.id };
+          const newOrderInFolder = insertAt(
+            targetFolder.projects,
+            movedProject,
+            neighborIdx,
+            capturedLastPos,
+          );
+
+          fetchVersionRef.current++;
+          setProjects(prev => prev.map(p => p.id === sourceId ? { ...p, folderId: targetFolder.id } : p));
+          setFolders(prev => prev.map(f => {
+            if (f.id === targetFolder.id) return { ...f, projects: newOrderInFolder };
+            if (f.id === origFolderId) return { ...f, projects: f.projects.filter(p => p.id !== sourceId) };
+            return f;
+          }));
+          setLayoutVersion(v => v + 1);
+
+          removeProjectFromFolder(origFolderId, sourceId)
+            .then(() => addProjectToFolder(targetFolder.id, sourceId))
+            .then(() => reorderFolderProjects(targetFolder.id, newOrderInFolder.map(p => p.id)))
+            .then(() => fetchAll())
+            .catch(() => { toast.error('Failed to move between folders'); fetchAll(); });
+          return;
+        }
+
+        // Fallback: unrecognized target (e.g., a folder header — Branch 2 would
+        // normally catch this; only reachable if `capturedLastTarget` is stale).
+        // Preserve prior behavior: eject to the end of the root list.
+        setLayoutVersion(v => v + 1);
+        removeProjectFromFolder(origFolderId, sourceId)
+          .then(() => fetchAll())
+          .catch(() => { toast.error('Failed to remove from folder'); fetchAll(); });
+      }
+
+      } catch (err) {
+        // Safety net: any unhandled throw in the drag-end branches blanks the
+        // page otherwise. Log, toast, and force a re-sync instead.
+        // eslint-disable-next-line no-console
+        console.error('[Sidebar DnD] onDragEnd crashed', err);
+        toast.error('Something went wrong during drag. Reloading list...');
+        runningTopLevelOrderRef.current = null;
+        runningFolderOrderRef.current = null;
+        lastTargetIdRef.current = null;
+        lastTargetPosRef.current = null;
+        cancelMerge();
+        setLayoutVersion(v => v + 1);
+        fetchAll();
       }
     },
   });

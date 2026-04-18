@@ -4,6 +4,8 @@
 > The drag-drop system is the most regression-prone area of the codebase.
 > 18+ commits have fixed/broken/re-fixed this code. Every rule below exists because removing it caused a bug.
 
+> **Library migration planned (2026-04-18):** The sidebar currently uses `@dnd-kit/react` v0.3 — a **pre-1.0 rewrite** that has been a recurring source of bugs. `@dnd-kit/core` v6 + `@dnd-kit/sortable` (stable, 2.8M weekly npm downloads) is also already in `package.json` and will replace the pre-1.0 packages in a dedicated migration. Do not add significant new complexity to the v0.3 codepath without first checking whether the migration has started. Estimated migration effort: 1–2 focused days for the Sidebar (other components using `@dnd-kit/react` are simpler).
+
 ## Library: @dnd-kit/react v0.3 (pre-1.0)
 
 The sidebar uses `@dnd-kit/react` — a **pre-1.0 rewrite** of @dnd-kit. Its API differs significantly from the older @dnd-kit v5 packages. Key imports:
@@ -48,14 +50,14 @@ The `accept` callbacks on sortables allow cross-group sorting (e.g., dragging a 
 
 ### 2. Within-folder reorder
 - **Trigger:** Drag a project up/down within the same folder
-- **Handler:** `onDragEnd` Branch 4 (first sub-branch: `lastTargetInSameFolder`)
+- **Handler:** `onDragEnd` Branch 4, accumulated-order path (`usingAccumulated`)
 - **API:** `POST /api/project-folders/{folderId}/reorder` with `{ orderedIds: [...] }`
-- **State:** Uses `computeFolderDropOrder()` with `capturedLastTarget`
+- **State:** Uses `runningFolderOrderRef` (accumulated by `onDragOver`), NOT `capturedLastTarget`. See Invariant 8.
 
 ### 3. Cross-folder / folder-to-toplevel move
 - **Trigger:** Drag a project from inside a folder to the top-level area (or vice versa)
-- **Handler:** `onDragEnd` Branch 2 (folder header/dropzone detection) or Branch 4 (last sub-branch)
-- **API:** `POST /api/project-folders/{id}/remove` then `POST /api/project-folders/{id}/add`
+- **Handler:** `onDragEnd` Branch 2 (folder header/dropzone detection) or Branch 4 (fallback paths)
+- **API:** `POST /api/project-folders/{id}/remove` → `POST /api/project-folders/{id}/add` → **reorder** (see Invariant 9). The add/remove endpoints server-side always append; the follow-up reorder is what places the project at the drop position.
 
 ### 4. Merge to create folder
 - **Trigger:** Hover one project over another for **1000ms** (merge intent timer)
@@ -65,8 +67,9 @@ The `accept` callbacks on sortables allow cross-group sorting (e.g., dragging a 
 
 ### 5. Drop onto existing folder
 - **Trigger:** Drop a project onto a folder header or an expanded empty folder's dropzone
-- **Handler:** `onDragEnd` Branch 2
-- **API:** `POST /api/project-folders/{id}/add`
+- **Handler:** `onDragEnd` Branch 2 (instant drop) OR Branch 1 (hover 1000ms on a folder header latches merge intent with a folder target)
+- **API:** `POST /api/project-folders/{id}/add` → (if header drop or merge-on-folder) `POST /api/project-folders/{id}/reorder` to place at TOP. Dropzone drops skip the reorder and land at end.
+- **Invariant:** Both Branch 1 (folder-merge path) and Branch 2 optimistically flip `folderId` + rewrite both affected `folders[].projects` arrays before the API call, and both chain `reorderFolderProjects` after `add` to land at TOP. Do not regress Branch 1 to a simple `add` call — it will drop at end.
 
 ## Critical Invariants — DO NOT REMOVE
 
@@ -75,6 +78,8 @@ The `accept` callbacks on sortables allow cross-group sorting (e.g., dragging a 
 <React.Fragment key={`toplevel-${layoutVersion}`}>
 ```
 After every successful drop, `setLayoutVersion(v => v + 1)` forces the entire sortable subtree to remount. **Why:** dnd-kit's sortable holds internal DOM position state that gets out of sync with React's rendered order after a drag. Without this remount, the next drag starts from stale positions.
+
+**Safety net:** The entire `onDragEnd` body is wrapped in a `try/catch`. Any unhandled exception in a drag branch would otherwise blank the page (React error boundary). The catch logs, toasts, and calls `fetchAll()` to re-sync from the server.
 
 ### 2. `runningTopLevelOrderRef` — accumulated swap order
 The `onDragOver` callback progressively builds the final intended order by replaying each swap dnd-kit reports. `onDragEnd` reads this accumulated order as the source of truth.
@@ -107,13 +112,26 @@ The merge system uses **both refs and state**:
 The 1000ms timer is armed whenever the cursor enters a merge-eligible target and cleared whenever it leaves. At `onDragEnd`, both `mergeIntentRef` and `mergeTargetIdRef` are captured **before** `cancelMerge()` to avoid a race condition.
 
 ### 7. `onDragEnd` branch priority
-The four branches in `onDragEnd` fire in strict priority order with early returns:
-1. **Merge intent** (hover timer fired) — highest priority
-2. **Folder header/dropzone** (direct drop onto folder)
-3. **Top-level reorder** (source has no `folderId`)
+`onDragEnd` fires branches in strict priority order with early returns:
+0. **Folder-source branch** — `isSourceFolder === true`. Folders only participate in top-level reorder; they NEVER fall into the project branches. This isolation exists because folder sources have no matching `sourceProject` (they live in `foldersRef`, not `projectsRef`), so any project-aware branch would null-deref.
+1. **Merge intent** (hover timer fired) — highest priority for projects
+2. **Folder header/dropzone** (direct drop onto folder) — NOTE: this branch must NOT fall through to Branch 3 just because a transient `onDragOver` swap was accumulated; if the cursor geometrically landed on a folder header, honor it.
+3. **Top-level reorder** (ungrouped project source)
 4. **Folder-interior** (source has a `folderId`)
 
 **Do not reorder these branches.** Later branches have fallthrough logic that assumes earlier branches have already returned if applicable.
+
+### 8. Within-folder reorder MUST use `runningFolderOrderRef`, not `capturedLastTarget`
+Branch 4 takes the accumulated-order path first (`usingAccumulated`). This mirrors Branch 3's use of `runningTopLevelOrderRef` and avoids the stale-DOM-hit-test race that historically caused projects to eject from their folder on a pure reorder. Only fall back to `capturedLastTarget`-based logic when the source has clearly moved outside its original folder (no accumulated order matching the origin folder).
+
+### 9. Cross-container moves chain `remove/add → reorder` and optimistically flip `folderId`
+`POST /.../add` and `POST /.../remove` server-side always append to the destination. To honour the user's drop position, the client must:
+1. Optimistically update `projects[i].folderId` AND rewrite the affected `folders[j].projects` arrays **before** the API round-trip. Without this, the source re-renders in its old container with `isDragging`'s opacity-50 until `fetchAll` resolves — the "phantom gray project" bug.
+2. Chain `reorderFolderProjects` or `reorderTopLevel` after the add/remove so the server has the final position.
+3. Always bump `fetchVersionRef.current++` to keep any concurrent SignalR-triggered `fetchAll` from clobbering the optimistic state mid-flight.
+
+### 10. Drop-position hint: `lastTargetPosRef`
+Companion ref to `lastTargetIdRef`, updated in `onDragMove` every frame (even when the target hasn't changed — the pointer may cross the target's midpoint without switching targets). Value is `'before' | 'after'` based on pointer Y vs. target-rect midpoint. Used by cross-container branches to decide insert direction when the neighbor is another project.
 
 ## Backend API Contracts
 
@@ -162,11 +180,12 @@ Body: { isCollapsed: true/false }
 
 All reorder operations follow this pattern:
 1. Capture the intended order (from refs, not from dnd-kit's final state)
-2. Optimistically update React state (`setProjects`/`setFolders`)
-3. Bump `layoutVersion` to force remount
-4. Fire the API call
-5. On success: `fetchAll()` to re-sync with server
-6. On failure: `toast.error(...)` + `fetchAll()` to revert
+2. Optimistically update React state (`setProjects`/`setFolders`) — for cross-container moves, this MUST flip `project.folderId` AND rewrite both affected `folder.projects` arrays (see Invariant 9)
+3. Bump `fetchVersionRef.current++` to protect the optimistic state from in-flight `fetchAll`s
+4. Bump `layoutVersion` to force remount
+5. Fire the API call chain (for cross-container: `remove?` → `add?` → `reorder`)
+6. On success: `fetchAll()` to re-sync with server
+7. On failure: `toast.error(...)` + `fetchAll()` to revert
 
 ## Testing Checklist
 

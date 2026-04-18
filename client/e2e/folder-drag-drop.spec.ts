@@ -195,11 +195,47 @@ test.describe('Folder drag-and-drop', () => {
       targetYRatio: 0.3, // aim for the header strip, above the children
     });
 
-    // Assert: folder now contains both PA and PB
+    // Assert: folder now contains both PA and PB, with PA at the TOP (header drop)
     const folders = await apiListFolders(request);
     const f = folders.find(x => x.id === folder.id)!;
-    const names = f.projects.map(p => p.name).sort();
-    expect(names).toEqual([PA, PB].sort());
+    const orderedNames = f.projects.map(p => p.name);
+    expect(orderedNames).toEqual([PA, PB]);
+  });
+
+  test('drag project onto folder header lands at TOP, not bottom', async ({ page, request }) => {
+    // Regression: Bug #3 — dropping on folder header always landed at bottom.
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA);
+    await createProjectUI(page, PB);
+    await createProjectUI(page, PC);
+
+    // Start with a folder containing PB and PC; PA is at root.
+    const projects = await apiListProjects(request);
+    const pb = projects.find(p => p.name === PB)!;
+    const pc = projects.find(p => p.name === PC)!;
+    const uniqueFolderName = `${FOLDER_PREFIX} top ${Math.random().toString(36).slice(2, 6)}`;
+    const folder = await apiCreateFolder(request, uniqueFolderName, [pb.id, pc.id]);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(uniqueFolderName).first()).toBeVisible();
+
+    const paLink = projectLink(page, PA);
+    await paLink.hover();
+    const handle = projectHandle(page, PA);
+    // Target the actual header strip (first div child), not the full wrapper which
+    // includes the expanded children and dropzone.
+    const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
+
+    await performDrag(page, handle, folderHeader, {
+      holdMs: 1200,
+      targetYRatio: 0.5,
+    });
+
+    // Order must be [PA, PB, PC] — PA landed at TOP from the header drop.
+    const folders = await apiListFolders(request);
+    const f = folders.find(x => x.id === folder.id)!;
+    expect(f.projects.map(p => p.name)).toEqual([PA, PB, PC]);
   });
 
   test('drag project out of folder back to root', async ({ page, request }) => {
@@ -239,6 +275,137 @@ test.describe('Folder drag-and-drop', () => {
     const folders = await apiListFolders(request);
     const fAfter = folders.find(x => x.id === folder.id);
     expect(fAfter?.projects.map(p => p.id)).toEqual([pb.id]);
+  });
+
+  test('drag project out of folder lands at a specific root position', async ({ page, request }) => {
+    // Regression: Bug #4 — dragging out of folder always landed at bottom of root.
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA); // will be inside the folder
+    await createProjectUI(page, PB); // root
+    await createProjectUI(page, PC); // root
+
+    const projects = await apiListProjects(request);
+    const pa = projects.find(p => p.name === PA)!;
+    const pb = projects.find(p => p.name === PB)!;
+    const pc = projects.find(p => p.name === PC)!;
+    const uniqueFolderName = `${FOLDER_PREFIX} pos ${Math.random().toString(36).slice(2, 6)}`;
+    await apiCreateFolder(request, uniqueFolderName, [pa.id]);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(uniqueFolderName).first()).toBeVisible();
+
+    // Drag PA (inside folder) onto the UPPER half of PB so it lands BEFORE PB at root.
+    const paLink = projectLink(page, PA);
+    await paLink.hover();
+    const handle = projectHandle(page, PA);
+
+    await performDrag(page, handle, projectLink(page, PB), {
+      holdMs: 0,
+      targetYRatio: 0.2,
+      steps: 6,
+    });
+
+    // Assert: PA is ungrouped, and ordered BEFORE PB (not at the end).
+    const projectsAfter = await apiListProjects(request);
+    const paAfter = projectsAfter.find(p => p.id === pa.id)!;
+    expect(paAfter.folderId).toBeNull();
+
+    const rootOrdered = projectsAfter
+      .filter(p => p.folderId === null && !p.isInbox && [pa.id, pb.id, pc.id].includes(p.id))
+      .sort((a, b) => (a as Project & { sortOrder: number }).sortOrder - (b as Project & { sortOrder: number }).sortOrder)
+      .map(p => p.name);
+    const idxA = rootOrdered.indexOf(PA);
+    const idxB = rootOrdered.indexOf(PB);
+    const idxC = rootOrdered.indexOf(PC);
+    expect(idxA).toBeGreaterThanOrEqual(0);
+    expect(idxA).toBeLessThan(idxB);
+    expect(idxB).toBeLessThan(idxC);
+  });
+
+  test('quick-drag project onto folder header lands inside folder (not at root)', async ({ page, request }) => {
+    // Regression: a transient onDragOver swap accumulated in runningTopLevelOrderRef
+    // was causing Branch 2 to fall through to Branch 3, leaving the project at
+    // root below the folder (the "ghost record" symptom).
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA);
+    await createProjectUI(page, PB);
+
+    const projects = await apiListProjects(request);
+    const pb = projects.find(p => p.name === PB)!;
+    const uniqueFolderName = `${FOLDER_PREFIX} quick ${Math.random().toString(36).slice(2, 6)}`;
+    const folder = await apiCreateFolder(request, uniqueFolderName, [pb.id]);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(uniqueFolderName).first()).toBeVisible();
+
+    const paLink = projectLink(page, PA);
+    await paLink.hover();
+    const handle = projectHandle(page, PA);
+    // Quick drag with NO hold — merge timer (1000ms) must not latch; this
+    // exercises the Branch 2 "instant header drop" path that used to bypass
+    // the add-to-folder logic.
+    const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
+
+    await performDrag(page, handle, folderHeader, {
+      holdMs: 0,
+      targetYRatio: 0.5,
+      steps: 8,
+    });
+
+    // PA must now be inside the folder.
+    const projectsAfter = await apiListProjects(request);
+    const paAfter = projectsAfter.find(p => p.name === PA)!;
+    expect(paAfter.folderId).toBe(folder.id);
+
+    const foldersAfter = await apiListFolders(request);
+    const fAfter = foldersAfter.find(x => x.id === folder.id)!;
+    expect(fAfter.projects.map(p => p.name).sort()).toEqual([PA, PB].sort());
+  });
+
+  test('dragging a folder to reorder does not crash the page', async ({ page, request }) => {
+    // Regression: Bug #2 — dragging a folder (not a project) blanked the page.
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA);
+    await createProjectUI(page, PB);
+
+    const projects = await apiListProjects(request);
+    const pa = projects.find(p => p.name === PA)!;
+    const pb = projects.find(p => p.name === PB)!;
+    const fname1 = `${FOLDER_PREFIX} one ${Math.random().toString(36).slice(2, 6)}`;
+    const fname2 = `${FOLDER_PREFIX} two ${Math.random().toString(36).slice(2, 6)}`;
+    const f1 = await apiCreateFolder(request, fname1, [pa.id]);
+    const f2 = await apiCreateFolder(request, fname2, [pb.id]);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(fname1).first()).toBeVisible();
+    await expect(sb.getByText(fname2).first()).toBeVisible();
+
+    const f1Header = sb.locator(`[data-drag-id="folder-${f1.id}"] > div`).first();
+    const f2Wrapper = sb.locator(`[data-drag-id="folder-${f2.id}"]`);
+    // Use the folder wrapper's grip — folders have their own drag handle.
+    const f1Handle = sb.locator(`[data-drag-id="folder-${f1.id}"] span[class*="cursor-grab"]`).first();
+    await f1Header.hover();
+
+    await performDrag(page, f1Handle, f2Wrapper, {
+      holdMs: 0,
+      targetYRatio: 0.9,
+      steps: 6,
+    });
+
+    // Page must still be rendered (sidebar visible) — no blank page.
+    await expect(sb).toBeVisible();
+    await expect(sb.getByText(fname1).first()).toBeVisible();
+    await expect(sb.getByText(fname2).first()).toBeVisible();
+
+    // Folder order: f1 should now be after f2 (higher sortOrder).
+    const foldersAfter = await apiListFolders(request);
+    const f1After = foldersAfter.find(x => x.id === f1.id)!;
+    const f2After = foldersAfter.find(x => x.id === f2.id)!;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((f1After as any).sortOrder).toBeGreaterThan((f2After as any).sortOrder);
   });
 
   test('delete folder via context menu leaves projects ungrouped', async ({ page, request }) => {
