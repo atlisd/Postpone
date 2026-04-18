@@ -1,137 +1,149 @@
 # Sidebar Drag-Drop — Architecture & Rules
 
 > **Read this file before modifying any drag-drop logic in `Sidebar.tsx`.**
-> The drag-drop system is the most regression-prone area of the codebase.
-> 18+ commits have fixed/broken/re-fixed this code. Every rule below exists because removing it caused a bug.
+> Drag-drop is historically the most regression-prone area of the codebase.
+> The library migration on 2026-04-18 cleared a long backlog of pre-1.0 workarounds,
+> but the remaining rules below still exist because removing them caused a bug.
 
-> **Library migration planned (2026-04-18):** The sidebar currently uses `@dnd-kit/react` v0.3 — a **pre-1.0 rewrite** that has been a recurring source of bugs. `@dnd-kit/core` v6 + `@dnd-kit/sortable` (stable, 2.8M weekly npm downloads) is also already in `package.json` and will replace the pre-1.0 packages in a dedicated migration. Do not add significant new complexity to the v0.3 codepath without first checking whether the migration has started. Estimated migration effort: 1–2 focused days for the Sidebar (other components using `@dnd-kit/react` are simpler).
+## Library: `@dnd-kit/core` v6 + `@dnd-kit/sortable` v10
 
-## Library: @dnd-kit/react v0.3 (pre-1.0)
-
-The sidebar uses `@dnd-kit/react` — a **pre-1.0 rewrite** of @dnd-kit. Its API differs significantly from the older @dnd-kit v5 packages. Key imports:
+The whole app now uses the mature `@dnd-kit/core` / `@dnd-kit/sortable` / `@dnd-kit/utilities` packages. The pre-1.0 `@dnd-kit/react` and `@dnd-kit/dom` have been removed. Key imports:
 
 ```ts
-import { useDroppable, useDragDropMonitor, useDragOperation } from '@dnd-kit/react';
-import { useSortable, isSortableOperation } from '@dnd-kit/react/sortable';
+import {
+  DndContext, useDroppable, useDndMonitor, useDndContext,
+  PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin,
+  type DragStartEvent, type DragOverEvent, type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 ```
 
-**Do NOT** reference @dnd-kit v5 docs or patterns (e.g., `DndContext`, `closestCenter`, `arrayMove`). They don't apply here.
+**Do NOT** reference pre-1.0 `@dnd-kit/react` patterns (`useDragDropMonitor`, `isSortableOperation`, `DragDropProvider`). They no longer apply.
 
-## Component Architecture
+## Top-level `DndContext` (AppShell)
+
+There is **one** `DndContext` in the app, mounted in `client/src/components/layout/AppShell.tsx`. Every drag flow — sidebar project/folder reorder, cross-tree task-to-sidebar drops, project task list reorder, and (inside their own isolated DndContexts) calendar chip drags and subtask reorder — registers against it via `useDndMonitor` inside feature components.
 
 ```
-Sidebar (main component, ~1400 lines)
-├── InboxProjectItem          — always first, NOT draggable, only a drop target for tasks
-├── SortableProjectItem       — top-level ungrouped project (draggable + drop target)
-├── SortableFolderItem        — folder header (draggable) + children container
-│   └── FolderProjectItem     — project inside a folder (draggable + drop target)
-└── useDragDropMonitor()      — centralized drag lifecycle (onDragStart/Over/Move/End)
+<DndContext sensors pointerWithin onDragEnd={...}>
+  <IconSidebar />
+  <Sidebar>…</Sidebar>
+  <main>… ProjectTaskList / TagTaskList / SmartListView …</main>
+</DndContext>
 ```
 
-### Sortable Groups
+`AppShell`'s `onDragEnd` is a narrow dispatcher: it only runs when the drag is a `task-item` dropped onto a `project-drop` (Inbox) or `sidebar-project` target, and fires `moveTask(taskId, projectId)`. Sidebar reorder/merge logic lives in `Sidebar`'s own `useDndMonitor` subscription, not in AppShell.
 
-Items belong to named groups for collision/accept logic:
+Activation constraint `{ distance: 5 }` ensures plain clicks on draggable elements still fire normally.
 
-| Component | Group | Accepts |
-|-----------|-------|---------|
-| `SortableProjectItem` | `sidebar-toplevel` | `sidebar-toplevel` or `sidebar-folder-*` |
-| `SortableFolderItem` | `sidebar-toplevel` | `sidebar-toplevel` or `sidebar-folder-*` |
-| `FolderProjectItem` | `sidebar-folder-{folderId}` | `sidebar-toplevel` or `sidebar-folder-*` |
+## Component Architecture (Sidebar)
 
-The `accept` callbacks on sortables allow cross-group sorting (e.g., dragging a project out of a folder into the top-level list). The `useDroppable` hooks on project items accept only **non-sidebar** drags (task chips from the project list or calendar).
+```
+Sidebar (~1400 lines)
+├── InboxProjectItem         — always first, useDroppable only (task drops only)
+├── SortableProjectItem      — top-level ungrouped project; useSortable + drop target
+├── SortableFolderItem       — folder header (useSortable) + children dropzone (useDroppable)
+│   └── nested SortableContext over folder.projects
+│       └── SortableProjectItem  (rendered with container = folderId)
+└── useDndMonitor()          — subscribes to onDragStart/Over/End/Cancel
+```
+
+### Drag data shapes
+
+Every draggable/droppable sets `data` so the end handler can route without DOM queries:
+
+| Item | `type` | `container` | Extras |
+|------|--------|-------------|--------|
+| Top-level project | `sidebar-project` | `'toplevel'` | `projectId`, `projectName`, `folderId: null` |
+| Project inside folder | `sidebar-project` | folderId | `projectId`, `projectName`, `folderId` |
+| Folder header | `sidebar-folder` | `'toplevel'` | `folderId` |
+| Folder children dropzone | `folder-dropzone` | — | `folderId` |
+| Inbox | `project-drop` | — | `projectId`, `projectName` |
+| Task chip | `task-item` | — | `taskId`, `occurrenceDate` |
+
+`container` is the single source of truth for "is this a cross-container move?" — don't re-derive it from `active.rect` or DOM lookups.
+
+### `SortableContext` layout
+
+- One outer `SortableContext` containing the top-level list: `[...folderIds, ...ungroupedProjectIds]`. Strategy: `verticalListSortingStrategy`.
+- One nested `SortableContext` per folder containing that folder's project IDs.
+- A project rendered inside a folder registers in **both** contexts (since the same `useSortable` hook nests correctly inside SortableContext), but its `container` data field identifies which one it belongs to.
 
 ## Five Interaction Patterns
 
 ### 1. Top-level reorder (projects and folders)
-- **Trigger:** Drag an ungrouped project or folder header up/down within the top-level list
-- **Handler:** `onDragEnd` Branch 3
-- **API:** `POST /api/project-folders/reorder-toplevel` with `{ items: [{ type, id }] }`
-- **State:** `runningTopLevelOrderRef` accumulates swap operations from each `onDragOver`
+- **Trigger:** Drag an ungrouped project or folder header up/down within the top-level list.
+- **Handler:** `onDragEnd`, same-container branch, `active.data.container === 'toplevel' && over.data.container === 'toplevel'`.
+- **Implementation:** `arrayMove(topLevelIds, oldIndex, newIndex)`, then split folders and projects back out to send the combined order.
+- **API:** `POST /api/project-folders/reorder-toplevel` with `{ items: [{ type, id }] }`.
 
 ### 2. Within-folder reorder
-- **Trigger:** Drag a project up/down within the same folder
-- **Handler:** `onDragEnd` Branch 4, accumulated-order path (`usingAccumulated`)
-- **API:** `POST /api/project-folders/{folderId}/reorder` with `{ orderedIds: [...] }`
-- **State:** Uses `runningFolderOrderRef` (accumulated by `onDragOver`), NOT `capturedLastTarget`. See Invariant 8.
+- **Trigger:** Drag a project up/down within the same folder.
+- **Handler:** `onDragEnd`, same-container branch, both `container === folderId`.
+- **Implementation:** `arrayMove(folder.projects, oldIndex, newIndex)`.
+- **API:** `POST /api/project-folders/{folderId}/reorder`.
 
 ### 3. Cross-folder / folder-to-toplevel move
-- **Trigger:** Drag a project from inside a folder to the top-level area (or vice versa)
-- **Handler:** `onDragEnd` Branch 2 (folder header/dropzone detection) or Branch 4 (fallback paths)
-- **API:** `POST /api/project-folders/{id}/remove` → `POST /api/project-folders/{id}/add` → **reorder** (see Invariant 9). The add/remove endpoints server-side always append; the follow-up reorder is what places the project at the drop position.
+- **Trigger:** Drag a project from one folder to another, or out to the top level (or from top level into a folder's interior — landing next to a specific project).
+- **Handler:** `onDragEnd`, cross-container branch (`active.data.container !== over.data.container`).
+- **API chain:** (if leaving a folder) `POST /api/project-folders/{srcId}/remove` → (if entering a folder) `POST /api/project-folders/{dstId}/add` → final reorder (`reorder-toplevel` or `/{id}/reorder`). See Invariant 3.
 
 ### 4. Merge to create folder
-- **Trigger:** Hover one project over another for **1000ms** (merge intent timer)
-- **Handler:** `onDragEnd` Branch 1 (merge intent latched)
-- **API:** `POST /api/project-folders` with `{ name: "New Folder", projectIds: [source, target] }`
-- **Visual:** `mergeTarget` state triggers dashed ring + folder icon overlay
+- **Trigger:** Hover one project over another for **1000ms** (merge intent timer).
+- **Handler:** `onDragEnd`, merge-intent branch (highest priority for project sources).
+- **API:** `POST /api/project-folders` with `{ name: "New Folder", projectIds: [source, target] }`.
+- **Visual:** `mergeTarget` state triggers dashed ring + folder icon overlay.
 
-### 5. Drop onto existing folder
-- **Trigger:** Drop a project onto a folder header or an expanded empty folder's dropzone
-- **Handler:** `onDragEnd` Branch 2 (instant drop) OR Branch 1 (hover 1000ms on a folder header latches merge intent with a folder target)
-- **API:** `POST /api/project-folders/{id}/add` → (if header drop or merge-on-folder) `POST /api/project-folders/{id}/reorder` to place at TOP. Dropzone drops skip the reorder and land at end.
-- **Invariant:** Both Branch 1 (folder-merge path) and Branch 2 optimistically flip `folderId` + rewrite both affected `folders[].projects` arrays before the API call, and both chain `reorderFolderProjects` after `add` to land at TOP. Do not regress Branch 1 to a simple `add` call — it will drop at end.
+### 5. Drop onto folder
+- **Trigger:** Either (a) drop onto a folder's children dropzone (`type: 'folder-dropzone'`) for instant add-at-end, or (b) hover on a folder header for 1000ms (latches merge intent with a folder target) for add-at-top.
+- **Handler:** `onDragEnd`, folder-dropzone branch (instant) OR merge-intent branch with folder target.
+- **API (dropzone):** `POST /api/project-folders/{folderId}/add` (lands at end).
+- **API (header-hover merge):** `POST /api/project-folders/{folderId}/add` → `POST /api/project-folders/{folderId}/reorder` to place at top. Both paths optimistically flip `folderId` + rewrite `folders[].projects` before the round-trip (see Invariant 3).
 
 ## Critical Invariants — DO NOT REMOVE
 
-### 1. `layoutVersion` forced remount
-```tsx
-<React.Fragment key={`toplevel-${layoutVersion}`}>
-```
-After every successful drop, `setLayoutVersion(v => v + 1)` forces the entire sortable subtree to remount. **Why:** dnd-kit's sortable holds internal DOM position state that gets out of sync with React's rendered order after a drag. Without this remount, the next drag starts from stale positions.
-
-**Safety net:** The entire `onDragEnd` body is wrapped in a `try/catch`. Any unhandled exception in a drag branch would otherwise blank the page (React error boundary). The catch logs, toasts, and calls `fetchAll()` to re-sync from the server.
-
-### 2. `runningTopLevelOrderRef` — accumulated swap order
-The `onDragOver` callback progressively builds the final intended order by replaying each swap dnd-kit reports. `onDragEnd` reads this accumulated order as the source of truth.
-
-**Why not use dnd-kit's final target position?** Because dnd-kit's `onDragMove` fires with the cursor inside the source's new visual rect after a swap, causing `resolveTargetAtPoint` to skip the source and pick the wrong neighbor. The accumulated approach avoids this race entirely.
-
-### 3. `resolveTargetAtPoint` — custom DOM-based target resolution
-```ts
-const resolveTargetAtPoint = (x, y, sourceId): string | null => { ... }
-```
-This function manually finds the drag target by querying `[data-drag-id]` elements and doing geometric hit-testing. **Why:** dnd-kit's built-in collision detection is unreliable — the source element tracks the cursor and always wins as "closest". This custom resolver skips the source and finds the actual target.
-
-### 4. `dragOccurred` module-level flag
+### 1. `dragOccurred` module-level flag — click suppression after drag
 ```ts
 let dragOccurred = false; // module scope, NOT component state
 ```
-Set in `onDragStart`, cleared after a tick in `onDragEnd`. Prevents the post-drag `pointerup` from triggering NavLink navigation. Must be module-level (not state/ref) because the click handler fires synchronously before React's next render.
+Set to `true` in `onDragStart`, cleared `setTimeout(..., 0)` from `onDragEnd` / `onDragCancel`. Every NavLink inside a draggable checks it:
 
-### 5. `data-drag-id` attributes
-Every draggable element must have `data-drag-id={id}` for `resolveTargetAtPoint` to find it. The IDs follow these conventions:
-- Projects: `data-drag-id={project.id}` (raw GUID)
-- Folders: `data-drag-id={`folder-${folder.id}`}`
-- Folder dropzones: `data-drag-id={`folder-dropzone-${folder.id}`}`
+```tsx
+onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
+```
 
-### 6. Merge intent timer coordination
-The merge system uses **both refs and state**:
-- `mergeTargetIdRef` + `mergeIntentRef` (refs) — real-time tracking inside `onDragMove`/`onDragEnd` callbacks
-- `mergeTarget` (state) — triggers visual re-render for the dashed ring overlay
+**Why module-level and not state/ref?** The post-drag `pointerup` synthesizes a click that fires synchronously before React's next render — a state update hasn't been applied yet, and a ref kept in the same component wouldn't be visible inside a child's click handler. A module-level variable is library-agnostic UI glue.
 
-The 1000ms timer is armed whenever the cursor enters a merge-eligible target and cleared whenever it leaves. At `onDragEnd`, both `mergeIntentRef` and `mergeTargetIdRef` are captured **before** `cancelMerge()` to avoid a race condition.
+### 2. Merge intent timer (1000ms) with both refs and state
+The merge system tracks:
+- `mergeTargetIdRef` + `mergeIntentRef` — real-time values read inside `onDragEnd`.
+- `mergeTarget` React state — triggers the dashed-ring visual re-render.
 
-### 7. `onDragEnd` branch priority
-`onDragEnd` fires branches in strict priority order with early returns:
-0. **Folder-source branch** — `isSourceFolder === true`. Folders only participate in top-level reorder; they NEVER fall into the project branches. This isolation exists because folder sources have no matching `sourceProject` (they live in `foldersRef`, not `projectsRef`), so any project-aware branch would null-deref.
-1. **Merge intent** (hover timer fired) — highest priority for projects
-2. **Folder header/dropzone** (direct drop onto folder) — NOTE: this branch must NOT fall through to Branch 3 just because a transient `onDragOver` swap was accumulated; if the cursor geometrically landed on a folder header, honor it.
-3. **Top-level reorder** (ungrouped project source)
-4. **Folder-interior** (source has a `folderId`)
+`handleDragOver` arms a 1000ms `setTimeout` the moment `over.id` matches a merge-eligible project or folder header, clears it on any target change (`mergeTargetIdRef.current !== overId`), and sets `mergeIntentRef.current = true` only when the timer expires. `onDragEnd` captures `mergeIntentRef.current` and `mergeTargetIdRef.current` into local vars **before** calling `cancelMerge()`, avoiding a race where the cleanup wipes state mid-branch.
 
-**Do not reorder these branches.** Later branches have fallthrough logic that assumes earlier branches have already returned if applicable.
+Do not reduce the timer to "first frame" — the product behaviour is deliberate: accidental drops over a neighbour should reorder, not merge.
 
-### 8. Within-folder reorder MUST use `runningFolderOrderRef`, not `capturedLastTarget`
-Branch 4 takes the accumulated-order path first (`usingAccumulated`). This mirrors Branch 3's use of `runningTopLevelOrderRef` and avoids the stale-DOM-hit-test race that historically caused projects to eject from their folder on a pure reorder. Only fall back to `capturedLastTarget`-based logic when the source has clearly moved outside its original folder (no accumulated order matching the origin folder).
+### 3. Cross-container moves chain `remove → add → reorder` and optimistically flip `folderId` + bump `fetchVersionRef`
+`POST /.../add` and `POST /.../remove` server-side always append. To honour the user's drop position, the client must:
 
-### 9. Cross-container moves chain `remove/add → reorder` and optimistically flip `folderId`
-`POST /.../add` and `POST /.../remove` server-side always append to the destination. To honour the user's drop position, the client must:
-1. Optimistically update `projects[i].folderId` AND rewrite the affected `folders[j].projects` arrays **before** the API round-trip. Without this, the source re-renders in its old container with `isDragging`'s opacity-50 until `fetchAll` resolves — the "phantom gray project" bug.
-2. Chain `reorderFolderProjects` or `reorderTopLevel` after the add/remove so the server has the final position.
-3. Always bump `fetchVersionRef.current++` to keep any concurrent SignalR-triggered `fetchAll` from clobbering the optimistic state mid-flight.
+1. Optimistically update both `projects[i].folderId` **and** rewrite the affected `folders[j].projects` arrays before the API round-trip. Without this, the source re-renders in its old container with opacity-50 until `fetchAll` resolves — the "phantom gray project" bug.
+2. Chain `reorderFolderProjects` or `reorderTopLevel` after `add`/`remove` so the server has the final position.
+3. Bump `fetchVersionRef.current++` to stop any concurrent SignalR-triggered `fetchAll` from clobbering the optimistic state mid-flight.
 
-### 10. Drop-position hint: `lastTargetPosRef`
-Companion ref to `lastTargetIdRef`, updated in `onDragMove` every frame (even when the target hasn't changed — the pointer may cross the target's midpoint without switching targets). Value is `'before' | 'after'` based on pointer Y vs. target-rect midpoint. Used by cross-container branches to decide insert direction when the neighbor is another project.
+### 4. `onDragEnd` branch priority
+Branches fire in strict priority order with early returns:
+
+0. **Folder-source guard** — `active.data.type === 'sidebar-folder'`. Folders only participate in top-level reorder; never fall into project branches (they have no matching `sourceProject`).
+1. **Merge intent latched** (`mergeIntentRef.current === true`) — highest priority for project sources.
+2. **Folder dropzone** (`over.data.type === 'folder-dropzone'`) — instant add-at-end.
+3. **Same-container reorder** — top-level or within-folder via `arrayMove`.
+4. **Cross-container move** — remove/add/reorder chain per Invariant 3.
+
+Do not reorder these branches — later branches assume earlier ones have returned when applicable.
+
+### 5. `fetchVersionRef` guards every optimistic mutation
+Any optimistic `setProjects`/`setFolders` (reorder, cross-container move, merge) must `fetchVersionRef.current++` before the API call. `fetchAll` and the SignalR-triggered refetch both capture the version on entry and abort their `setState` if a newer version has been assigned — keeping the optimistic state visible until the real fetch catches up. Dropping a bump here reintroduces the "drag snaps back" class of bugs.
 
 ## Backend API Contracts
 
@@ -145,7 +157,7 @@ Assigns `SortOrder = index` to each folder/project. Projects must be ungrouped (
 ### Reorder within folder
 ```
 POST /api/project-folders/{folderId}/reorder
-Body: { orderedIds: ["guid", "guid", ...] }
+Body: { orderedIds: ["guid", ...] }
 ```
 Assigns `SortOrder = index` to each project within the folder.
 
@@ -179,13 +191,15 @@ Body: { isCollapsed: true/false }
 ## Optimistic Update Pattern
 
 All reorder operations follow this pattern:
-1. Capture the intended order (from refs, not from dnd-kit's final state)
-2. Optimistically update React state (`setProjects`/`setFolders`) — for cross-container moves, this MUST flip `project.folderId` AND rewrite both affected `folder.projects` arrays (see Invariant 9)
-3. Bump `fetchVersionRef.current++` to protect the optimistic state from in-flight `fetchAll`s
-4. Bump `layoutVersion` to force remount
-5. Fire the API call chain (for cross-container: `remove?` → `add?` → `reorder`)
-6. On success: `fetchAll()` to re-sync with server
-7. On failure: `toast.error(...)` + `fetchAll()` to revert
+
+1. Compute the intended order from `arrayMove(current, oldIndex, newIndex)` where indices come from `active.id`/`over.id`.
+2. Optimistically update React state (`setProjects`/`setFolders`). For cross-container moves this MUST flip `project.folderId` AND rewrite both affected `folder.projects` arrays (Invariant 3).
+3. Bump `fetchVersionRef.current++` to protect the optimistic state from in-flight `fetchAll`s (Invariant 5).
+4. Fire the API call chain (for cross-container: `remove?` → `add?` → `reorder`).
+5. On success: `fetchAll()` to re-sync with server.
+6. On failure: `toast.error(...)` + `fetchAll()` to revert.
+
+No forced remount is needed — `@dnd-kit/core`'s `SortableContext` rebuilds its index from the `items` prop, so a simple re-render is enough.
 
 ## Testing Checklist
 
@@ -204,4 +218,4 @@ After ANY modification to drag-drop code, verify all of these manually:
 - [ ] **Inbox immovable:** Inbox project cannot be dragged, only receives task drops
 - [ ] **Shared/household projects:** Cannot create folders with or merge non-owned projects
 - [ ] **Rapid consecutive drags:** Reorder, then immediately reorder again → both operations persist correctly
-- [ ] **Scroll during drag:** Start drag, scroll sidebar → target resolution still works (closest-in-Y fallback)
+- [ ] **Task → sidebar:** Drag a task from `ProjectTaskList` / `SmartListView` onto any sidebar project (including Inbox) → task moves (AppShell's `onDragEnd` dispatcher)
