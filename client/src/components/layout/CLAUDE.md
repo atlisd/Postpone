@@ -103,17 +103,31 @@ Every draggable/droppable sets `data` so the end handler can route without DOM q
 
 ## Critical Invariants — DO NOT REMOVE
 
-### 1. `dragOccurred` module-level flag — click suppression after drag
+### 1. `dragOccurred` module-level flag + document capture-phase preventDefault — click suppression after drag
 ```ts
 let dragOccurred = false; // module scope, NOT component state
 ```
-Set to `true` in `onDragStart`, cleared `setTimeout(..., 0)` from `onDragEnd` / `onDragCancel`. Every NavLink inside a draggable checks it:
+Set to `true` in `onDragStart`, cleared `setTimeout(..., 0)` from `onDragEnd` / `onDragCancel`.
 
-```tsx
-onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
+The actual *navigation suppression* is a document-level capture-phase click listener mounted in `Sidebar` (search for `onCapturedClick`):
+
+```ts
+useEffect(() => {
+  const onCapturedClick = (e: MouseEvent) => { if (dragOccurred) e.preventDefault(); };
+  document.addEventListener('click', onCapturedClick, true);
+  return () => document.removeEventListener('click', onCapturedClick, true);
+}, []);
 ```
 
-**Why module-level and not state/ref?** The post-drag `pointerup` synthesizes a click that fires synchronously before React's next render — a state update hasn't been applied yet, and a ref kept in the same component wouldn't be visible inside a child's click handler. A module-level variable is library-agnostic UI glue.
+**Why a document capture-phase listener and not the per-NavLink `onClick` guards alone?** `@dnd-kit/core`'s `PointerSensor` adds *its own* document capture-phase click listener on drag start that calls **only `event.stopPropagation()`** — see `node_modules/@dnd-kit/core/dist/core.esm.js`, look for `documentListeners.add(EventName.Click, stopPropagation, { capture: true })`. That listener stays armed for ~50 ms after `pointerup`. By stopping propagation, it kills React's delegated event system before any per-NavLink `onClick={(e) => { if (dragOccurred) e.preventDefault(); }}` handler can run. The native `<a href>` default action then commits as a **full page reload** — visible as the "page flashes/reloads when dragging projects up" symptom.
+
+Our document listener is registered at `Sidebar` mount, so it fires *before* dnd-kit's (capture-phase listeners run in registration order). `preventDefault()` is enough — the only side effect we still need to suppress is the native `<a>` navigation.
+
+**Why module-level and not state/ref?** The post-drag `pointerup` synthesizes a click that fires before React's next render — state updates haven't been applied yet, and a ref kept in the component wouldn't be visible to a top-level document listener. A module-level variable is library-agnostic UI glue.
+
+**Per-NavLink `onClick={(e) => { if (dragOccurred) e.preventDefault(); }}` guards are belt-and-suspenders.** They never actually fire after a real drag (dnd-kit blocks them — see above). Keep them for documentation and as fallback if the document listener is ever removed; do not rely on them.
+
+**Grip handle `onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}`** — the `<span class="cursor-grab">` lives inside the project NavLink's `<a>`. `preventDefault` here is essential for plain (non-drag) clicks on the grip, since the document-level guard only fires when `dragOccurred` is true. Without it, a plain click on the grip would trigger native `<a>` navigation (full page reload).
 
 ### 2. Merge intent timer (1000ms) with both refs and state
 The merge system tracks:

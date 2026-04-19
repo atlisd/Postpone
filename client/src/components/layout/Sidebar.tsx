@@ -147,7 +147,14 @@ function SortableProjectItem({
             {...listeners}
             {...attributes}
             className="cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
-            onClick={(e) => e.stopPropagation()}
+            // preventDefault is essential: this span sits inside the NavLink's <a>.
+            // After a drag, the browser synthesizes a click on whatever element is
+            // under the pointer; if that element is an icon inside the grip span,
+            // stopPropagation alone keeps React Router's onClick from running but
+            // the native <a href> still navigates — which the browser commits as a
+            // FULL PAGE RELOAD. preventDefault suppresses the native navigation.
+            // The same applies to plain (non-drag) clicks on the grip handle.
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             <GripVertical size={16} className="hidden group-hover:block text-gray-400" />
             <FolderOpen size={16} style={{ color: project.color }} className="block group-hover:hidden" />
@@ -418,10 +425,10 @@ function SortableFolderItem({
 
 // ─── InboxProjectItem ────────────────────────────────────────────────────────
 
-function InboxProjectItem({ project, navLinkClass, onClose }: {
+function InboxProjectItem({ project, navLinkClass, onNavClick }: {
   project: ProjectResponse;
   navLinkClass: (props: { isActive: boolean }) => string;
-  onClose: () => void;
+  onNavClick: (e: React.MouseEvent) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'project-drop-' + project.id,
@@ -439,7 +446,7 @@ function InboxProjectItem({ project, navLinkClass, onClose }: {
       ref={setNodeRef}
       className={`relative group rounded-md ${isTaskHovering ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
     >
-      <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onClose}>
+      <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={onNavClick}>
         <FolderOpen size={16} style={{ color: project.color }} />
         <span className="flex-1 truncate">{project.name}</span>
         <span className="text-xs text-gray-400">
@@ -576,6 +583,28 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   useEffect(() => { fetchTags(); }, [fetchTags]);
   useEffect(() => { fetchAssignedCount(); }, [fetchAssignedCount]);
   useEffect(() => { checkNavOverflow(); }, [projects, folders, tags, checkNavOverflow]);
+
+  // Suppress the post-drag synthesized click at the document level.
+  //
+  // Why this exists: @dnd-kit/core's PointerSensor adds its own document-level
+  // capture-phase click listener at drag start that calls *only* event.stopPropagation()
+  // (see node_modules/@dnd-kit/core/dist/core.esm.js — `stopPropagation` is added on
+  // EventName.Click with { capture: true }, and removed 50ms after pointerup). Stopping
+  // propagation prevents React's delegated onClick from ever firing — so the per-NavLink
+  // `if (dragOccurred) e.preventDefault()` guards never run after a real drag. The native
+  // <a href> default action then commits as a *full page reload*, which is what the user
+  // sees as "the page reloads when dragging projects up".
+  //
+  // Registering at Sidebar mount means our capture-phase listener runs *before* dnd-kit's
+  // (capture-phase listeners fire in registration order). preventDefault here is enough —
+  // the native <a> navigation is the only side effect we still need to suppress.
+  useEffect(() => {
+    const onCapturedClick = (e: MouseEvent) => {
+      if (dragOccurred) e.preventDefault();
+    };
+    document.addEventListener('click', onCapturedClick, true);
+    return () => document.removeEventListener('click', onCapturedClick, true);
+  }, []);
 
   const fetchAll = useCallback(() => {
     fetchProjects();
@@ -1090,6 +1119,15 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // Guard every navigable link in the sidebar: after a drag, the browser
+  // synthesizes a `click` on whatever element sits under the pointer. Without
+  // this check, dragging a project UP and releasing over a Smart List or the
+  // Inbox navigates the route, which looks like a page reload.
+  const handleNavClick = useCallback((e: React.MouseEvent) => {
+    if (dragOccurred) { e.preventDefault(); return; }
+    onClose();
+  }, [onClose]);
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
       isActive
@@ -1170,7 +1208,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               (to !== '/app/assigned' || hasAssignedTasks !== false)
             )
             .map(({ to, label, icon: Icon, key }) => (
-              <NavLink key={to} to={to} className={navLinkClass} onClick={onClose}>
+              <NavLink key={to} to={to} className={navLinkClass} onClick={handleNavClick}>
                 <Icon size={18} className="flex-shrink-0" />
                 <span className="flex-1 truncate">{label}</span>
                 {smartListCounts[key] > 0 && (
@@ -1205,7 +1243,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 <InboxProjectItem
                   project={inboxProject}
                   navLinkClass={navLinkClass}
-                  onClose={onClose}
+                  onNavClick={handleNavClick}
                 />
               )}
 
@@ -1279,7 +1317,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                   <NavLink
                     to={`/app/tags/${tag.id}`}
                     className={({ isActive }) => navLinkClass({ isActive }) + ' flex-1 min-w-0'}
-                    onClick={onClose}
+                    onClick={handleNavClick}
                   >
                     <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
                     <span className="flex-1 truncate">{tag.name}</span>
