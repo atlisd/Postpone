@@ -143,7 +143,9 @@ Branches fire in strict priority order with early returns:
 Do not reorder these branches — later branches assume earlier ones have returned when applicable.
 
 ### 5. `fetchVersionRef` guards every optimistic mutation
-Any optimistic `setProjects`/`setFolders` (reorder, cross-container move, merge) must `fetchVersionRef.current++` before the API call. `fetchAll` and the SignalR-triggered refetch both capture the version on entry and abort their `setState` if a newer version has been assigned — keeping the optimistic state visible until the real fetch catches up. Dropping a bump here reintroduces the "drag snaps back" class of bugs.
+Any optimistic `setProjects`/`setFolders` (reorder, cross-container move, merge) must `fetchVersionRef.current++` before the API call. Every fetch function (`fetchProjects`, `fetchFolders`, `fetchTags`, `fetchAssignedCount`) snapshots `fetchVersionRef` at entry and skips its `setState` if the barrier has since moved — keeping the optimistic state visible until a post-mutation fetch catches up. Dropping a bump here reintroduces the "drag snaps back" class of bugs.
+
+Each fetch function ALSO uses a per-kind counter (`projectsFetchRef`, `foldersFetchRef`, etc.) to dedupe concurrent fetches of the same kind so the latest result wins. Don't replace these with a single shared counter — `fetchAll()` fires all four in parallel, so a shared counter would invalidate all but the last to start.
 
 ## Backend API Contracts
 
@@ -196,8 +198,10 @@ All reorder operations follow this pattern:
 2. Optimistically update React state (`setProjects`/`setFolders`). For cross-container moves this MUST flip `project.folderId` AND rewrite both affected `folder.projects` arrays (Invariant 3).
 3. Bump `fetchVersionRef.current++` to protect the optimistic state from in-flight `fetchAll`s (Invariant 5).
 4. Fire the API call chain (for cross-container: `remove?` → `add?` → `reorder`).
-5. On success: `fetchAll()` to re-sync with server.
-6. On failure: `toast.error(...)` + `fetchAll()` to revert.
+5. On success:
+   - **Same-container reorder (top-level or within-folder):** do NOT call `fetchAll()`. The optimistic `sortOrder = index` assignment exactly matches what the backend computes, so a success-path refetch only produces a visible re-paint cascade (four endpoints, six requests — the original "everything re-flashes" bug).
+   - **Cross-container move / merge / folder-dropzone add:** call `fetchAll()` to reconcile, since `add`/`remove` semantics and folder membership can diverge from the client's optimistic view.
+6. On failure: `toast.error(...)` + `fetchAll()` (or `fetchFolders()`) to revert.
 
 No forced remount is needed — `@dnd-kit/core`'s `SortableContext` rebuilds its index from the `items` prop, so a simple re-render is enough.
 

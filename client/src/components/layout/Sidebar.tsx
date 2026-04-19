@@ -475,7 +475,17 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [mergeTarget, setMergeTarget] = useState<string | null>(null);
   const [folderRenaming, setFolderRenaming] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
+  // Shared barrier: bumped by optimistic mutations to invalidate in-flight fetches
+  // that started before the mutation. Fetches snapshot its value at start and
+  // skip applying their result if it's moved on.
   const fetchVersionRef = useRef(0);
+  // Per-kind fetch counters: dedupe concurrent fetches of the SAME kind so only
+  // the latest setState wins. Necessary because fetchAll() runs all four in
+  // parallel — a shared counter would invalidate all but the last to bump.
+  const projectsFetchRef = useRef(0);
+  const foldersFetchRef = useRef(0);
+  const tagsFetchRef = useRef(0);
+  const assignedFetchRef = useRef(0);
 
   const checkNavOverflow = useCallback(() => {
     const el = navRef.current;
@@ -494,10 +504,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   }, [checkNavOverflow]);
 
   const fetchProjects = useCallback(async () => {
-    const version = ++fetchVersionRef.current;
+    const barrier = fetchVersionRef.current;
+    const mine = ++projectsFetchRef.current;
     try {
       const data = await listProjects();
-      if (fetchVersionRef.current === version) {
+      if (fetchVersionRef.current === barrier && projectsFetchRef.current === mine) {
         setProjects(data);
       }
     } catch {
@@ -506,24 +517,34 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   }, []);
 
   const fetchFolders = useCallback(async () => {
+    const barrier = fetchVersionRef.current;
+    const mine = ++foldersFetchRef.current;
     try {
       const data = await listFolders();
-      setFolders(data);
+      if (fetchVersionRef.current === barrier && foldersFetchRef.current === mine) {
+        setFolders(data);
+      }
     } catch {
       // silent
     }
   }, []);
 
   const fetchTags = useCallback(async () => {
+    const barrier = fetchVersionRef.current;
+    const mine = ++tagsFetchRef.current;
     try {
       const data = await listTags();
-      setTags(data);
+      if (fetchVersionRef.current === barrier && tagsFetchRef.current === mine) {
+        setTags(data);
+      }
     } catch {
       // silent
     }
   }, []);
 
   const fetchAssignedCount = useCallback(async () => {
+    const barrier = fetchVersionRef.current;
+    const mine = ++assignedFetchRef.current;
     try {
       const [today, tomorrow, next7days, allTasks, priorityTasks, assigned] = await Promise.all([
         getSmartList('today'),
@@ -533,6 +554,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         user?.showPriorityTasksList ? getSmartList('priority') : Promise.resolve([]),
         getSmartList('assigned-to-me'),
       ]);
+      if (fetchVersionRef.current !== barrier || assignedFetchRef.current !== mine) return;
       setHasAssignedTasks(assigned.length > 0);
       setSmartListCounts({
         today: today.length,
@@ -543,7 +565,9 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         assigned: assigned.length,
       });
     } catch {
-      setHasAssignedTasks(null);
+      if (fetchVersionRef.current === barrier && assignedFetchRef.current === mine) {
+        setHasAssignedTasks(null);
+      }
     }
   }, [user?.showAllTasksList, user?.showPriorityTasksList]);
 
@@ -797,11 +821,14 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       });
       return updated;
     });
+    // Optimistic sortOrder assignment exactly matches what the server computes
+    // (both assign `index` to each item), so the success path does not need a
+    // resync. fetchVersionRef guards against late in-flight fetches clobbering
+    // the optimistic state.
     reorderTopLevel(newOrder.map(item => ({
       type: item.type,
       id: item.type === 'folder' ? item.folder.id : item.project.id,
     })))
-      .then(() => fetchAll())
       .catch(() => { toast.error('Failed to save order'); fetchAll(); });
   }, [fetchAll]);
 
@@ -960,9 +987,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         const reordered = [...folder.projects];
         const [moved] = reordered.splice(oldIdx, 1);
         reordered.splice(newIdx, 0, moved);
+        fetchVersionRef.current++;
         setFolders(prev => prev.map(f => f.id === folderId ? { ...f, projects: reordered } : f));
+        // Same-container reorder: server assigns sortOrder = index, matching the
+        // optimistic update. Skip the success refetch to avoid re-paint cascade.
         reorderFolderProjects(folderId, reordered.map(p => p.id))
-          .then(() => fetchAll())
           .catch(() => { toast.error('Failed to save order'); fetchFolders(); });
         return;
       }

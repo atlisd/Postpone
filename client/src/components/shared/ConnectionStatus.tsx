@@ -5,20 +5,29 @@ import { useSignalRStatus } from '../../hooks/useSignalRStatus';
 export function ConnectionStatus() {
   const status = useSignalRStatus();
   const [showReconnected, setShowReconnected] = useState(false);
-  const hadDisconnect = useRef(false);
+  // State (not ref) because render suppresses the amber banner until this flips.
+  const [hasBeenConnected, setHasBeenConnected] = useState(false);
+  const hadLostConnection = useRef(false);
 
   useEffect(() => {
-    if (status !== 'connected') {
-      hadDisconnect.current = true;
+    if (status === 'connected') {
+      if (hadLostConnection.current) {
+        hadLostConnection.current = false;
+        setShowReconnected(true);
+        const t = setTimeout(() => setShowReconnected(false), 2500);
+        return () => clearTimeout(t);
+      }
+      setHasBeenConnected(true);
+    } else if (hasBeenConnected) {
+      hadLostConnection.current = true;
       setShowReconnected(false);
-    } else if (hadDisconnect.current) {
-      setShowReconnected(true);
-      const t = setTimeout(() => setShowReconnected(false), 2500);
-      return () => clearTimeout(t);
     }
-  }, [status]);
+  }, [status, hasBeenConnected]);
 
   if (status === 'connected' && !showReconnected) return null;
+  // Before we've ever connected, suppress the "Connection lost" banner — a slow
+  // initial connect otherwise flashes it on every page load.
+  if (!hasBeenConnected && !showReconnected) return null;
 
   if (showReconnected) {
     return (

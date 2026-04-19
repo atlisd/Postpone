@@ -30,6 +30,10 @@ export function subscribeToStatus(cb: (s: ConnectionStatus) => void): () => void
   return () => statusSubscribers.delete(cb);
 }
 
+export function getCurrentStatus(): ConnectionStatus {
+  return currentStatus;
+}
+
 function notifyAllSubscribers() {
   for (const cb of subscribers) cb();
 }
