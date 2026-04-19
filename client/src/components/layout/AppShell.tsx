@@ -11,10 +11,61 @@ import {
   useSensor,
   useSensors,
   pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { moveTask } from '../../api/tasks';
 import { toast } from 'sonner';
+
+// Sidebar uses one DndContext with nested SortableContexts (top-level + per-folder).
+// Plain pointerWithin lets `over` resolve to items in a *different* container than
+// `active` — e.g. dragging within Folder B can resolve to a child of Folder A or to
+// Folder A's header. That is what caused projects to "pop out" of folders and the
+// visual reorder to jump as the cursor drifted across container boundaries.
+//
+// Filter the droppable set per active source so collisions can only land on
+// targets that make sense for that source:
+//   - sidebar-project: same-container projects (reorder), folder headers (merge),
+//     folder dropzones (add to folder), and Inbox project-drop. Cross-container
+//     project moves go through dropzones / merge intent, not cross-context drift.
+//   - sidebar-folder: only top-level items (folders never enter folders).
+//   - task-item / anything else: no filtering.
+const sidebarSmartCollision: CollisionDetection = (args) => {
+  const activeData = args.active?.data?.current as
+    | { type?: string; container?: string }
+    | undefined;
+  const activeType = activeData?.type;
+  const activeContainer = activeData?.container;
+
+  if (activeType !== 'sidebar-project' && activeType !== 'sidebar-folder') {
+    return pointerWithin(args);
+  }
+
+  const filtered = args.droppableContainers.filter((c) => {
+    const d = c.data?.current as { type?: string; container?: string } | undefined;
+    if (!d?.type) return false;
+    if (activeType === 'sidebar-folder') {
+      return d.type === 'sidebar-folder' || d.type === 'sidebar-project'
+        ? d.container === 'toplevel'
+        : false;
+    }
+    if (d.type === 'sidebar-folder') return true;
+    if (d.type === 'folder-dropzone') return true;
+    if (d.type === 'project-drop') return true;
+    if (d.type === 'sidebar-project') {
+      // Always allow same-container project drops (reorder).
+      if (d.container === activeContainer) return true;
+      // Allow drops onto top-level projects from anywhere (move out of folder, or
+      // top-level reorder targets). Block project drops onto a *different* folder's
+      // child — those should go through the dropzone or merge intent, not collision
+      // drift, which used to cause the "jumping" inside a folder.
+      return d.container === 'toplevel';
+    }
+    return false;
+  });
+
+  return pointerWithin({ ...args, droppableContainers: filtered });
+};
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -67,7 +118,7 @@ export function AppShell() {
   }, [location.pathname]);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={sidebarSmartCollision} onDragEnd={handleDragEnd}>
       <ConnectionStatus />
       <div className="h-screen flex bg-gray-50 dark:bg-gray-900">
         <IconSidebar />

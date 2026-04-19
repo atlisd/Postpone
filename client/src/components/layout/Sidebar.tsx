@@ -377,26 +377,39 @@ function SortableFolderItem({
             isChildrenDropTarget && folder.projects.length === 0 ? 'ring-2 ring-dashed ring-blue-400 bg-blue-50/40 dark:bg-blue-900/20' : ''
           }`}
         >
-          <SortableContext
-            items={folder.projects.map(p => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {folder.projects.map(project => (
-              <SortableProjectItem
-                key={project.id}
-                project={project}
-                container={folder.id}
-                userId={userId}
-                navLinkClass={navLinkClass}
-                onClose={onClose}
-                onContextMenu={onProjectContextMenu}
-                contextMenuProjectId={projectContextMenuId}
-                taskCount={project.taskCount - project.completedTaskCount}
-                onShareClick={onShareClick}
-                mergeTarget={mergeTarget}
-              />
-            ))}
-          </SortableContext>
+          {(() => {
+            // Dedupe defensively — a stale optimistic write that left the same
+            // project in two folders would otherwise produce duplicate React keys
+            // inside the SortableContext and blank the sidebar.
+            const seen = new Set<string>();
+            const uniqueProjects = folder.projects.filter(p => {
+              if (seen.has(p.id)) return false;
+              seen.add(p.id);
+              return true;
+            });
+            return (
+              <SortableContext
+                items={uniqueProjects.map(p => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {uniqueProjects.map(project => (
+                  <SortableProjectItem
+                    key={project.id}
+                    project={project}
+                    container={folder.id}
+                    userId={userId}
+                    navLinkClass={navLinkClass}
+                    onClose={onClose}
+                    onContextMenu={onProjectContextMenu}
+                    contextMenuProjectId={projectContextMenuId}
+                    taskCount={project.taskCount - project.completedTaskCount}
+                    onShareClick={onShareClick}
+                    mergeTarget={mergeTarget}
+                  />
+                ))}
+              </SortableContext>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -670,11 +683,25 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const inboxProject = projects.find(p => p.isInbox);
   const ungroupedProjects = projects.filter(p => !p.isInbox && p.folderId === null);
 
-  // Top-level items: folders + ungrouped projects, interleaved by sortOrder
-  const topLevelItems: SidebarTopLevelItem[] = [
-    ...folders.map(f => ({ type: 'folder' as const, id: `folder-${f.id}`, sortOrder: f.sortOrder, folder: f })),
-    ...ungroupedProjects.map(p => ({ type: 'project' as const, id: p.id, sortOrder: p.sortOrder, project: p })),
-  ].sort((a, b) => a.sortOrder - b.sortOrder);
+  // Top-level items: folders + ungrouped projects, interleaved by sortOrder.
+  // Defensive dedupe by id — a malformed optimistic update that left a duplicate
+  // would otherwise crash the SortableContext (duplicate React keys = blank page).
+  const topLevelItems: SidebarTopLevelItem[] = (() => {
+    const seen = new Set<string>();
+    const items: SidebarTopLevelItem[] = [];
+    for (const f of folders) {
+      const id = `folder-${f.id}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      items.push({ type: 'folder', id, sortOrder: f.sortOrder, folder: f });
+    }
+    for (const p of ungroupedProjects) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      items.push({ type: 'project', id: p.id, sortOrder: p.sortOrder, project: p });
+    }
+    return items.sort((a, b) => a.sortOrder - b.sortOrder);
+  })();
 
   const topLevelItemsRef = useRef(topLevelItems);
   topLevelItemsRef.current = topLevelItems;
@@ -941,6 +968,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       }
 
       // Branch 4: Cross-container — move project to a different container at over's position.
+      // Reject drops on a folder *header* without a latched merge intent: that's the
+      // "accidentally drifted over Folder A while reordering inside Folder B" case
+      // and was the source of the long-standing "popped out of folder" bug. Cross-
+      // folder moves are only allowed via folder-dropzone (Branch 2) or merge
+      // intent (Branch 1).
+      if (overType === 'sidebar-folder') return;
+
       if (destContainer === 'toplevel') {
         // Move from folder to top level at over's position.
         if (!origFolderId) return;
@@ -977,6 +1011,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       if (typeof destContainer === 'string' && destContainer !== 'toplevel') {
         // Move into another folder at over's position.
         const targetFolderId = destContainer;
+        // Same-folder is Branch 3's job. Falling into this branch with
+        // origFolderId === targetFolderId would insert a duplicate copy of the
+        // moved project into the folder's children → duplicate React keys.
+        if (targetFolderId === origFolderId) return;
         const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
         if (!targetFolder) return;
         const overIdx = targetFolder.projects.findIndex(p => p.id === overId);
