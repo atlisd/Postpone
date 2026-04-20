@@ -50,7 +50,7 @@ function getConnection(): HubConnection {
 
     // Detect dead WebSockets (killed by iOS) faster than the 30s default.
     connection.keepAliveIntervalInMilliseconds = 5000;
-    connection.serverTimeoutInMilliseconds = 15000;
+    connection.serverTimeoutInMilliseconds = 30000;
 
     for (const event of SYNC_EVENTS) {
       connection.on(event, notifyAllSubscribers);
