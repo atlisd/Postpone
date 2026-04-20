@@ -48,6 +48,10 @@ function getConnection(): HubConnection {
       .configureLogging(LogLevel.Warning)
       .build();
 
+    // Detect dead WebSockets (killed by iOS) faster than the 30s default.
+    connection.keepAliveIntervalInMilliseconds = 5000;
+    connection.serverTimeoutInMilliseconds = 15000;
+
     for (const event of SYNC_EVENTS) {
       connection.on(event, notifyAllSubscribers);
     }
@@ -67,7 +71,7 @@ function getConnection(): HubConnection {
   return connection;
 }
 
-function scheduleRetry(delayMs = 5000) {
+function scheduleRetry(delayMs = 2000) {
   if (retryTimeout) return;
   retryTimeout = setTimeout(() => {
     retryTimeout = null;
@@ -88,7 +92,7 @@ function startConnection() {
     .catch(() => {
       setStatus('disconnected');
       if (subscribers.size > 0) {
-        scheduleRetry(10000);
+        scheduleRetry(3000);
       }
     });
 }
@@ -110,8 +114,8 @@ export function subscribe(callback: SyncCallback): () => void {
 
   if (!visibilityListenerRegistered) {
     visibilityListenerRegistered = true;
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
+
+    const onResume = () => {
       if (subscribers.size === 0) return;
       const conn = getConnection();
       if (conn.state === HubConnectionState.Connected) {
@@ -119,8 +123,21 @@ export function subscribe(callback: SyncCallback): () => void {
       } else if (conn.state === HubConnectionState.Disconnected) {
         if (retryTimeout) { clearTimeout(retryTimeout); retryTimeout = null; }
         startConnection();
+      } else {
+        // Reconnecting/Connecting: iOS may have frozen the backoff timers.
+        // Force stop → restart so we reconnect immediately instead of waiting.
+        if (retryTimeout) { clearTimeout(retryTimeout); retryTimeout = null; }
+        conn.stop().then(() => startConnection());
       }
-      // If Connecting/Reconnecting: onreconnected will fire and call notifyAllSubscribers
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onResume();
+    });
+
+    // pageshow fires on iOS PWA when page is restored from bfcache.
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) onResume();
     });
   }
 
