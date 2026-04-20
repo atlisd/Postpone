@@ -61,12 +61,21 @@ function DescriptionWithLinks({ text, onClick }: { text: string; onClick: () => 
   );
 }
 
-function SortableSubtask({ sub, onToggle, onDelete }: {
+function SortableSubtask({ sub, onToggle, onDelete, onEdit }: {
   sub: SubtaskResponse;
   onToggle: (id: string, isCompleted: boolean) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, newTitle: string, originalTitle: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(sub.title);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: sub.id });
+
+  const commitEdit = () => {
+    onEdit(sub.id, editValue, sub.title);
+    setIsEditing(false);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -91,9 +100,26 @@ function SortableSubtask({ sub, onToggle, onDelete }: {
       >
         {sub.isCompleted && <Check size={10} strokeWidth={3} />}
       </button>
-      <span className={`text-sm flex-1 ${sub.isCompleted ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
-        {sub.title}
-      </span>
+      {isEditing ? (
+        <input
+          autoFocus
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') { setEditValue(sub.title); setIsEditing(false); }
+          }}
+          className={`text-sm flex-1 bg-transparent outline-none border-b border-blue-400 ${sub.isCompleted ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}
+        />
+      ) : (
+        <span
+          onClick={() => { setEditValue(sub.title); setIsEditing(true); }}
+          className={`text-sm flex-1 cursor-text ${sub.isCompleted ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}
+        >
+          {sub.title}
+        </span>
+      )}
       <button
         onClick={() => onDelete(sub.id)}
         className="p-0.5 text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -104,11 +130,12 @@ function SortableSubtask({ sub, onToggle, onDelete }: {
   );
 }
 
-function SubtaskDragContainer({ taskId, subtasks, onToggle, onDelete, onUpdate }: {
+function SubtaskDragContainer({ taskId, subtasks, onToggle, onDelete, onEdit, onUpdate }: {
   taskId: string;
   subtasks: SubtaskResponse[];
   onToggle: (id: string, isCompleted: boolean) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string, newTitle: string, originalTitle: string) => void;
   onUpdate: () => void;
 }) {
   const [localSubtasks, setLocalSubtasks] = useState<SubtaskResponse[]>(subtasks);
@@ -149,6 +176,7 @@ function SubtaskDragContainer({ taskId, subtasks, onToggle, onDelete, onUpdate }
               sub={sub}
               onToggle={onToggle}
               onDelete={onDelete}
+              onEdit={onEdit}
             />
           ))}
         </div>
@@ -408,6 +436,16 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
       onUpdate();
     } catch {
       toast.error('Failed to delete subtask');
+    }
+  };
+
+  const handleEditSubtask = async (subtaskId: string, newTitle: string, originalTitle: string) => {
+    if (!newTitle.trim() || newTitle.trim() === originalTitle.trim()) return;
+    try {
+      await updateSubtask(subtaskId, { title: newTitle.trim() });
+      onUpdate();
+    } catch {
+      toast.error('Failed to update subtask');
     }
   };
 
@@ -850,6 +888,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
               subtasks={task.subtasks}
               onToggle={handleToggleSubtask}
               onDelete={handleDeleteSubtask}
+              onEdit={handleEditSubtask}
               onUpdate={onUpdate}
             />
             <form onSubmit={handleAddSubtask} className="flex items-center gap-2 mt-2">
