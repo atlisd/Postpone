@@ -1,6 +1,6 @@
 import { Check, Flag, Repeat, GripVertical, FileText, EyeOff, BellOff } from 'lucide-react';
 import type { TaskResponse } from '../../types/api';
-import { formatDueDate, formatDueTime, dueDateColor } from '../../lib/dates';
+import { formatDueDate, formatDueTime, dueDateColor, formatTimeUntilDue } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
 import { useLocale } from '../../contexts/LocaleContext';
 import { useSortable } from '@dnd-kit/sortable';
@@ -37,6 +37,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   const dueLabel = task.dueDate
     ? `${formatDueDate(task.dueDate, locale)}${formatDueTime(task.dueDateTime, locale) ? ` ${formatDueTime(task.dueDateTime, locale)}` : ''}`
     : null;
+  const timeUntil = formatTimeUntilDue(task.dueDate, task.dueDateTime);
 
   return (
     <div
@@ -115,6 +116,11 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
           )}
           {showProject && (
             <span className="text-xs text-gray-400 dark:text-gray-500">{task.projectName}</span>
+          )}
+          {timeUntil && (
+            <span className="order-last sm:order-none text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+              {timeUntil}
+            </span>
           )}
           {dueLabel && (
             <span className={`text-xs font-medium ${dueDateColor(task.dueDate!)}`}>{dueLabel}</span>
