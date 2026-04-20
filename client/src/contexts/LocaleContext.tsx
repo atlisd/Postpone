@@ -50,6 +50,7 @@ interface LocaleContextType {
   localeCode: string;
   use24Hour: boolean;
   formatHour: (hour: number) => string;
+  formatHourShort: (hour: number) => string;
 }
 
 const LocaleContext = createContext<LocaleContextType | null>(null);
@@ -70,7 +71,15 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       return new Intl.DateTimeFormat(localeCode, { hour: 'numeric', minute: '2-digit' }).format(date);
     };
 
-    return { locale, localeCode, use24Hour, formatHour };
+    const formatHourShort = (hour: number): string => {
+      if (use24Hour) {
+        return String(hour).padStart(2, '0');
+      }
+      const date = new Date(2000, 0, 1, hour, 0);
+      return new Intl.DateTimeFormat(localeCode, { hour: 'numeric' }).format(date);
+    };
+
+    return { locale, localeCode, use24Hour, formatHour, formatHourShort };
   }, [localeCode]);
 
   return (

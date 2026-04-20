@@ -17,7 +17,7 @@ export function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  const { formatHour } = useLocale();
+  const { formatHourShort } = useLocale();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [locale, setLocaleState] = useState(user?.locale ?? 'en');
@@ -27,9 +27,12 @@ export function SettingsPage() {
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
   const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
   const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
+  const [overdueNotificationMinute, setOverdueNotificationMinute] = useState(user?.overdueNotificationMinute ?? 0);
   const [todayNotificationsEnabled, setTodayNotificationsEnabled] = useState(user?.todayNotificationsEnabled ?? true);
   const [todayNotificationHour, setTodayNotificationHour] = useState(user?.todayNotificationHour ?? 8);
+  const [todayNotificationMinute, setTodayNotificationMinute] = useState(user?.todayNotificationMinute ?? 0);
   const [todayNotificationWeekendHour, setTodayNotificationWeekendHour] = useState(user?.todayNotificationWeekendHour ?? 8);
+  const [todayNotificationWeekendMinute, setTodayNotificationWeekendMinute] = useState(user?.todayNotificationWeekendMinute ?? 0);
   const [todayNotificationsGrouped, setTodayNotificationsGrouped] = useState(user?.todayNotificationsGrouped ?? false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -67,9 +70,12 @@ export function SettingsPage() {
       await setNotificationPreferences({
         overdueNotificationsEnabled,
         overdueNotificationHour,
+        overdueNotificationMinute,
         todayNotificationsEnabled,
         todayNotificationHour,
+        todayNotificationMinute,
         todayNotificationWeekendHour,
+        todayNotificationWeekendMinute,
         todayNotificationsGrouped,
       });
       await refreshUser();
@@ -302,16 +308,29 @@ export function SettingsPage() {
 
         <div className={overdueNotificationsEnabled ? '' : 'opacity-50 pointer-events-none'}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Send overdue notifications at</label>
-          <select
-            value={overdueNotificationHour}
-            onChange={(e) => setOverdueNotificationHour(Number(e.target.value))}
-            disabled={!overdueNotificationsEnabled}
-            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={h}>{formatHour(h)}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1">
+            <select
+              value={overdueNotificationHour}
+              onChange={(e) => setOverdueNotificationHour(Number(e.target.value))}
+              disabled={!overdueNotificationsEnabled}
+              className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>{formatHourShort(h)}</option>
+              ))}
+            </select>
+            <span className="text-sm text-gray-500 dark:text-gray-400">:</span>
+            <select
+              value={overdueNotificationMinute}
+              onChange={(e) => setOverdueNotificationMinute(Number(e.target.value))}
+              disabled={!overdueNotificationsEnabled}
+              className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+              {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <hr className="border-gray-200 dark:border-gray-700" />
@@ -333,29 +352,55 @@ export function SettingsPage() {
           <div className="flex gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weekdays</label>
-              <select
-                value={todayNotificationHour}
-                onChange={(e) => setTodayNotificationHour(Number(e.target.value))}
-                disabled={!todayNotificationsEnabled}
-                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>{formatHour(h)}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={todayNotificationHour}
+                  onChange={(e) => setTodayNotificationHour(Number(e.target.value))}
+                  disabled={!todayNotificationsEnabled}
+                  className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{formatHourShort(h)}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-500 dark:text-gray-400">:</span>
+                <select
+                  value={todayNotificationMinute}
+                  onChange={(e) => setTodayNotificationMinute(Number(e.target.value))}
+                  disabled={!todayNotificationsEnabled}
+                  className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weekends</label>
-              <select
-                value={todayNotificationWeekendHour}
-                onChange={(e) => setTodayNotificationWeekendHour(Number(e.target.value))}
-                disabled={!todayNotificationsEnabled}
-                className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>{formatHour(h)}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={todayNotificationWeekendHour}
+                  onChange={(e) => setTodayNotificationWeekendHour(Number(e.target.value))}
+                  disabled={!todayNotificationsEnabled}
+                  className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{formatHourShort(h)}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-gray-500 dark:text-gray-400">:</span>
+                <select
+                  value={todayNotificationWeekendMinute}
+                  onChange={(e) => setTodayNotificationWeekendMinute(Number(e.target.value))}
+                  disabled={!todayNotificationsEnabled}
+                  className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

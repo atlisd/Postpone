@@ -40,9 +40,12 @@ export async function setPushoverKey(userKey: string | null): Promise<void> {
 export async function setNotificationPreferences(data: {
   overdueNotificationsEnabled?: boolean;
   overdueNotificationHour?: number;
+  overdueNotificationMinute?: number;
   todayNotificationsEnabled?: boolean;
   todayNotificationHour?: number;
+  todayNotificationMinute?: number;
   todayNotificationWeekendHour?: number;
+  todayNotificationWeekendMinute?: number;
   todayNotificationsGrouped?: boolean;
 }): Promise<void> {
   await api.put('api/auth/me/notification-preferences', { json: data });

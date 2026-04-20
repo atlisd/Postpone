@@ -13,9 +13,12 @@ public class User
     public string? PushoverUserKey { get; set; }
     public bool OverdueNotificationsEnabled { get; set; } = true;
     public int OverdueNotificationHour { get; set; } = 8;
+    public int OverdueNotificationMinute { get; set; } = 0;
     public bool TodayNotificationsEnabled { get; set; } = true;
     public int TodayNotificationHour { get; set; } = 8;
+    public int TodayNotificationMinute { get; set; } = 0;
     public int TodayNotificationWeekendHour { get; set; } = 8;
+    public int TodayNotificationWeekendMinute { get; set; } = 0;
     public bool TodayNotificationsGrouped { get; set; } = false;
     public bool UseGravatar { get; set; } = false;
     public bool ShowAllTasksList { get; set; } = true;

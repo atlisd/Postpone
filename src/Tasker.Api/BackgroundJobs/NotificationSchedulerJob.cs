@@ -165,11 +165,12 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             if (user.TodayNotificationsGrouped) return;
             var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
             var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
-            if (userNow.Hour != targetHour) return;
+            var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
+            if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
         }
 
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
-        if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
+        if (isOverdue && (userNow.Hour != user.OverdueNotificationHour || userNow.Minute != user.OverdueNotificationMinute)) return;
 
         var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
@@ -252,11 +253,12 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             if (user.TodayNotificationsGrouped) return;
             var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
             var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
-            if (userNow.Hour != targetHour) return;
+            var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
+            if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
         }
 
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
-        if (isOverdue && userNow.Hour != user.OverdueNotificationHour) return;
+        if (isOverdue && (userNow.Hour != user.OverdueNotificationHour || userNow.Minute != user.OverdueNotificationMinute)) return;
 
         var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence:{instance.OccurrenceDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
@@ -288,7 +290,8 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
     {
         var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
         var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
-        if (userNow.Hour != targetHour) return;
+        var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
+        if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
 
         var payloadHash = ComputeHash($"{user.Id}:today-grouped:{today}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;

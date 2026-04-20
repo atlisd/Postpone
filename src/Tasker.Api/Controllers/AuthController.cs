@@ -148,9 +148,9 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
-            user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
-            user.TodayNotificationsEnabled, user.TodayNotificationHour,
-            user.TodayNotificationWeekendHour, user.TodayNotificationsGrouped,
+            user.OverdueNotificationsEnabled, user.OverdueNotificationHour, user.OverdueNotificationMinute,
+            user.TodayNotificationsEnabled, user.TodayNotificationHour, user.TodayNotificationMinute,
+            user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
@@ -176,9 +176,9 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         return Ok(new UserProfileResponse(
             user.Id, user.Email, user.DisplayName, user.AvatarUrl,
             user.Timezone, user.Locale, user.PushoverUserKey,
-            user.OverdueNotificationsEnabled, user.OverdueNotificationHour,
-            user.TodayNotificationsEnabled, user.TodayNotificationHour,
-            user.TodayNotificationWeekendHour, user.TodayNotificationsGrouped,
+            user.OverdueNotificationsEnabled, user.OverdueNotificationHour, user.OverdueNotificationMinute,
+            user.TodayNotificationsEnabled, user.TodayNotificationHour, user.TodayNotificationMinute,
+            user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList));
     }
@@ -265,6 +265,14 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.OverdueNotificationHour = hour;
         }
 
+        if (request.OverdueNotificationMinute.HasValue)
+        {
+            var minute = request.OverdueNotificationMinute.Value;
+            if (minute < 0 || minute > 59)
+                return BadRequest(new { message = "Minute must be between 0 and 59" });
+            user.OverdueNotificationMinute = minute;
+        }
+
         if (request.TodayNotificationsEnabled.HasValue)
             user.TodayNotificationsEnabled = request.TodayNotificationsEnabled.Value;
 
@@ -276,12 +284,28 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.TodayNotificationHour = hour;
         }
 
+        if (request.TodayNotificationMinute.HasValue)
+        {
+            var minute = request.TodayNotificationMinute.Value;
+            if (minute < 0 || minute > 59)
+                return BadRequest(new { message = "Minute must be between 0 and 59" });
+            user.TodayNotificationMinute = minute;
+        }
+
         if (request.TodayNotificationWeekendHour.HasValue)
         {
             var hour = request.TodayNotificationWeekendHour.Value;
             if (hour < 0 || hour > 23)
                 return BadRequest(new { message = "Hour must be between 0 and 23" });
             user.TodayNotificationWeekendHour = hour;
+        }
+
+        if (request.TodayNotificationWeekendMinute.HasValue)
+        {
+            var minute = request.TodayNotificationWeekendMinute.Value;
+            if (minute < 0 || minute > 59)
+                return BadRequest(new { message = "Minute must be between 0 and 59" });
+            user.TodayNotificationWeekendMinute = minute;
         }
 
         if (request.TodayNotificationsGrouped.HasValue)
