@@ -31,7 +31,9 @@ public class CalendarController(IProjectAccessService access, IRecurrenceService
 
         // Recurring task occurrences in date range
         var recurringQuery = access.GetAccessibleTasks(userId).Where(t => t.Rrule != null && !t.HideFromCalendar);
-        var virtualInstances = await recurrence.ExpandOccurrencesAsync(recurringQuery, start, end);
+        var virtualInstances = (await recurrence.ExpandOccurrencesAsync(recurringQuery, start, end))
+            .Where(t => t.DueDate >= start && t.DueDate <= end)
+            .ToList();
 
         var all = regularTasks.Concat(virtualInstances)
             .OrderBy(t => t.DueDate)

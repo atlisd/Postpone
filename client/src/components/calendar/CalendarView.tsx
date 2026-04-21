@@ -358,6 +358,7 @@ export function CalendarView() {
     const taskEnd = task.endDate ? parseISO(task.endDate) : taskStart;
     const clampedStart = taskStart < calStart ? calStart : taskStart;
     const clampedEnd = taskEnd > calEnd ? calEnd : taskEnd;
+    if (clampedStart > clampedEnd) continue;
     for (const day of eachDayOfInterval({ start: clampedStart, end: clampedEnd })) {
       const key = format(day, 'yyyy-MM-dd');
       if (!tasksByDate.has(key)) tasksByDate.set(key, []);
