@@ -478,6 +478,18 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [hasAssignedTasks, setHasAssignedTasks] = useState<boolean | null>(null);
   const [smartListCounts, setSmartListCounts] = useState<Record<string, number>>({});
   const [navOverflows, setNavOverflows] = useState(false);
+  const [smartListsCollapsed, setSmartListsCollapsed] = useState(
+    () => localStorage.getItem('sidebar_smartlists_collapsed') === 'true'
+  );
+  const [projectsCollapsed, setProjectsCollapsed] = useState(
+    () => localStorage.getItem('sidebar_projects_collapsed') === 'true'
+  );
+  const [tagsCollapsed, setTagsCollapsed] = useState(
+    () => localStorage.getItem('sidebar_tags_collapsed') === 'true'
+  );
+  const toggleSmartLists = () => setSmartListsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_smartlists_collapsed', String(n)); return n; });
+  const toggleProjects = () => setProjectsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_projects_collapsed', String(n)); return n; });
+  const toggleTags = () => setTagsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_tags_collapsed', String(n)); return n; });
   // Merge intent state for drag-to-create folder / drag-onto-folder-header
   const [mergeTarget, setMergeTarget] = useState<string | null>(null);
   const [folderRenaming, setFolderRenaming] = useState<string | null>(null);
@@ -1198,10 +1210,15 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         {/* Navigation */}
         <div className="flex-1 relative min-h-0">
         <nav ref={navRef} className="h-full overflow-y-auto px-3 py-3 space-y-1">
-          <p className="px-3 py-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-            Smart Lists
-          </p>
-          {smartLists
+          <button onClick={toggleSmartLists} className="flex items-center gap-1 px-3 py-1 w-full text-left">
+            {smartListsCollapsed
+              ? <ChevronRight size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
+              : <ChevronDown size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />}
+            <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Smart Lists
+            </span>
+          </button>
+          {!smartListsCollapsed && smartLists
             .filter(({ key, to }) =>
               (key !== 'all' || user?.showAllTasksList !== false) &&
               (key !== 'priority' || user?.showPriorityTasksList === true) &&
@@ -1220,10 +1237,15 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
 
           {/* Projects */}
-          <div className="flex items-center justify-between px-3 py-1">
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Projects
-            </p>
+          <div className="flex items-center px-3 py-1">
+            <button onClick={toggleProjects} className="flex items-center gap-1 flex-1 min-w-0 text-left">
+              {projectsCollapsed
+                ? <ChevronRight size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                : <ChevronDown size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />}
+              <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                Projects
+              </span>
+            </button>
             <button
               onClick={() => setShowCreateModal(true)}
               className="text-gray-400 hover:text-blue-500 transition-colors -mr-1"
@@ -1233,7 +1255,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             </button>
           </div>
 
-          {projects.length === 0 ? (
+          {!projectsCollapsed && (projects.length === 0 ? (
             <p className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500 italic">
               No projects yet
             </p>
@@ -1294,16 +1316,21 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 )}
               </SortableContext>
             </>
-          )}
+          ))}
 
           {/* Tags */}
           {tags.some(t => t.taskCount > 0) && (
             <>
               <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
-              <div className="flex items-center justify-between px-3 py-1">
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                  Tags
-                </p>
+              <div className="flex items-center px-3 py-1">
+                <button onClick={toggleTags} className="flex items-center gap-1 flex-1 min-w-0 text-left">
+                  {tagsCollapsed
+                    ? <ChevronRight size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    : <ChevronDown size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />}
+                  <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    Tags
+                  </span>
+                </button>
                 <button
                   onClick={() => setShowCreateTagModal(true)}
                   className="text-gray-400 hover:text-blue-500 transition-colors -mr-1"
@@ -1312,7 +1339,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                   <Plus size={16} />
                 </button>
               </div>
-              {tags.filter(t => t.taskCount > 0).map(tag => (
+              {!tagsCollapsed && tags.filter(t => t.taskCount > 0).map(tag => (
                 <div key={tag.id} className="relative group/tag flex items-center">
                   <NavLink
                     to={`/app/tags/${tag.id}`}
