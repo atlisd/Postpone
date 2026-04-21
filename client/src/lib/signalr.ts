@@ -1,5 +1,5 @@
 import { HubConnectionBuilder, HubConnection, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { getAccessToken } from '../api/client';
+import { getAccessToken, refreshAccessToken, isAccessTokenExpired } from '../api/client';
 
 type SyncCallback = () => void;
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
@@ -42,7 +42,13 @@ function getConnection(): HubConnection {
   if (!connection) {
     connection = new HubConnectionBuilder()
       .withUrl('/hubs/sync', {
-        accessTokenFactory: () => getAccessToken() ?? '',
+        accessTokenFactory: async () => {
+          const token = getAccessToken();
+          if (!token || isAccessTokenExpired(token)) {
+            try { await refreshAccessToken(); } catch {}
+          }
+          return getAccessToken() ?? '';
+        },
       })
       .withAutomaticReconnect([0, 1000, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Warning)

@@ -31,7 +31,16 @@ if (typeof window !== 'undefined') {
   });
 }
 
-async function refreshAccessToken(): Promise<void> {
+export function isAccessTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp !== 'number' || payload.exp < Date.now() / 1000 + 10;
+  } catch {
+    return true;
+  }
+}
+
+export async function refreshAccessToken(): Promise<void> {
   try {
     const response = await ky.post('/api/auth/refresh', { credentials: 'include' }).json<{ accessToken: string }>();
     setTokens(response.accessToken);
