@@ -271,7 +271,14 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
     private TaskResponse BuildOccurrenceResponse(TodoTask master, DateOnly occurrenceDate, RecurrenceException? exception)
     {
         var effectiveDueDate = exception?.OverriddenDueDate ?? occurrenceDate;
-        var effectiveDueDateTime = exception?.OverriddenDueDateTime ?? master.DueDateTime;
+        DateTime? effectiveDueDateTime;
+        if (exception?.OverriddenDueDateTime is { } overriddenDt)
+            effectiveDueDateTime = overriddenDt;
+        else if (master.DueDateTime is { } masterDt)
+            effectiveDueDateTime = new DateTime(effectiveDueDate.Year, effectiveDueDate.Month, effectiveDueDate.Day,
+                masterDt.Hour, masterDt.Minute, masterDt.Second, masterDt.Kind);
+        else
+            effectiveDueDateTime = null;
         var effectiveTitle = exception?.Title ?? master.Title;
         var effectiveDescription = exception?.Description ?? master.Description;
         var effectivePriority = exception?.Priority ?? master.Priority;

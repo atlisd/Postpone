@@ -43,11 +43,13 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         var allOccurrences = await recurrenceService.ExpandOccurrencesAsync(
             recurringQuery, today.AddYears(-1), today.AddDays(90));
 
-        // Pick the next incomplete occurrence per series
+        // Pick the next incomplete occurrence per series: prefer earliest future occurrence,
+        // fall back to most recent past occurrence if all are overdue.
         var nextOccurrences = allOccurrences
             .Where(o => o.CompletedAt == null)
             .GroupBy(o => o.Id)
-            .Select(g => g.OrderBy(o => o.DueDate).First())
+            .Select(g => g.Where(o => o.DueDate >= today).OrderBy(o => o.DueDate).FirstOrDefault()
+                         ?? g.OrderByDescending(o => o.DueDate).First())
             .ToList();
 
         List<TaskResponse> completedOccurrences = [];
