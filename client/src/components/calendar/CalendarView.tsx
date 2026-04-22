@@ -33,7 +33,7 @@ const VIEW_LABELS: Record<CalendarViewType, string> = {
   agenda: 'Agenda',
 };
 
-const VIEW_ORDER: CalendarViewType[] = ['day', 'week', 'twoWeek', 'workWeek', 'month', 'agenda'];
+const VIEW_ORDER: CalendarViewType[] = ['day', 'workWeek', 'week', 'twoWeek', 'month', 'agenda'];
 
 function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: Date } {
   switch (view) {
