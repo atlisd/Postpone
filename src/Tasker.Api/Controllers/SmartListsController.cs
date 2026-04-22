@@ -45,8 +45,9 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
         var all = regularTasks.Concat(filteredInstances)
             .OrderBy(t => t.DueDate == today ? 1 : 0)
             .ThenBy(t => t.DueDate)
-            .ThenByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDateTime.HasValue ? 0 : 1)
             .ThenBy(t => t.DueDateTime)
+            .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
             .ToList();
 
@@ -69,8 +70,9 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
         var filteredInstances = virtualInstances.Where(v => v.CompletedAt == null && v.DueDate == tomorrow).ToList();
 
         var all = regularTasks.Concat(filteredInstances)
-            .OrderByDescending(t => t.Priority)
+            .OrderBy(t => t.DueDateTime.HasValue ? 0 : 1)
             .ThenBy(t => t.DueDateTime)
+            .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
             .ToList();
 
@@ -95,6 +97,8 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
 
         var all = regularTasks.Concat(filteredInstances)
             .OrderBy(t => t.DueDate)
+            .ThenBy(t => t.DueDateTime.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDateTime)
             .ThenByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
             .ToList();
@@ -146,6 +150,8 @@ public class SmartListsController(IProjectAccessService access, IRecurrenceServi
 
         var all = regularTasks.Concat(filteredInstances)
             .OrderByDescending(t => t.Priority)
+            .ThenBy(t => t.DueDateTime.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueDateTime)
             .ThenBy(t => t.DueDate.HasValue ? 0 : 1)
             .ThenBy(t => t.DueDate)
             .ThenBy(t => t.ProjectName)
