@@ -19,6 +19,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { formatHourShort } = useLocale();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [appName, setAppName] = useState(user?.appName ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [locale, setLocaleState] = useState(user?.locale ?? 'en');
   const [useGravatar, setUseGravatar] = useState(user?.useGravatar ?? false);
@@ -44,7 +45,7 @@ export function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateProfile({ displayName, timezone, locale, useGravatar, showAllTasksList, showPriorityTasksList, hideCompletedInCalendar });
+      await updateProfile({ displayName, timezone, locale, useGravatar, showAllTasksList, showPriorityTasksList, hideCompletedInCalendar, appName: appName || null });
       await refreshUser();
       toast.success('Profile updated');
     } catch {
@@ -127,6 +128,17 @@ export function SettingsPage() {
             onChange={(e) => setDisplayName(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">App name</label>
+          <input
+            value={appName}
+            onChange={(e) => setAppName(e.target.value)}
+            placeholder="Postpone"
+            className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          />
+          <p className="text-xs text-gray-500 mt-1">Replaces "Postpone" in the sidebar header. Leave blank to use the default.</p>
         </div>
 
         <div>

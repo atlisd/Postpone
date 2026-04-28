@@ -29,6 +29,7 @@ export interface UserProfile {
   pinnedProjectIds: string[];
   pinnedTagIds: string[];
   hideCompletedInCalendar: boolean;
+  appName: string | null;
 }
 
 export interface AdminUser {

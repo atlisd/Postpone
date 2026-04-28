@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { IconSidebar } from './IconSidebar';
 import { ConnectionStatus } from '../shared/ConnectionStatus';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   DndContext,
   PointerSensor,
@@ -69,6 +70,7 @@ const sidebarSmartCollision: CollisionDetection = (args) => {
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
   const location = useLocation();
   const showSidebar = ['/app/today', '/app/tomorrow', '/app/next7days', '/app/all', '/app/assigned', '/app/priority', '/app/projects/', '/app/tags/']
     .some(r => location.pathname.startsWith(r));
@@ -133,7 +135,7 @@ export function AppShell() {
             >
               <Menu size={24} />
             </button>
-            <h1 className="ml-3 text-lg font-semibold text-gray-900 dark:text-white">Postpone</h1>
+            <h1 className="ml-3 text-lg font-semibold text-gray-900 dark:text-white">{user?.appName || 'Postpone'}</h1>
           </header>
 
           <div className="flex-1 overflow-y-auto">
