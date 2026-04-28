@@ -152,7 +152,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.TodayNotificationsEnabled, user.TodayNotificationHour, user.TodayNotificationMinute,
             user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
-            user.ShowAllTasksList, user.ShowPriorityTasksList));
+            user.ShowAllTasksList, user.ShowPriorityTasksList,
+            user.PinnedProjectIds, user.PinnedTagIds));
     }
 
     [Authorize]
@@ -170,6 +171,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         if (request.UseGravatar is not null) user.UseGravatar = request.UseGravatar.Value;
         if (request.ShowAllTasksList is not null) user.ShowAllTasksList = request.ShowAllTasksList.Value;
         if (request.ShowPriorityTasksList is not null) user.ShowPriorityTasksList = request.ShowPriorityTasksList.Value;
+        if (request.PinnedProjectIds is not null) user.PinnedProjectIds = request.PinnedProjectIds;
+        if (request.PinnedTagIds is not null) user.PinnedTagIds = request.PinnedTagIds;
 
         await db.SaveChangesAsync();
 
@@ -180,7 +183,8 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.TodayNotificationsEnabled, user.TodayNotificationHour, user.TodayNotificationMinute,
             user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
-            user.ShowAllTasksList, user.ShowPriorityTasksList));
+            user.ShowAllTasksList, user.ShowPriorityTasksList,
+            user.PinnedProjectIds, user.PinnedTagIds));
     }
 
     [Authorize]

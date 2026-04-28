@@ -8,7 +8,7 @@ public record RefreshRequest(string RefreshToken);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale, bool? UseGravatar, bool? ShowAllTasksList, bool? ShowPriorityTasksList);
+public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale, bool? UseGravatar, bool? ShowAllTasksList, bool? ShowPriorityTasksList, Guid[]? PinnedProjectIds, Guid[]? PinnedTagIds);
 
 public record SetPushoverKeyRequest(string? UserKey);
 
@@ -54,4 +54,6 @@ public record UserProfileResponse(
     bool IsAdmin,
     bool MustChangePassword,
     bool ShowAllTasksList,
-    bool ShowPriorityTasksList);
+    bool ShowPriorityTasksList,
+    Guid[] PinnedProjectIds,
+    Guid[] PinnedTagIds);

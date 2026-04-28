@@ -23,6 +23,8 @@ public class User
     public bool UseGravatar { get; set; } = false;
     public bool ShowAllTasksList { get; set; } = true;
     public bool ShowPriorityTasksList { get; set; } = false;
+    public Guid[] PinnedProjectIds { get; set; } = [];
+    public Guid[] PinnedTagIds { get; set; } = [];
     public bool IsAdmin { get; set; }
     public bool MustChangePassword { get; set; } = true;
     public string? InvitationTokenHash { get; set; }

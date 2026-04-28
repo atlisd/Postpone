@@ -6,6 +6,7 @@ import { useSignalR } from '../../hooks/useSignalR';
 import { listProjects, createProject, deleteProject, updateProject } from '../../api/projects';
 import { reorderFolderProjects, reorderTopLevel, listFolders, createFolder, updateFolder, deleteFolder, addProjectToFolder, removeProjectFromFolder, setFolderCollapsed } from '../../api/folders';
 import { listTags, createTag, updateTag, deleteTag } from '../../api/tags';
+import { updateProfile } from '../../api/auth';
 import { getSmartList } from '../../api/tasks';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import { TagFormModal } from '../tags/TagFormModal';
@@ -43,6 +44,7 @@ import {
   User,
   Share2,
   Flag,
+  Pin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProjectShareModal } from '../projects/ProjectShareModal';
@@ -460,7 +462,7 @@ function InboxProjectItem({ project, navLinkClass, onNavClick }: {
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) {
-  const { user, gravatarUrl } = useAuth();
+  const { user, gravatarUrl, refreshUser } = useAuth();
   const [gravatarFailed, setGravatarFailed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -475,6 +477,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const [showCreateTagModal, setShowCreateTagModal] = useState(false);
   const [editingTag, setEditingTag] = useState<TagFull | null>(null);
   const [tagContextMenu, setTagContextMenu] = useState<{ tagId: string; rect: DOMRect } | null>(null);
+  const [pinContextMenu, setPinContextMenu] = useState<{ type: 'project' | 'tag'; id: string; rect: DOMRect } | null>(null);
   const [hasAssignedTasks, setHasAssignedTasks] = useState<boolean | null>(null);
   const [smartListCounts, setSmartListCounts] = useState<Record<string, number>>({});
   const [navOverflows, setNavOverflows] = useState(false);
@@ -1149,6 +1152,61 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
   const allProjects = projects;
 
+  const pinnedProjects = (user?.pinnedProjectIds ?? [])
+    .map(id => allProjects.find(p => p.id === id))
+    .filter((p): p is ProjectResponse => p !== undefined);
+
+  const pinnedTags = (user?.pinnedTagIds ?? [])
+    .map(id => tags.find(t => t.id === id))
+    .filter((t): t is TagFull => t !== undefined);
+
+  const handlePinProject = async (projectId: string) => {
+    if (!user) return;
+    const current = user.pinnedProjectIds ?? [];
+    const already = current.includes(projectId);
+    const next = already ? current.filter(id => id !== projectId) : [...current, projectId];
+    try {
+      await updateProfile({ pinnedProjectIds: next });
+      await refreshUser();
+    } catch {
+      toast.error('Failed to update pinned projects');
+    }
+    setContextMenu(null);
+    setPinContextMenu(null);
+  };
+
+  const handlePinTag = async (tagId: string) => {
+    if (!user) return;
+    const current = user.pinnedTagIds ?? [];
+    const already = current.includes(tagId);
+    const next = already ? current.filter(id => id !== tagId) : [...current, tagId];
+    try {
+      await updateProfile({ pinnedTagIds: next });
+      await refreshUser();
+    } catch {
+      toast.error('Failed to update pinned tags');
+    }
+    setTagContextMenu(null);
+    setPinContextMenu(null);
+  };
+
+  const handleUnpin = async (type: 'project' | 'tag', id: string) => {
+    if (!user) return;
+    try {
+      if (type === 'project') {
+        const next = (user.pinnedProjectIds ?? []).filter(pid => pid !== id);
+        await updateProfile({ pinnedProjectIds: next });
+      } else {
+        const next = (user.pinnedTagIds ?? []).filter(tid => tid !== id);
+        await updateProfile({ pinnedTagIds: next });
+      }
+      await refreshUser();
+    } catch {
+      toast.error('Failed to unpin');
+    }
+    setPinContextMenu(null);
+  };
+
   return (
     <>
       {/* Mobile overlay */}
@@ -1234,6 +1292,52 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               </NavLink>
             ))}
 
+          {!smartListsCollapsed && (pinnedProjects.length > 0 || pinnedTags.length > 0) && (
+            <>
+              <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+              {pinnedProjects.map(project => (
+                <div key={project.id} className="relative group/pin">
+                  <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={handleNavClick}>
+                    <Pin size={14} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    <span className="flex-1 truncate">{project.name}</span>
+                  </NavLink>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setPinContextMenu(prev => prev?.id === project.id ? null : { type: 'project', id: project.id, rect });
+                      setContextMenu(null);
+                      setTagContextMenu(null);
+                    }}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-opacity ${pinContextMenu?.id === project.id ? 'opacity-100' : 'opacity-0 group-hover/pin:opacity-100'}`}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </div>
+              ))}
+              {pinnedTags.map(tag => (
+                <div key={tag.id} className="relative group/pin">
+                  <NavLink to={`/app/tags/${tag.id}`} className={navLinkClass} onClick={handleNavClick}>
+                    <Pin size={14} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    <span className="flex-1 truncate">{tag.name}</span>
+                  </NavLink>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setPinContextMenu(prev => prev?.id === tag.id ? null : { type: 'tag', id: tag.id, rect });
+                      setContextMenu(null);
+                      setTagContextMenu(null);
+                    }}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-opacity ${pinContextMenu?.id === tag.id ? 'opacity-100' : 'opacity-0 group-hover/pin:opacity-100'}`}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+
           <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
 
           {/* Projects */}
@@ -1287,9 +1391,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                         setFolderContextMenu(folderContextMenu?.folderId === folderId ? null : { folderId, rect })
                       }
                       folderContextMenuId={folderContextMenu?.folderId ?? null}
-                      onProjectContextMenu={(projectId, folderId, rect) =>
-                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect })
-                      }
+                      onProjectContextMenu={(projectId, folderId, rect) => {
+                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
+                        setPinContextMenu(null);
+                      }}
                       projectContextMenuId={contextMenu?.projectId ?? null}
                       onShareClick={setSharingProject}
                       onCollapseToggle={handleCollapseToggle}
@@ -1304,9 +1409,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                       userId={user?.id}
                       navLinkClass={navLinkClass}
                       onClose={onClose}
-                      onContextMenu={(projectId, folderId, rect) =>
-                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect })
-                      }
+                      onContextMenu={(projectId, folderId, rect) => {
+                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
+                        setPinContextMenu(null);
+                      }}
                       contextMenuProjectId={contextMenu?.projectId ?? null}
                       taskCount={item.project.taskCount - item.project.completedTaskCount}
                       onShareClick={setSharingProject}
@@ -1356,6 +1462,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                       const rect = e.currentTarget.getBoundingClientRect();
                       setTagContextMenu(tagContextMenu?.tagId === tag.id ? null : { tagId: tag.id, rect });
                       setContextMenu(null);
+                      setPinContextMenu(null);
                     }}
                     className={`absolute right-1 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover/tag:opacity-100 transition-opacity ${tagContextMenu?.tagId === tag.id ? 'opacity-100' : ''}`}
                   >
@@ -1382,8 +1489,8 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div
             className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[140px]"
             style={{
-              top: contextMenu.rect.bottom + 4 + (contextMenu.folderId ? 140 : 115) > window.innerHeight
-                ? contextMenu.rect.top - (contextMenu.folderId ? 140 : 115)
+              top: contextMenu.rect.bottom + 4 + (contextMenu.folderId ? 165 : 140) > window.innerHeight
+                ? contextMenu.rect.top - (contextMenu.folderId ? 165 : 140)
                 : contextMenu.rect.bottom + 4,
               left: contextMenu.rect.left,
             }}
@@ -1422,6 +1529,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 Remove from folder
               </button>
             )}
+            <button
+              onClick={() => handlePinProject(contextMenu.projectId)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pin size={14} />
+              {user?.pinnedProjectIds?.includes(contextMenu.projectId) ? 'Unpin' : 'Pin'}
+            </button>
             <button
               onClick={() => {
                 const project = allProjects.find(p => p.id === contextMenu.projectId);
@@ -1500,8 +1614,8 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
           <div
             className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
             style={{
-              top: tagContextMenu.rect.bottom + 4 + 80 > window.innerHeight
-                ? tagContextMenu.rect.top - 80
+              top: tagContextMenu.rect.bottom + 4 + 105 > window.innerHeight
+                ? tagContextMenu.rect.top - 105
                 : tagContextMenu.rect.bottom + 4,
               left: tagContextMenu.rect.left,
             }}
@@ -1517,6 +1631,13 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
               Edit
             </button>
             <button
+              onClick={() => handlePinTag(tagContextMenu.tagId)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pin size={14} />
+              {user?.pinnedTagIds?.includes(tagContextMenu.tagId) ? 'Unpin' : 'Pin'}
+            </button>
+            <button
               onClick={() => {
                 const tag = tags.find(t => t.id === tagContextMenu.tagId);
                 if (tag) handleDeleteTag(tag.id, tag.name);
@@ -1525,6 +1646,30 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             >
               <Trash2 size={14} />
               Delete
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {pinContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setPinContextMenu(null)} />
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[120px]"
+            style={{
+              top: pinContextMenu.rect.bottom + 4 + 50 > window.innerHeight
+                ? pinContextMenu.rect.top - 50
+                : pinContextMenu.rect.bottom + 4,
+              left: pinContextMenu.rect.left,
+            }}
+          >
+            <button
+              onClick={() => handleUnpin(pinContextMenu.type, pinContextMenu.id)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Pin size={14} />
+              Unpin
             </button>
           </div>
         </>,

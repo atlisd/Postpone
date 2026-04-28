@@ -26,6 +26,8 @@ export interface UserProfile {
   mustChangePassword: boolean;
   showAllTasksList: boolean;
   showPriorityTasksList: boolean;
+  pinnedProjectIds: string[];
+  pinnedTagIds: string[];
 }
 
 export interface AdminUser {

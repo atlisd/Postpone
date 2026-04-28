@@ -27,6 +27,13 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordResetTokenHash).IsRequired(false);
         builder.Property(u => u.PasswordResetExpiresAt).IsRequired(false);
 
+        builder.Property(u => u.PinnedProjectIds)
+            .HasColumnType("uuid[]")
+            .HasDefaultValueSql("'{}'::uuid[]");
+        builder.Property(u => u.PinnedTagIds)
+            .HasColumnType("uuid[]")
+            .HasDefaultValueSql("'{}'::uuid[]");
+
         builder.HasIndex(u => u.EmailNormalized).IsUnique();
         builder.HasIndex(u => u.InvitationTokenHash)
             .HasFilter("\"InvitationTokenHash\" IS NOT NULL");
