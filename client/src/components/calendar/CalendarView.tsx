@@ -7,6 +7,7 @@ import {
 import type { Locale } from 'date-fns';
 import { ChevronLeft, ChevronRight, ChevronDown, Check, X } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { getCalendarTasks } from '../../api/calendar';
 import { parseNaturalDate } from '../../lib/naturalDate';
 import { updateTaskDueDate, createTask, rescheduleOccurrence, splitSeriesFrom, completeTask, uncompleteTask, completeOccurrence, uncompleteOccurrence } from '../../api/tasks';
@@ -109,6 +110,7 @@ function navigateDate(view: CalendarViewType, date: Date, delta: 1 | -1): Date {
 }
 
 export function CalendarView() {
+  const { user } = useAuth();
   const { locale } = useLocale();
 
   const [viewType, setViewType] = useState<CalendarViewType>(() => {
@@ -345,10 +347,10 @@ export function CalendarView() {
     taskCountByProject.set(task.projectId, (taskCountByProject.get(task.projectId) ?? 0) + 1);
   }
 
-  // Filter tasks by selected projects
-  const filteredTasks = selectedProjectIds.size === 0
-    ? tasks
-    : tasks.filter(t => selectedProjectIds.has(t.projectId));
+  // Filter tasks by selected projects and completion preference
+  const filteredTasks = tasks
+    .filter(t => selectedProjectIds.size === 0 || selectedProjectIds.has(t.projectId))
+    .filter(t => !user?.hideCompletedInCalendar || !t.completedAt);
 
   // Group tasks by date — multi-day tasks appear on every day in their range
   const tasksByDate = new Map<string, TaskResponse[]>();

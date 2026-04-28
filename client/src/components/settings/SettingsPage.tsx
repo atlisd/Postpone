@@ -24,6 +24,7 @@ export function SettingsPage() {
   const [useGravatar, setUseGravatar] = useState(user?.useGravatar ?? false);
   const [showAllTasksList, setShowAllTasksList] = useState(user?.showAllTasksList ?? true);
   const [showPriorityTasksList, setShowPriorityTasksList] = useState(user?.showPriorityTasksList ?? false);
+  const [hideCompletedInCalendar, setHideCompletedInCalendar] = useState(user?.hideCompletedInCalendar ?? false);
   const [pushoverKey, setPushoverKeyState] = useState(user?.pushoverUserKey ?? '');
   const [overdueNotificationsEnabled, setOverdueNotificationsEnabled] = useState(user?.overdueNotificationsEnabled ?? true);
   const [overdueNotificationHour, setOverdueNotificationHour] = useState(user?.overdueNotificationHour ?? 8);
@@ -43,7 +44,7 @@ export function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateProfile({ displayName, timezone, locale, useGravatar, showAllTasksList, showPriorityTasksList });
+      await updateProfile({ displayName, timezone, locale, useGravatar, showAllTasksList, showPriorityTasksList, hideCompletedInCalendar });
       await refreshUser();
       toast.success('Profile updated');
     } catch {
@@ -184,6 +185,16 @@ export function SettingsPage() {
             className="w-4 h-4 rounded border-gray-300 text-blue-600"
           />
           <span className="text-sm text-gray-700 dark:text-gray-300">Show "Priority Tasks" in the sidebar</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hideCompletedInCalendar}
+            onChange={(e) => setHideCompletedInCalendar(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Hide completed tasks in calendar views</span>
         </label>
 
         <button

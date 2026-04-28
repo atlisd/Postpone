@@ -28,6 +28,7 @@ export interface UserProfile {
   showPriorityTasksList: boolean;
   pinnedProjectIds: string[];
   pinnedTagIds: string[];
+  hideCompletedInCalendar: boolean;
 }
 
 export interface AdminUser {

@@ -4,6 +4,7 @@ import type { Locale } from 'date-fns';
 import { Repeat } from 'lucide-react';
 import { getCalendarTasks } from '../../api/calendar';
 import type { TaskResponse } from '../../types/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { useSignalR } from '../../hooks/useSignalR';
 
@@ -19,6 +20,7 @@ const INITIAL_DAYS = 60;
 const MORE_DAYS = 30;
 
 export function AgendaView({ selectedProjectIds, onSelectTask, onAddTask, todayTrigger, locale }: AgendaViewProps) {
+  const { user } = useAuth();
   const today = useRef(new Date()).current;
   const windowStartRef = useRef(today);
   const windowEndRef = useRef(addDays(today, INITIAL_DAYS));
@@ -117,9 +119,9 @@ export function AgendaView({ selectedProjectIds, onSelectTask, onAddTask, todayT
     if (nearest) refs.get(nearest)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [todayTrigger, today]);
 
-  const filteredTasks = selectedProjectIds.size === 0
-    ? tasks
-    : tasks.filter(t => selectedProjectIds.has(t.projectId));
+  const filteredTasks = tasks
+    .filter(t => selectedProjectIds.size === 0 || selectedProjectIds.has(t.projectId))
+    .filter(t => !user?.hideCompletedInCalendar || !t.completedAt);
 
   // Group by date
   const grouped: { dateKey: string; date: Date; tasks: TaskResponse[] }[] = [];
