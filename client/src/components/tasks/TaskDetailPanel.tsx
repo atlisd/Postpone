@@ -219,15 +219,15 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
   const [tagOpen, setTagOpen] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const naturalDateInputRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionRef = useRef<HTMLDivElement>(null);
   const isCompleted = !!task.completedAt;
 
   useEffect(() => {
     const el = descriptionRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [description]);
+    if (el && document.activeElement !== el && el.textContent !== description) {
+      el.textContent = description;
+    }
+  }, [description, isEditingDescription]);
 
   useEffect(() => {
     const taskChanged = taskIdRef.current !== task.id;
@@ -859,22 +859,33 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           {/* Description */}
           <div className="-mx-4 border-t border-b border-gray-200 dark:border-gray-700">
             {isEditingDescription || !description ? (
-              <textarea
+              <div
                 ref={descriptionRef}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => setDescription(e.currentTarget.textContent ?? '')}
                 onBlur={handleBlur}
                 onFocus={() => setIsEditingDescription(true)}
-                placeholder="Add description..."
+                data-placeholder="Add description..."
                 style={{ minHeight: '6rem' }}
-                className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent border-none outline-none resize-none px-4 py-2"
+                className="w-full text-sm text-gray-700 dark:text-gray-300 bg-transparent outline-none px-4 py-2 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-600 empty:before:pointer-events-none"
               />
             ) : (
               <DescriptionWithLinks
                 text={description}
                 onClick={() => {
                   setIsEditingDescription(true);
-                  requestAnimationFrame(() => descriptionRef.current?.focus());
+                  requestAnimationFrame(() => {
+                    const el = descriptionRef.current;
+                    if (!el) return;
+                    el.focus();
+                    const range = document.createRange();
+                    const sel = window.getSelection();
+                    range.selectNodeContents(el);
+                    range.collapse(false);
+                    sel?.removeAllRanges();
+                    sel?.addRange(range);
+                  });
                 }}
               />
             )}
