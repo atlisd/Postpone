@@ -914,12 +914,17 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           </div>
         </div>
 
+        <button
+          onClick={handleDelete}
+          className="mx-4 mb-4 flex items-center justify-center gap-2 py-2 text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg transition-colors"
+        >
+          <Trash2 size={15} />
+          Delete task
+        </button>
+
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 flex items-center justify-between">
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 pb-[env(safe-area-inset-bottom)]">
           <span>{saving ? 'Saving...' : `Created by ${task.createdByName} · ${new Date(task.createdAt).toLocaleString(localeCode, { dateStyle: 'medium', timeStyle: 'short' })}`}</span>
-          <button onClick={handleDelete} className="p-1 text-gray-400 hover:text-red-500 rounded">
-            <Trash2 size={14} />
-          </button>
         </div>
       </div>
     </div>
