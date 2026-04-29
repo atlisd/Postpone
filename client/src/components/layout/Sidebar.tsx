@@ -1294,7 +1294,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
           {!smartListsCollapsed && (pinnedProjects.length > 0 || pinnedTags.length > 0) && (
             <>
-              <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+              <div className="my-1.5 border-t border-gray-200 dark:border-gray-700" />
               {pinnedProjects.map(project => (
                 <div key={project.id} className="relative group/pin">
                   <NavLink to={`/app/projects/${project.id}`} className={navLinkClass} onClick={handleNavClick}>
@@ -1338,7 +1338,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
             </>
           )}
 
-          <div className="my-3 border-t border-gray-200 dark:border-gray-700" />
+          <div className="my-1.5 border-t border-gray-200 dark:border-gray-700" />
 
           {/* Projects */}
           <div className="flex items-center px-3 py-1">
