@@ -21,7 +21,7 @@ export default defineConfig({
         name: 'Postpone',
         short_name: 'Postpone',
         description: 'A general purpose task manager',
-        theme_color: '#3b82f6',
+        theme_color: '#fafafa',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/app/today',

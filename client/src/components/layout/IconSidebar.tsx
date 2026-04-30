@@ -25,7 +25,7 @@ const isSettingsActive = location.pathname === '/app/settings';
   const effectiveAvatarUrl = (!gravatarFailed && gravatarUrl) ? gravatarUrl : user?.avatarUrl;
 
   return (
-    <aside className="hidden md:flex flex-col items-center w-14 py-3 gap-2 bg-gray-200 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <aside className="hidden md:flex flex-col items-center w-14 py-3 gap-2 bg-gray-200 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 [@media(display-mode:standalone)]:rounded-tr-xl">
       {/* User avatar */}
       <button
         onClick={() => navigate('/app/settings')}
