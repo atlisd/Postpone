@@ -41,10 +41,17 @@ export function formatTimeUntilDue(dueDate: string | null, dueDateTime: string |
     const diffHrs  = Math.floor(diffMs / 3_600_000);
     const diffDays = Math.floor(diffMs / 86_400_000);
     const diffWks  = Math.floor(diffDays / 7);
+    const diffMos  = Math.floor(diffDays / 30);
+    const diffYrs  = Math.floor(diffMos / 12);
     if (diffMins < 60) return `in ${diffMins}m`;
     if (diffHrs  < 24) return `in ${diffHrs}h`;
     if (diffDays <  7) return `in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-    return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
+    if (diffDays < 30) return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
+    if (diffMos  < 12) return `in ${diffMos} mo${diffMos !== 1 ? 's' : ''}`;
+    const remMos = diffMos % 12;
+    return remMos === 0
+      ? `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''}`
+      : `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''} ${remMos} mo${remMos !== 1 ? 's' : ''}`;
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -54,7 +61,14 @@ export function formatTimeUntilDue(dueDate: string | null, dueDateTime: string |
   if (diffDays === 0) return 'Today';
   if (diffDays < 7)  return `in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
   const diffWks = Math.floor(diffDays / 7);
-  return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
+  if (diffDays < 30) return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
+  const diffMos = Math.floor(diffDays / 30);
+  if (diffMos < 12) return `in ${diffMos} mo${diffMos !== 1 ? 's' : ''}`;
+  const diffYrs = Math.floor(diffMos / 12);
+  const remMos  = diffMos % 12;
+  return remMos === 0
+    ? `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''}`
+    : `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''} ${remMos} mo${remMos !== 1 ? 's' : ''}`;
 }
 
 export function groupByDate(dateStr: string, locale: Locale): string {
