@@ -19,8 +19,10 @@ import { Toaster } from 'sonner';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LocaleProvider } from './contexts/LocaleContext';
+import { useVersionCheck } from './hooks/useVersionCheck';
 
 export default function App() {
+  useVersionCheck()
   return (
     <ThemeProvider>
     <BrowserRouter>

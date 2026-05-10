@@ -6,14 +6,26 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
+const buildTime = Date.now().toString()
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __BUILD_TIME__: JSON.stringify(buildTime),
   },
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'generate-version-json',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ buildTime }),
+        })
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -49,6 +61,12 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/hubs/],
+        runtimeCaching: [
+          {
+            urlPattern: /\/version\.json$/,
+            handler: 'NetworkOnly',
+          },
+        ],
       },
     }),
   ],
