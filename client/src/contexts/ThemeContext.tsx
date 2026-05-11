@@ -23,7 +23,7 @@ function applyTheme(theme: ThemeMode) {
   document.documentElement.classList.toggle('dark', isDark);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute('content', isDark ? '#111827' : '#3b82f6');
+    meta.setAttribute('content', isDark ? '#111827' : '#fafafa');
   }
 }
 
