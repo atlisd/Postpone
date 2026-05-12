@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  startOfDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, addMonths, addWeeks, addDays,
   isSameMonth, isToday, parseISO,
 } from 'date-fns';
@@ -39,7 +39,7 @@ const VIEW_ORDER: CalendarViewType[] = ['day', 'workWeek', 'week', 'twoWeek', 'm
 function getViewRange(view: CalendarViewType, date: Date): { start: Date; end: Date } {
   switch (view) {
     case 'day':
-      return { start: date, end: date };
+      return { start: startOfDay(date), end: startOfDay(date) };
     case 'week':
       return {
         start: startOfWeek(date, { weekStartsOn: 1 }),
