@@ -10,12 +10,16 @@ interface LocaleDateInputProps {
   className?: string;
 }
 
-function isMonthFirst(localeCode: string): boolean {
-  // Use Intl to detect if locale puts month before day
-  const parts = new Intl.DateTimeFormat(localeCode).formatToParts(new Date(2000, 1, 3)); // Feb 3
-  const dayIndex = parts.findIndex(p => p.type === 'day');
-  const monthIndex = parts.findIndex(p => p.type === 'month');
-  return monthIndex < dayIndex;
+function isMonthFirst(locale: import('date-fns').Locale): boolean {
+  // Derive day/month order from date-fns (same source as formatForDisplay) rather
+  // than Intl.DateTimeFormat. Intl is backed by the OS's ICU data, which disagrees
+  // across platforms (e.g. Chrome on Windows vs macOS) for locales like 'is' — that
+  // mismatch made typed dates silently swap or revert. date-fns ships its own locale
+  // data, so display and parsing stay consistent on every OS.
+  // Test date Mar 4 2000: day=4, month=3 are distinct single digits, each appearing
+  // once in the 'P' output, so the index comparison is unambiguous.
+  const formatted = format(new Date(2000, 2, 4), 'P', { locale });
+  return formatted.indexOf('3') < formatted.indexOf('4'); // month before day?
 }
 
 function formatForDisplay(isoDate: string, dateFnsLocale: import('date-fns').Locale): string {
@@ -29,7 +33,7 @@ function formatForDisplay(isoDate: string, dateFnsLocale: import('date-fns').Loc
   }
 }
 
-function parseInput(input: string, localeCode: string): string | null {
+function parseInput(input: string, locale: import('date-fns').Locale): string | null {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
@@ -53,14 +57,14 @@ function parseInput(input: string, localeCode: string): string | null {
     [year, month, day] = nums;
   } else if (parts[2].length === 4) {
     // Last part is year — determine day/month order from locale
-    if (isMonthFirst(localeCode)) {
+    if (isMonthFirst(locale)) {
       [month, day, year] = nums;
     } else {
       [day, month, year] = nums;
     }
   } else if (parts[2].length === 2) {
     const fullYear = nums[2] + (nums[2] < 50 ? 2000 : 1900);
-    if (isMonthFirst(localeCode)) {
+    if (isMonthFirst(locale)) {
       [month, day] = nums;
     } else {
       [day, month] = nums;
@@ -233,7 +237,7 @@ function CalendarPopup({ value, onSelect, onClose, locale }: CalendarPopupProps)
 }
 
 export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDateInputProps) {
-  const { locale, localeCode } = useLocale();
+  const { locale } = useLocale();
   const [displayValue, setDisplayValue] = useState(() => formatForDisplay(value, locale));
   const [editing, setEditing] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -245,7 +249,7 @@ export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDa
       setDisplayValue(formatForDisplay(value, locale));
       lastValidRef.current = value;
     }
-  }, [value, localeCode, locale, editing]);
+  }, [value, locale, editing]);
 
   // Close calendar on outside click
   useEffect(() => {
@@ -269,7 +273,7 @@ export function LocaleDateInput({ value, onChange, onBlur, className }: LocaleDa
 
   const handleBlur = () => {
     setEditing(false);
-    const parsed = parseInput(displayValue, localeCode);
+    const parsed = parseInput(displayValue, locale);
     if (parsed !== null) {
       lastValidRef.current = parsed;
       onChange(parsed);
