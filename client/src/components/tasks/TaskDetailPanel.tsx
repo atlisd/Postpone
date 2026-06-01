@@ -224,7 +224,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   useEffect(() => {
     const el = descriptionRef.current;
-    if (el && document.activeElement !== el && el.textContent !== description) {
+    if (el && document.activeElement !== el && el.innerText.replace(/\n$/, '') !== description) {
       el.textContent = description;
     }
   }, [description, isEditingDescription]);
@@ -863,7 +863,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
                 ref={descriptionRef}
                 contentEditable
                 suppressContentEditableWarning
-                onInput={(e) => setDescription(e.currentTarget.textContent ?? '')}
+                onInput={(e) => setDescription(e.currentTarget.innerText.replace(/\n$/, ''))}
                 onBlur={handleBlur}
                 onFocus={() => setIsEditingDescription(true)}
                 data-placeholder="Add description..."
