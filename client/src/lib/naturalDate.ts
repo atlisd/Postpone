@@ -147,26 +147,28 @@ export function parseNaturalDate(raw: string): ParsedDateResult | null {
       re: /\btoday\b/,
       resolve: () => today,
     },
-    // 6a. "[D] [Month]" e.g. "20 apr"
+    // 6a. "[D] [Month] [Year?]" e.g. "20 apr" or "20 apr 2027"
     {
-      re: new RegExp(`\\b(\\d{1,2})\\s+(${MONTH_PATTERN})\\b`),
+      re: new RegExp(`\\b(\\d{1,2})\\s+(${MONTH_PATTERN})(?:\\s+(\\d{4}))?\\b`),
       resolve: (m) => {
         const day = parseInt(m[1], 10);
         const monthKey = m[2].slice(0, 3);
         const month = MONTH_MAP[monthKey];
+        if (m[3]) return startOfDay(new Date(parseInt(m[3], 10), month, day));
         let year = today.getFullYear();
         let d = new Date(year, month, day);
         if (d < today) d = new Date(year + 1, month, day);
         return startOfDay(d);
       },
     },
-    // 6b. "[Month] [D]" e.g. "apr 20"
+    // 6b. "[Month] [D] [Year?]" e.g. "apr 20" or "apr 20 2027" or "apr 20, 2027"
     {
-      re: new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})\\b`),
+      re: new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})(?:,?\\s+(\\d{4}))?\\b`),
       resolve: (m) => {
         const monthKey = m[1].slice(0, 3);
         const month = MONTH_MAP[monthKey];
-        const day = parseInt(m[m.length - 1], 10);
+        const day = parseInt(m[2], 10);
+        if (m[3]) return startOfDay(new Date(parseInt(m[3], 10), month, day));
         let year = today.getFullYear();
         let d = new Date(year, month, day);
         if (d < today) d = new Date(year + 1, month, day);
