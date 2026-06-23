@@ -120,7 +120,9 @@ test.describe('Drag and Drop', () => {
     // Drag P1 below P3
     const p1Link = sidebar.locator('a', { hasText: P1 });
     const p3Link = sidebar.locator('a', { hasText: P3 });
-    const p1Item = p1Link.locator('..');
+    // The sortable wrapper (which receives the opacity-50 dragging class) is the
+    // grandparent of the <a>: <div setNodeRef opacity-50> > <div relative group> > <a>
+    const p1Item = p1Link.locator('../..');
 
     // Scroll P3 into view first, then P1, ensuring both are visible before the drag
     await p3Link.scrollIntoViewIfNeeded();
@@ -237,7 +239,8 @@ test.describe('Drag and Drop', () => {
 
     await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2);
     await page.mouse.down();
-    await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2 + 5);
+    // Move well past the PointerSensor activation constraint (distance: 5) to start the drag
+    await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2 + 12);
 
     // Verify dragging animation (opacity class applied)
     await expect(taskOneRow).toHaveClass(/opacity-/, { timeout: 2000 });

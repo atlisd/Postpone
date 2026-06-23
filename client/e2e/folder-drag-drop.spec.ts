@@ -323,10 +323,12 @@ test.describe('Folder drag-and-drop', () => {
     expect(idxB).toBeLessThan(idxC);
   });
 
-  test('quick-drag project onto folder header lands inside folder (not at root)', async ({ page, request }) => {
-    // Regression: a transient onDragOver swap accumulated in runningTopLevelOrderRef
-    // was causing Branch 2 to fall through to Branch 3, leaving the project at
-    // root below the folder (the "ghost record" symptom).
+  test('quick-drag project onto folder header reorders at root (does not add to folder)', async ({ page, request }) => {
+    // By design, a quick drop on a folder header (no 1000ms merge hold) is a top-level
+    // reorder — the project stays ungrouped. Adding to a folder via the header requires
+    // the merge-intent hold (covered by the "adds it to the folder" / "lands at TOP" tests).
+    // This deliberately rejects header drops without latched merge intent to fix the old
+    // "popped out of folder" bug (Sidebar onDragEnd Branch 4).
     page.on('dialog', d => d.accept());
     await createProjectUI(page, PA);
     await createProjectUI(page, PB);
@@ -343,9 +345,8 @@ test.describe('Folder drag-and-drop', () => {
     const paLink = projectLink(page, PA);
     await paLink.hover();
     const handle = projectHandle(page, PA);
-    // Quick drag with NO hold — merge timer (1000ms) must not latch; this
-    // exercises the Branch 2 "instant header drop" path that used to bypass
-    // the add-to-folder logic.
+    // Quick drag with NO hold — the merge timer (1000ms) must not latch, so this drop
+    // is treated as a top-level reorder rather than a folder add.
     const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
 
     await performDrag(page, handle, folderHeader, {
@@ -354,14 +355,15 @@ test.describe('Folder drag-and-drop', () => {
       steps: 8,
     });
 
-    // PA must now be inside the folder.
+    // PA must remain ungrouped — a quick header drop does not add it to the folder.
     const projectsAfter = await apiListProjects(request);
     const paAfter = projectsAfter.find(p => p.name === PA)!;
-    expect(paAfter.folderId).toBe(folder.id);
+    expect(paAfter.folderId).toBeNull();
 
+    // The folder still contains only PB.
     const foldersAfter = await apiListFolders(request);
     const fAfter = foldersAfter.find(x => x.id === folder.id)!;
-    expect(fAfter.projects.map(p => p.name).sort()).toEqual([PA, PB].sort());
+    expect(fAfter.projects.map(p => p.name)).toEqual([PB]);
   });
 
   test('dragging a folder to reorder does not crash the page', async ({ page, request }) => {

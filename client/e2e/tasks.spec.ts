@@ -77,7 +77,7 @@ test.describe('Tasks', () => {
 
     page.on('dialog', dialog => dialog.accept());
     await projectEntry.locator('button').last().click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(page).toHaveURL(/\/app\/today/, { timeout: 10000 });
   });
@@ -124,7 +124,7 @@ test.describe('Tasks', () => {
     await projectEntry.hover();
     page.on('dialog', dialog => dialog.accept());
     await projectEntry.locator('button').last().click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/today/, { timeout: 10000 });
   });
 
@@ -173,7 +173,7 @@ test.describe('Tasks', () => {
 
     page.on('dialog', dialog => dialog.accept());
     await projectEntry.locator('button').last().click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(page).toHaveURL(/\/app\/today/, { timeout: 10000 });
   });

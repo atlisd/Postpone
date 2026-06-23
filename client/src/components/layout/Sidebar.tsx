@@ -296,6 +296,7 @@ function SortableFolderItem({
   return (
     <div
       ref={setNodeRef}
+      data-drag-id={folderSortableId}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,

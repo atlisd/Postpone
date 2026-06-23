@@ -151,7 +151,7 @@ test.describe('Task Details', () => {
     await page.goto(projectUrl);
     await openTaskDetailPanel(page, taskTitle);
 
-    const desc = page.getByPlaceholder('Add description...');
+    const desc = page.locator('[data-placeholder="Add description..."]');
     await desc.fill('This is a test description for regression testing.');
     await desc.press('Tab');
     await page.waitForTimeout(500);
@@ -170,7 +170,7 @@ test.describe('Task Details', () => {
     const descContainer = page.locator('div').filter({ hasText: 'This is a test description' }).last();
     await descContainer.click();
 
-    const desc = page.getByPlaceholder('Add description...');
+    const desc = page.locator('[data-placeholder="Add description..."]');
     await expect(desc).toBeVisible({ timeout: 2000 });
     await desc.fill('Check out https://example.com for more info.');
     await desc.press('Tab');
@@ -193,7 +193,7 @@ test.describe('Task Details', () => {
 
     // Clicking non-link text enters edit mode (textarea reappears)
     await page.locator('text=Check out').click();
-    await expect(page.getByPlaceholder('Add description...')).toBeVisible({ timeout: 2000 });
+    await expect(page.locator('[data-placeholder="Add description..."]')).toBeVisible({ timeout: 2000 });
   });
 
   test('set priority to High', async ({ page }) => {
@@ -287,7 +287,8 @@ test.describe('Task Details', () => {
     // Perform drag: Sub A → below Sub C
     await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2);
     await page.mouse.down();
-    await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2 + 5);
+    // Move well past the PointerSensor activation constraint (distance: 5) to start the drag
+    await page.mouse.move(handleBB.x + handleBB.width / 2, handleBB.y + handleBB.height / 2 + 12);
     // Verify drag animation started (item gets opacity change)
     await expect(subARow).toHaveClass(/opacity-/, { timeout: 2000 });
     await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height / 2 + 5, { steps: 30 });

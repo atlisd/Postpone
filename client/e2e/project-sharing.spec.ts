@@ -122,8 +122,9 @@ test.describe('Project Sharing', () => {
 
     // User should now appear in the members list
     await expect(page.getByText(SHARE_DISPLAY)).toBeVisible({ timeout: 5000 });
-    // They should no longer appear in the dropdown (it should be gone or not show SHARE_DISPLAY)
-    await expect(page.locator('select').first()).not.toContainText(SHARE_DISPLAY, { timeout: 3000 });
+    // They should no longer appear in the dropdown (the select is removed entirely when
+    // there are no remaining users to add, or it simply no longer lists SHARE_DISPLAY)
+    await expect(page.locator('select').filter({ hasText: SHARE_DISPLAY })).toHaveCount(0, { timeout: 3000 });
 
     // Close the modal via X button
     await page.getByRole('button', { name: 'Close', exact: true }).click();
