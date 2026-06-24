@@ -62,29 +62,35 @@ public static class ServiceCollectionExtensions
         services.AddFluentValidationAutoValidation();
         services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
 
-        // Rate limiting
+        // Rate limiting — both policies partition by client IP so limits are per-user, not global.
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            // Limit for low-frequency auth endpoints (setup, reset-password, etc.)
+            // Per-IP limit for low-frequency auth endpoints (setup, reset-password, etc.)
             // Login uses ILoginRateLimiter (failed-attempts only) instead of this policy.
-            options.AddFixedWindowLimiter("auth", opt =>
-            {
-                opt.PermitLimit = 20;
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                opt.QueueLimit = 0;
-            });
+            options.AddPolicy("auth", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 20,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
 
-            // General API limit per IP
-            options.AddFixedWindowLimiter("api", opt =>
-            {
-                opt.PermitLimit = 300;
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                opt.QueueLimit = 0;
-            });
+            // Per-IP general API limit
+            options.AddPolicy("api", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 300,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
         });
 
         // Health checks

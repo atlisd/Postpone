@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Tasker.Api.Data;
@@ -107,6 +108,14 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
+
+    // Trust X-Forwarded-For from the nginx reverse proxy on the Docker internal network.
+    // The Docker default bridge subnet is 172.16.0.0/12.
+    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        KnownIPNetworks = { new System.Net.IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12) }
+    });
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseSerilogRequestLogging(opts =>
