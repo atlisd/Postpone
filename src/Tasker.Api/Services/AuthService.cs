@@ -83,6 +83,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         user.MustChangePassword = false;
+        await RevokeAllTokensInContextAsync(userId);
         await db.SaveChangesAsync();
 
         return true;
@@ -100,6 +101,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         user.InvitationTokenHash = null;
         user.InvitationExpiresAt = null;
         user.MustChangePassword = false;
+        await RevokeAllTokensInContextAsync(user.Id);
         await db.SaveChangesAsync();
 
         return true;
@@ -117,9 +119,21 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         user.PasswordResetTokenHash = null;
         user.PasswordResetExpiresAt = null;
         user.MustChangePassword = false;
+        await RevokeAllTokensInContextAsync(user.Id);
         await db.SaveChangesAsync();
 
         return true;
+    }
+
+    private async Task RevokeAllTokensInContextAsync(Guid userId)
+    {
+        var tokens = await db.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        foreach (var t in tokens)
+            t.RevokedAt = now;
     }
 
     public async Task<(bool isValid, string? email, string? displayName)> ValidateTokenAsync(string token, string type)
