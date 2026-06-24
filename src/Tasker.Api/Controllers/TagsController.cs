@@ -125,7 +125,7 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access, IS
             return Forbid();
 
         var tag = await db.Tags.FindAsync(request.TagId);
-        if (tag is null) return NotFound();
+        if (tag is null || tag.UserId != userId) return NotFound();
 
         var exists = await db.TaskTags.AnyAsync(tt => tt.TaskId == taskId && tt.TagId == request.TagId);
         if (exists) return Ok();
