@@ -10,18 +10,21 @@ using Tasker.Api.Services;
 
 namespace Tasker.Api.BackgroundJobs;
 
-public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger, IConfiguration configuration) : IHostedService, IDisposable
+public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger, IConfiguration configuration) : BackgroundService
 {
-    private Timer? _timer;
-
-    public Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("NotificationSchedulerJob starting");
-        _timer = new Timer(DoWork, null, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(1));
-        return Task.CompletedTask;
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+                await DoWork(stoppingToken);
+        }
+        catch (OperationCanceledException) { }
     }
 
-    private async void DoWork(object? state)
+    private async Task DoWork(CancellationToken cancellationToken)
     {
         try
         {
@@ -30,25 +33,22 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             var pushover = scope.ServiceProvider.GetRequiredService<IPushoverClient>();
             var access = scope.ServiceProvider.GetRequiredService<IProjectAccessService>();
 
-            // Find users with Pushover keys
             var users = await db.Users
                 .Where(u => u.PushoverUserKey != null && u.PushoverUserKey != "")
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             foreach (var user in users)
-            {
-                await ProcessUserNotifications(db, pushover, access, user);
-            }
+                await ProcessUserNotifications(db, pushover, access, user, cancellationToken);
 
             var logCutoff = DateTime.UtcNow.AddDays(-90);
             await db.NotificationLogs
                 .Where(n => n.SentAt < logCutoff)
-                .ExecuteDeleteAsync();
+                .ExecuteDeleteAsync(cancellationToken);
 
             var tokenCutoff = DateTime.UtcNow.AddDays(-1);
             await db.RefreshTokens
                 .Where(t => t.ExpiresAt < tokenCutoff || t.RevokedAt != null)
-                .ExecuteDeleteAsync();
+                .ExecuteDeleteAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -56,12 +56,11 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         }
     }
 
-    private async Task ProcessUserNotifications(TaskerDbContext db, IPushoverClient pushover, IProjectAccessService access, User user)
+    private async Task ProcessUserNotifications(TaskerDbContext db, IPushoverClient pushover, IProjectAccessService access, User user, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
         var projectIds = await access.GetAccessibleProjectIdsAsync(user.Id);
 
-        // Non-recurring tasks
         var tasks = await db.Tasks
             .Include(t => t.Project)
             .Include(t => t.Reminders)
@@ -70,7 +69,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 && t.CompletedAt == null
                 && (t.DueDate.HasValue || t.DueDateTime.HasValue)
                 && t.Rrule == null)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         TimeZoneInfo tz;
         try { tz = TimeZoneInfo.FindSystemTimeZoneById(user.Timezone); }
@@ -81,18 +80,24 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         foreach (var task in tasks)
         {
             if (task.SkipNotification) continue;
-            if (task.DueDateTime.HasValue)
+            try
             {
-                if (task.Reminders.Count > 0)
-                    await ProcessReminderNotifications(db, pushover, user, task, now, tz);
+                if (task.DueDateTime.HasValue)
+                {
+                    if (task.Reminders.Count > 0)
+                        await ProcessReminderNotifications(db, pushover, user, task, now, tz);
+                    else
+                        await ProcessTimedNotification(db, pushover, user, task, now, tz);
+                }
                 else
-                    await ProcessTimedNotification(db, pushover, user, task, now, tz);
+                    await ProcessDateOnlyNotification(db, pushover, user, task, now, userNow);
             }
-            else
-                await ProcessDateOnlyNotification(db, pushover, user, task, now, userNow);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing notification for user {User} task {Task}", user.Email, task.Id);
+            }
         }
 
-        // Recurring task occurrences — expand for today and check notifications
         var recurrenceService = new RecurrenceService(db, LoggerFactory.Create(b => { }).CreateLogger<RecurrenceService>());
         var today = DateOnly.FromDateTime(userNow);
         var recurringQuery = db.Tasks
@@ -102,20 +107,35 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         foreach (var instance in virtualInstances.Where(v => v.CompletedAt == null))
         {
             if (instance.SkipNotification) continue;
-            if (instance.DueDateTime.HasValue)
+            try
             {
-                if (instance.Reminders.Count > 0)
-                    await ProcessRecurringReminderNotifications(db, pushover, user, instance, now, tz);
+                if (instance.DueDateTime.HasValue)
+                {
+                    if (instance.Reminders.Count > 0)
+                        await ProcessRecurringReminderNotifications(db, pushover, user, instance, now, tz);
+                    else
+                        await ProcessRecurringTimedNotification(db, pushover, user, instance, now, tz);
+                }
                 else
-                    await ProcessRecurringTimedNotification(db, pushover, user, instance, now, tz);
+                    await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
             }
-            else
-                await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing recurring notification for user {User} task {Task}", user.Email, instance.Id);
+            }
         }
 
-        // Grouped today notification — sent once per day covering all date-only tasks due today
         if (user.TodayNotificationsEnabled && user.TodayNotificationsGrouped)
-            await ProcessTodayGroupedNotification(db, pushover, recurrenceService, user, now, userNow, today, projectIds);
+        {
+            try
+            {
+                await ProcessTodayGroupedNotification(db, pushover, recurrenceService, user, now, userNow, today, projectIds, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing grouped today notification for user {User}", user.Email);
+            }
+        }
     }
 
     private async Task ProcessTimedNotification(
@@ -123,7 +143,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         User user, TodoTask task, DateTime utcNow, TimeZoneInfo tz)
     {
         var dueUtc = task.DueDateTime!.Value;
-        var windowStart = utcNow.AddMinutes(-2);
+        var windowStart = utcNow.AddMinutes(-15);
         if (dueUtc < windowStart || dueUtc > utcNow) return;
 
         var dueDateTimeForHash = dueUtc.ToString("yyyy-MM-ddTHH:mm");
@@ -171,11 +191,16 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
             var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
             var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
-            if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
+            // Use >= so a restart past the exact minute still fires; payload-hash prevents doubles
+            if (userNow.Hour < targetHour || (userNow.Hour == targetHour && userNow.Minute < targetMinute)) return;
         }
 
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
-        if (isOverdue && (userNow.Hour != user.OverdueNotificationHour || userNow.Minute != user.OverdueNotificationMinute)) return;
+        if (isOverdue)
+        {
+            if (userNow.Hour < user.OverdueNotificationHour ||
+                (userNow.Hour == user.OverdueNotificationHour && userNow.Minute < user.OverdueNotificationMinute)) return;
+        }
 
         var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
@@ -204,14 +229,13 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         TaskerDbContext db, IPushoverClient pushover,
         User user, Models.Dtos.Tasks.TaskResponse instance, DateTime utcNow, TimeZoneInfo tz)
     {
-        // Combine occurrence date with master's time-of-day to get correct UTC fire time
         var masterTime = instance.DueDateTime!.Value;
         var occurrenceDate = instance.OccurrenceDate ?? instance.DueDate!.Value;
         var dueUtc = new DateTime(
             occurrenceDate.Year, occurrenceDate.Month, occurrenceDate.Day,
             masterTime.Hour, masterTime.Minute, masterTime.Second, DateTimeKind.Utc);
 
-        var windowStart = utcNow.AddMinutes(-2);
+        var windowStart = utcNow.AddMinutes(-15);
         if (dueUtc < windowStart || dueUtc > utcNow) return;
 
         var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence-time:{dueUtc:yyyy-MM-ddTHH:mm}");
@@ -259,11 +283,15 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
             var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
             var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
             var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
-            if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
+            if (userNow.Hour < targetHour || (userNow.Hour == targetHour && userNow.Minute < targetMinute)) return;
         }
 
         if (isOverdue && !user.OverdueNotificationsEnabled) return;
-        if (isOverdue && (userNow.Hour != user.OverdueNotificationHour || userNow.Minute != user.OverdueNotificationMinute)) return;
+        if (isOverdue)
+        {
+            if (userNow.Hour < user.OverdueNotificationHour ||
+                (userNow.Hour == user.OverdueNotificationHour && userNow.Minute < user.OverdueNotificationMinute)) return;
+        }
 
         var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence:{instance.OccurrenceDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
@@ -291,15 +319,15 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
     private async Task ProcessTodayGroupedNotification(
         TaskerDbContext db, IPushoverClient pushover, RecurrenceService recurrenceService,
-        User user, DateTime utcNow, DateTime userNow, DateOnly today, IEnumerable<Guid> projectIds)
+        User user, DateTime utcNow, DateTime userNow, DateOnly today, IEnumerable<Guid> projectIds, CancellationToken cancellationToken)
     {
         var isWeekend = userNow.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
         var targetHour = isWeekend ? user.TodayNotificationWeekendHour : user.TodayNotificationHour;
         var targetMinute = isWeekend ? user.TodayNotificationWeekendMinute : user.TodayNotificationMinute;
-        if (userNow.Hour != targetHour || userNow.Minute != targetMinute) return;
+        if (userNow.Hour < targetHour || (userNow.Hour == targetHour && userNow.Minute < targetMinute)) return;
 
         var payloadHash = ComputeHash($"{user.Id}:today-grouped:{today}");
-        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
+        if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash, cancellationToken)) return;
 
         var nonRecurring = await db.Tasks
             .Include(t => t.Project)
@@ -310,7 +338,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 && t.DueDate == today
                 && !t.DueDateTime.HasValue
                 && t.Rrule == null)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var recurringQuery = db.Tasks.Where(t => projectIds.Contains(t.ProjectId) && !t.IsDeleted && t.Rrule != null);
         var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today);
@@ -335,7 +363,7 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 SentAt = utcNow,
                 PayloadHash = payloadHash,
             });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(cancellationToken);
             logger.LogInformation("Sent grouped today notification to {User} ({Count} tasks)", user.Email, lines.Count);
         }
     }
@@ -348,31 +376,38 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         foreach (var reminder in task.Reminders)
         {
-            var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
-            var windowStart = utcNow.AddMinutes(-2);
-            if (fireUtc < windowStart || fireUtc > utcNow) continue;
-
-            var payloadHash = ComputeHash($"{user.Id}:{task.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
-            if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
-
-            var message = FormatReminderMessage(task.Title, task.Project.Name, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
-            var url = BuildTaskUrl(task.ProjectId, task.Id, null);
-            var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
-
-            var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
-            if (sent)
+            try
             {
-                db.NotificationLogs.Add(new NotificationLog
+                var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
+                var windowStart = utcNow.AddMinutes(-15);
+                if (fireUtc < windowStart || fireUtc > utcNow) continue;
+
+                var payloadHash = ComputeHash($"{user.Id}:{task.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
+                if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
+
+                var message = FormatReminderMessage(task.Title, task.Project.Name, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
+                var url = BuildTaskUrl(task.ProjectId, task.Id, null);
+                var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
+
+                var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
+                if (sent)
                 {
-                    UserId = user.Id,
-                    TaskId = task.Id,
-                    Channel = "pushover",
-                    SentAt = utcNow,
-                    PayloadHash = payloadHash,
-                });
-                await db.SaveChangesAsync();
-                logger.LogInformation("Sent reminder notification to {User} for task {Task} (offset {Offset} min)",
-                    user.Email, task.Title, reminder.OffsetMinutes);
+                    db.NotificationLogs.Add(new NotificationLog
+                    {
+                        UserId = user.Id,
+                        TaskId = task.Id,
+                        Channel = "pushover",
+                        SentAt = utcNow,
+                        PayloadHash = payloadHash,
+                    });
+                    await db.SaveChangesAsync();
+                    logger.LogInformation("Sent reminder notification to {User} for task {Task} (offset {Offset} min)",
+                        user.Email, task.Title, reminder.OffsetMinutes);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing reminder {Reminder} for user {User} task {Task}", reminder.Id, user.Email, task.Id);
             }
         }
     }
@@ -389,31 +424,38 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
 
         foreach (var reminder in instance.Reminders)
         {
-            var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
-            var windowStart = utcNow.AddMinutes(-2);
-            if (fireUtc < windowStart || fireUtc > utcNow) continue;
-
-            var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
-            if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
-
-            var message = FormatReminderMessage(instance.Title, instance.ProjectName, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
-            var url = BuildTaskUrl(instance.ProjectId, instance.Id, instance.OccurrenceDate);
-            var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
-
-            var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
-            if (sent)
+            try
             {
-                db.NotificationLogs.Add(new NotificationLog
+                var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
+                var windowStart = utcNow.AddMinutes(-15);
+                if (fireUtc < windowStart || fireUtc > utcNow) continue;
+
+                var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
+                if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
+
+                var message = FormatReminderMessage(instance.Title, instance.ProjectName, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
+                var url = BuildTaskUrl(instance.ProjectId, instance.Id, instance.OccurrenceDate);
+                var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
+
+                var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
+                if (sent)
                 {
-                    UserId = user.Id,
-                    TaskId = instance.Id,
-                    Channel = "pushover",
-                    SentAt = utcNow,
-                    PayloadHash = payloadHash,
-                });
-                await db.SaveChangesAsync();
-                logger.LogInformation("Sent recurring reminder notification to {User} for task {Task} occurrence {Date} (offset {Offset} min)",
-                    user.Email, instance.Title, instance.OccurrenceDate, reminder.OffsetMinutes);
+                    db.NotificationLogs.Add(new NotificationLog
+                    {
+                        UserId = user.Id,
+                        TaskId = instance.Id,
+                        Channel = "pushover",
+                        SentAt = utcNow,
+                        PayloadHash = payloadHash,
+                    });
+                    await db.SaveChangesAsync();
+                    logger.LogInformation("Sent recurring reminder notification to {User} for task {Task} occurrence {Date} (offset {Offset} min)",
+                        user.Email, instance.Title, instance.OccurrenceDate, reminder.OffsetMinutes);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing recurring reminder {Reminder} for user {User} task {Task}", reminder.Id, user.Email, instance.Id);
             }
         }
     }
@@ -463,16 +505,5 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexStringLower(bytes);
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        _timer?.Change(Timeout.Infinite, 0);
-        return Task.CompletedTask;
-    }
-
-    public void Dispose()
-    {
-        _timer?.Dispose();
     }
 }
