@@ -29,6 +29,7 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   const selectedTaskRef = useRef(selectedTask);
   selectedTaskRef.current = selectedTask;
   const [loading, setLoading] = useState(true);
+  const fetchVersionRef = useRef(0);
   const [showPriorityFilter, setShowPriorityFilter] = useState(false);
   const [selectedPriorities, setSelectedPriorities] = useState<Set<number>>(() => {
     if (type !== 'priority') return new Set();
@@ -40,8 +41,10 @@ export function SmartListView({ type, title }: SmartListViewProps) {
   });
 
   const fetchData = useCallback(async () => {
+    const version = ++fetchVersionRef.current;
     try {
       const data = await getSmartList(type);
+      if (fetchVersionRef.current !== version) return;
       setTasks(data);
       if (selectedTaskRef.current) {
         const sel = selectedTaskRef.current;

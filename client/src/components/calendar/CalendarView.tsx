@@ -141,18 +141,21 @@ export function CalendarView() {
   const [rangeSelectCurrent, setRangeSelectCurrent] = useState<string | null>(null);
   const [isRangeSelecting, setIsRangeSelecting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const fetchVersionRef = useRef(0);
 
   useEffect(() => {
     localStorage.setItem('calendar-view', viewType);
   }, [viewType]);
 
   const fetchTasks = useCallback(async () => {
+    const version = ++fetchVersionRef.current;
     const { start, end } = getViewRange(viewType, currentDate);
     try {
       const data = await getCalendarTasks(
         format(start, 'yyyy-MM-dd'),
         format(end, 'yyyy-MM-dd'),
       );
+      if (fetchVersionRef.current !== version) return;
       setTasks(data);
     } catch {
       toast.error('Failed to load calendar');
