@@ -103,7 +103,12 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         {
             if (instance.SkipNotification) continue;
             if (instance.DueDateTime.HasValue)
-                await ProcessRecurringTimedNotification(db, pushover, user, instance, now, tz);
+            {
+                if (instance.Reminders.Count > 0)
+                    await ProcessRecurringReminderNotifications(db, pushover, user, instance, now, tz);
+                else
+                    await ProcessRecurringTimedNotification(db, pushover, user, instance, now, tz);
+            }
             else
                 await ProcessRecurringDateNotification(db, pushover, user, instance, now, userNow);
         }
@@ -368,6 +373,47 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 await db.SaveChangesAsync();
                 logger.LogInformation("Sent reminder notification to {User} for task {Task} (offset {Offset} min)",
                     user.Email, task.Title, reminder.OffsetMinutes);
+            }
+        }
+    }
+
+    private async Task ProcessRecurringReminderNotifications(
+        TaskerDbContext db, IPushoverClient pushover,
+        User user, Models.Dtos.Tasks.TaskResponse instance, DateTime utcNow, TimeZoneInfo tz)
+    {
+        var masterTime = instance.DueDateTime!.Value;
+        var occurrenceDate = instance.OccurrenceDate ?? instance.DueDate!.Value;
+        var dueUtc = new DateTime(
+            occurrenceDate.Year, occurrenceDate.Month, occurrenceDate.Day,
+            masterTime.Hour, masterTime.Minute, masterTime.Second, DateTimeKind.Utc);
+
+        foreach (var reminder in instance.Reminders)
+        {
+            var fireUtc = dueUtc.AddMinutes(-reminder.OffsetMinutes);
+            var windowStart = utcNow.AddMinutes(-2);
+            if (fireUtc < windowStart || fireUtc > utcNow) continue;
+
+            var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:reminder:{reminder.Id}:{dueUtc:yyyy-MM-ddTHH:mm}");
+            if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) continue;
+
+            var message = FormatReminderMessage(instance.Title, instance.ProjectName, reminder.OffsetMinutes, dueUtc, tz, user.Locale);
+            var url = BuildTaskUrl(instance.ProjectId, instance.Id, instance.OccurrenceDate);
+            var title = reminder.OffsetMinutes == 0 ? "Task due now" : "Task reminder";
+
+            var sent = await pushover.SendAsync(user.PushoverUserKey!, title, message, url);
+            if (sent)
+            {
+                db.NotificationLogs.Add(new NotificationLog
+                {
+                    UserId = user.Id,
+                    TaskId = instance.Id,
+                    Channel = "pushover",
+                    SentAt = utcNow,
+                    PayloadHash = payloadHash,
+                });
+                await db.SaveChangesAsync();
+                logger.LogInformation("Sent recurring reminder notification to {User} for task {Task} occurrence {Date} (offset {Offset} min)",
+                    user.Email, instance.Title, instance.OccurrenceDate, reminder.OffsetMinutes);
             }
         }
     }
