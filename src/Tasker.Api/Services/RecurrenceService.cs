@@ -92,8 +92,12 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
         if (task is null) return;
 
         // Validate RRULE
-        try { _ = new RecurrencePattern(rrule); }
+        RecurrencePattern recur;
+        try { recur = new RecurrencePattern(rrule); }
         catch (Exception ex) { throw new ArgumentException($"Invalid RRULE: {rrule}", ex); }
+
+        if (recur.Frequency < FrequencyType.Daily)
+            throw new ArgumentException($"RRULE frequency must be DAILY or longer, got {recur.Frequency}.");
 
         task.Rrule = rrule;
         task.DueDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
@@ -389,7 +393,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             && !e.ClearAssignedTo;
     }
 
-    internal static List<DateOnly> GetOccurrences(string rrule, DateOnly startDate, DateOnly rangeStart, DateOnly rangeEnd)
+    internal List<DateOnly> GetOccurrences(string rrule, DateOnly startDate, DateOnly rangeStart, DateOnly rangeEnd)
     {
         var recur = new RecurrencePattern(rrule);
 
@@ -405,8 +409,19 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
         var searchStart = new CalDateTime(rangeStart.Year, rangeStart.Month, rangeStart.Day);
         var rangeEndDt = rangeEnd.ToDateTime(TimeOnly.MaxValue);
 
+        const int maxOccurrences = 1000;
+
         var occurrences = calendar.GetOccurrences(searchStart)
-            .TakeWhile(o => o.Period.StartTime.Value <= rangeEndDt);
+            .TakeWhile(o => o.Period.StartTime.Value <= rangeEndDt)
+            .Take(maxOccurrences + 1)
+            .ToList();
+
+        if (occurrences.Count > maxOccurrences)
+        {
+            logger.LogWarning("RRULE {Rrule} starting {StartDate} produced >{Max} occurrences in range [{RangeStart},{RangeEnd}]; truncating.",
+                rrule, startDate, maxOccurrences, rangeStart, rangeEnd);
+            occurrences = occurrences.Take(maxOccurrences).ToList();
+        }
 
         return occurrences
             .Select(o => DateOnly.FromDateTime(o.Period.StartTime.Value))
