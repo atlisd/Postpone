@@ -202,7 +202,10 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 (userNow.Hour == user.OverdueNotificationHour && userNow.Minute < user.OverdueNotificationMinute)) return;
         }
 
-        var payloadHash = ComputeHash($"{user.Id}:{task.Id}:{dueDate}");
+        var today = DateOnly.FromDateTime(userNow);
+        var payloadHash = isOverdue
+            ? ComputeHash($"{user.Id}:{task.Id}:overdue:{today}")
+            : ComputeHash($"{user.Id}:{task.Id}:due-today:{dueDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
 
         var title = isOverdue ? "Overdue task" : "Task due today";
@@ -293,7 +296,10 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
                 (userNow.Hour == user.OverdueNotificationHour && userNow.Minute < user.OverdueNotificationMinute)) return;
         }
 
-        var payloadHash = ComputeHash($"{user.Id}:{instance.Id}:recurrence:{instance.OccurrenceDate}");
+        var today = DateOnly.FromDateTime(userNow);
+        var payloadHash = isOverdue
+            ? ComputeHash($"{user.Id}:{instance.Id}:recurrence-overdue:{today}")
+            : ComputeHash($"{user.Id}:{instance.Id}:recurrence-today:{instance.OccurrenceDate}");
         if (await db.NotificationLogs.AnyAsync(n => n.PayloadHash == payloadHash)) return;
 
         var title = isOverdue ? "Overdue task" : "Task due today";
