@@ -2,21 +2,20 @@ import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
 const POLL_MS = 5 * 60 * 1000
-const AUTO_RELOAD_HIDDEN_MS = 30 * 60 * 1000
 
 export function useVersionCheck() {
   const notified = useRef(false)
-  const hiddenAt = useRef<number | null>(null)
 
   useEffect(() => {
     if (import.meta.env.DEV) return
 
     async function check() {
+      if (notified.current) return
       try {
         const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
         if (!res.ok) return
         const { buildTime } = await res.json()
-        if (buildTime !== __BUILD_TIME__ && !notified.current) {
+        if (buildTime !== __BUILD_TIME__) {
           notified.current = true
           toast.info('A new version is available', {
             action: { label: 'Update', onClick: () => window.location.reload() },
@@ -28,18 +27,11 @@ export function useVersionCheck() {
 
     const timer = setInterval(check, POLL_MS)
 
+    // Stale data is refreshed by SignalR's visibility-resume refetch (see
+    // lib/signalr.ts onResume); here we only re-check the build version so the
+    // update toast appears promptly when returning to a backgrounded tab.
     function onVisibility() {
-      if (document.visibilityState === 'hidden') {
-        hiddenAt.current = Date.now()
-        return
-      }
-      const hiddenDuration = hiddenAt.current ? Date.now() - hiddenAt.current : 0
-      hiddenAt.current = null
-      if (hiddenDuration > AUTO_RELOAD_HIDDEN_MS && !notified.current) {
-        window.location.reload()
-      } else {
-        check()
-      }
+      if (document.visibilityState === 'visible') check()
     }
 
     document.addEventListener('visibilitychange', onVisibility)

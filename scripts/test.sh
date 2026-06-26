@@ -13,6 +13,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Build everything first so a regression run fails fast on compile/type errors
+echo "Building backend..."
+dotnet build "$API_DIR" -c Debug
+
+echo "Building frontend..."
+cd "$CLIENT_DIR"
+npm run build
+
 # Start DB
 echo "Starting database..."
 docker compose -f "$ROOT/docker-compose.yml" up db -d
