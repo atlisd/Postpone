@@ -37,8 +37,15 @@ export function offsetMinutesToLabel(m: number): string {
     const h = m / 60;
     return `${h} hour${h === 1 ? '' : 's'} before`;
   }
-  const d = m / 1440;
-  return `${d} day${d === 1 ? '' : 's'} before`;
+  const days = Math.floor(m / 1440);
+  const remainder = m % 1440;
+  const dayLabel = `${days} day${days === 1 ? '' : 's'}`;
+  if (remainder === 0) return `${dayLabel} before`;
+  if (remainder % 60 === 0) {
+    const hours = remainder / 60;
+    return `${dayLabel}, ${hours} hour${hours === 1 ? '' : 's'} before`;
+  }
+  return `${dayLabel}, ${remainder} min before`;
 }
 
 function ReminderChip({ reminder, taskId, onRemoved }: {
