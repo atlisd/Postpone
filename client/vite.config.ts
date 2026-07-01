@@ -4,14 +4,40 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import type { Plugin } from 'vite'
 
 const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
+// A unique id for this build. Baked into the running bundle as __APP_VERSION__
+// and also written to /version.json (see buildIdPlugin). useVersionCheck only
+// surfaces the update toast when the deployed version.json differs from the
+// running __APP_VERSION__ — this filters out iOS Safari's spurious
+// service-worker "update available" events, where a byte-identical sw.js gets
+// re-installed as if it were new (common after the OS evicts the worker).
+const buildId = `${version}+${Date.now()}`
+
+// Emit /version.json alongside the bundle so the client can confirm whether a
+// genuinely newer build is deployed before prompting the user to update.
+function buildIdPlugin(): Plugin {
+  return {
+    name: 'postpone-build-id',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version: buildId }),
+      })
+    },
+  }
+}
+
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(version),
+    __APP_VERSION__: JSON.stringify(buildId),
   },
   plugins: [
+    buildIdPlugin(),
     react(),
     tailwindcss(),
     VitePWA({
