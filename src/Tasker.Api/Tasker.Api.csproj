@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Tasker.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />

@@ -110,6 +110,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPushoverClient, PushoverClient>();
         services.AddSingleton<ILoginRateLimiter, LoginRateLimiter>();
         services.AddHttpClient();
+        services.AddSingleton(TimeProvider.System);
 
         // Background jobs
         services.AddHostedService<BackgroundJobs.NotificationSchedulerJob>();

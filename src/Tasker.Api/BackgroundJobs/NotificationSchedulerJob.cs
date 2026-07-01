@@ -10,7 +10,7 @@ using Tasker.Api.Services;
 
 namespace Tasker.Api.BackgroundJobs;
 
-public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger, IConfiguration configuration) : BackgroundService
+public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger<NotificationSchedulerJob> logger, IConfiguration configuration, TimeProvider timeProvider) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -56,9 +56,9 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         }
     }
 
-    private async Task ProcessUserNotifications(TaskerDbContext db, IPushoverClient pushover, IProjectAccessService access, User user, CancellationToken cancellationToken)
+    internal async Task ProcessUserNotifications(TaskerDbContext db, IPushoverClient pushover, IProjectAccessService access, User user, CancellationToken cancellationToken)
     {
-        var now = DateTime.UtcNow;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         var projectIds = await access.GetAccessibleProjectIdsAsync(user.Id);
 
         var tasks = await db.Tasks
@@ -102,7 +102,18 @@ public class NotificationSchedulerJob(IServiceScopeFactory scopeFactory, ILogger
         var today = DateOnly.FromDateTime(userNow);
         var recurringQuery = db.Tasks
             .Where(t => projectIds.Contains(t.ProjectId) && !t.IsDeleted && t.Rrule != null);
-        var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today);
+
+        // Reminders fire before the occurrence's due time, which can land on an earlier calendar day
+        // (e.g. an 08:00 task with a 12h reminder fires at 20:00 the previous evening). Expand the
+        // window forward far enough to cover the largest reminder offset so those occurrences are
+        // visible while their reminders are still pending. Same-day handlers stay gated by their own
+        // now-window / due-today checks, so the wider range has no side effects for them.
+        var maxOffsetMinutes = await recurringQuery
+            .SelectMany(t => t.Reminders)
+            .Select(r => (int?)r.OffsetMinutes)
+            .MaxAsync(cancellationToken) ?? 0;
+        var lookaheadDays = Math.Max(1, (int)Math.Ceiling(maxOffsetMinutes / 1440.0) + 1);
+        var virtualInstances = await recurrenceService.ExpandOccurrencesAsync(recurringQuery, today, today.AddDays(lookaheadDays));
 
         foreach (var instance in virtualInstances.Where(v => v.CompletedAt == null))
         {
