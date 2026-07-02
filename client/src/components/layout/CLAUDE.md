@@ -1,239 +1,225 @@
 # Sidebar Drag-Drop — Architecture & Rules
 
-> **Read this file before modifying any drag-drop logic in `Sidebar.tsx`.**
+> **Read this file before modifying any drag-drop logic in `Sidebar.tsx` or `sidebarDrag/`.**
 > Drag-drop is historically the most regression-prone area of the codebase.
-> The library migration on 2026-04-18 cleared a long backlog of pre-1.0 workarounds,
-> but the remaining rules below still exist because removing them caused a bug.
+> On 2026-07-02 the sidebar's project/folder dragging was moved off @dnd-kit onto a
+> purpose-built pointer-events engine (`sidebarDrag/`) for Edge-tab-strip-quality
+> interaction. The rules below exist because violating them caused a bug.
 
-## Library: `@dnd-kit/core` v6 + `@dnd-kit/sortable` v10
+## Two engines, one boundary
 
-The whole app now uses the mature `@dnd-kit/core` / `@dnd-kit/sortable` / `@dnd-kit/utilities` packages. The pre-1.0 `@dnd-kit/react` and `@dnd-kit/dom` have been removed. Key imports:
+| Flow | Engine |
+|------|--------|
+| Sidebar project/folder reorder, into-folder, merge | **Custom engine** — `layout/sidebarDrag/useSidebarDrag.ts` |
+| Task chip → sidebar project / Inbox | @dnd-kit (AppShell `DndContext`) |
+| Task reorder in `ProjectTaskList` | @dnd-kit (AppShell `DndContext`) |
+| Calendar chip drags, subtask reorder | @dnd-kit (own isolated `DndContext`s) |
 
-```ts
-import {
-  DndContext, useDroppable, useDndMonitor, useDndContext,
-  PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin,
-  type DragStartEvent, type DragOverEvent, type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-```
+**The boundary invariant:** sidebar project rows keep a dnd-kit `useDroppable`
+registration with data `{ type: 'sidebar-project', projectId, projectName }` (Inbox:
+`type: 'project-drop'`) so AppShell's `onDragEnd` dispatcher can `moveTask()` when a
+`task-item` is dropped on them. The custom engine never registers anything with
+dnd-kit; dnd-kit never sees sidebar row drags (rows aren't dnd-kit draggables).
+AppShell's `DndContext` uses plain `pointerWithin` — do not reintroduce per-source
+collision filtering; it only existed for the old dnd-kit sidebar sortables.
 
-**Do NOT** reference pre-1.0 `@dnd-kit/react` patterns (`useDragDropMonitor`, `isSortableOperation`, `DragDropProvider`). They no longer apply.
-
-## Top-level `DndContext` (AppShell)
-
-There is **one** `DndContext` in the app, mounted in `client/src/components/layout/AppShell.tsx`. Every drag flow — sidebar project/folder reorder, cross-tree task-to-sidebar drops, project task list reorder, and (inside their own isolated DndContexts) calendar chip drags and subtask reorder — registers against it via `useDndMonitor` inside feature components.
-
-```
-<DndContext sensors pointerWithin onDragEnd={...}>
-  <IconSidebar />
-  <Sidebar>…</Sidebar>
-  <main>… ProjectTaskList / TagTaskList / SmartListView …</main>
-</DndContext>
-```
-
-`AppShell`'s `onDragEnd` is a narrow dispatcher: it only runs when the drag is a `task-item` dropped onto a `project-drop` (Inbox) or `sidebar-project` target, and fires `moveTask(taskId, projectId)`. Sidebar reorder/merge logic lives in `Sidebar`'s own `useDndMonitor` subscription, not in AppShell.
-
-Activation constraint `{ distance: 5 }` ensures plain clicks on draggable elements still fire normally.
-
-## Component Architecture (Sidebar)
+## The custom engine (`sidebarDrag/`)
 
 ```
-Sidebar (~1400 lines)
-├── InboxProjectItem         — always first, useDroppable only (task drops only)
-├── SortableProjectItem      — top-level ungrouped project; useSortable + drop target
-├── SortableFolderItem       — folder header (useSortable) + children dropzone (useDroppable)
-│   └── nested SortableContext over folder.projects
-│       └── SortableProjectItem  (rendered with container = folderId)
-└── useDndMonitor()          — subscribes to onDragStart/Over/End/Cancel
+sidebarDrag/
+├── constants.ts      — every timing/threshold (activation 5px, into-latch 250ms,
+│                       auto-expand 500ms, edge zones 30%, scroll zone 28px, …)
+├── types.ts          — RowMeta/RowRegistration, DragSource, DropTarget union,
+│                       StaticMap/FlatRow, Resolution
+├── geometry.ts       — pure functions: buildStaticMap, resolvePointer,
+│                       initialInsertion, indicatorPosition
+├── useSidebarDrag.ts — the engine hook: activation, pointer capture, rAF frame
+│                       loop, imperative transforms, latch/expand timers,
+│                       auto-scroll, Escape/blur cancel, drop/cancel animations
+└── DragGhost.tsx     — portal ghost that follows the pointer (data-testid="drag-ghost")
 ```
 
-### Drag data shapes
+### Interaction model (spatial zones, no merge timer)
 
-Every draggable/droppable sets `data` so the end handler can route without DOM queries:
+Dragging a **project** over a row:
+- **Top/bottom 30%** of a project row or folder header → insertion (blue line +
+  neighbors animate apart via `translateY` transforms).
+- **Middle 40%** → "into": tint appears instantly, and after a **250 ms dwell**
+  the latch fires (dashed ring + FolderPlus). Released while latched: project→project
+  = merge into a new folder; project→folder-header = move into that folder at index 0.
+  Released before the latch: falls back to the nearest insertion — **accidental
+  drops reorder, never merge** (the product rule survives; only the mechanism
+  changed from a 1000 ms timer to geometry + a short dwell).
+- Folder header **bottom zone** on an *expanded* folder = first slot inside it;
+  on a collapsed folder = top-level slot below it.
+- Middle zones only arm when the source `canMerge` (owned, non-inbox) and the
+  target is `intoEligible` (owned non-inbox project; any folder). Shared/household
+  projects reorder and can be inserted into folders, but never via middle zones.
+- Dwelling **500 ms** over a collapsed folder auto-expands it for the drag
+  (render-only via the hook's `dragExpandedFolderIds`; persisted with
+  `setFolderCollapsed(false)` only if the drop lands inside).
 
-| Item | `type` | `container` | Extras |
-|------|--------|-------------|--------|
-| Top-level project | `sidebar-project` | `'toplevel'` | `projectId`, `projectName`, `folderId: null` |
-| Project inside folder | `sidebar-project` | folderId | `projectId`, `projectName`, `folderId` |
-| Folder header | `sidebar-folder` | `'toplevel'` | `folderId` |
-| Folder children dropzone | `folder-dropzone` | — | `folderId` |
-| Inbox | `project-drop` | — | `projectId`, `projectName` |
-| Task chip | `task-item` | — | `taskId`, `occurrenceDate` |
+Dragging a **folder**: top-level slots only (block granularity, midpoint split);
+never nests; ghost shows the header + project-count badge; the whole wrapper
+(header + children) collapses and travels as one block.
 
-`container` is the single source of truth for "is this a cross-container move?" — don't re-derive it from `active.rect` or DOM lookups.
+### Geometry invariants — DO NOT REMOVE
 
-### `SortableContext` layout
+1. **One static snapshot per structural state.** `buildStaticMap` measures all
+   registered rows once at activation (and again only after auto-expand), in
+   content-space (`rect.top - navRect.top + scrollTop`) — scroll never invalidates
+   it. Rows must have no transforms when it runs (`rebuildMap` strips them first,
+   re-applies without transition in the same frame).
+2. **Displacement-aware hit-testing.** Rows at/after the current gap render
+   `gapHeight` lower than their static position; `resolvePointer` compares the
+   pointer against these *displaced* positions because the user aims at what they
+   see. Removing this reintroduces the off-by-one-row drop bug.
+3. **The gap dead zone (`keep`).** A pointer inside the currently open gap keeps
+   the current insertion — including the end-gap (`gapFlatIndex === rows.length`,
+   where nothing is displaced and the vacated space is after the last row).
+   Removing the end-gap case makes "drop at end of a folder" instantly re-resolve
+   to "top-level end" as rows settle.
+4. **`gapHeight` = measured freed space,** not `blockHeight + gap`. Measured as the
+   max displacement of rows below the source across the collapse (`display:none`).
+   `scrollHeight` deltas are wrong (clamped at `clientHeight`); a block-height guess
+   is wrong when the source is a folder's only child (the emptied wrapper keeps its
+   `min-h-[8px]`).
+5. **`initialInsertion` is identity-based** (count same-container rows above the
+   source's old top), not pointer-based — the initial gap must reproduce the
+   pre-drag layout exactly, applied with transitions suppressed for one frame.
+6. **Final resolve at pointerup.** A fast drag can deliver its last pointermoves and
+   the `pointerup` inside one rAF frame; `completeDrag` re-resolves the final pointer
+   position synchronously. An un-dwelled `into` resolves to its fallback insertion.
+7. **Nav `paddingBottom` compensation.** Collapsing the source shrinks scrollHeight;
+   if scrolled near the bottom the browser clamps scrollTop and the list jumps at
+   grab. The engine adds `gapHeight` of bottom padding for the drag's duration.
+8. **Auto-scroll is suppressed while an into-candidate is hovered** (`s.into`
+   non-null). Scrolling under a stationary pointer resets the latch forever —
+   without this, merging near the viewport edge is impossible.
 
-- One outer `SortableContext` containing the top-level list: `[...folderIds, ...ungroupedProjectIds]`. Strategy: `verticalListSortingStrategy`.
-- One nested `SortableContext` per folder containing that folder's project IDs.
-- A project rendered inside a folder registers in **both** contexts (since the same `useSortable` hook nests correctly inside SortableContext), but its `container` data field identifies which one it belongs to.
+### Performance rules
 
-## Five Interaction Patterns
+- All per-frame state lives in refs (`sessionRef`); one rAF loop coalesces
+  pointermoves and only touches the DOM on actual insertion/zone changes.
+- React state changes during a drag are limited to: ghost mount/unmount,
+  `intoTarget` (tint/ring), `dragExpandedFolderIds`. Never add per-frame setState.
+- The file has a scoped eslint-disable for `react-hooks/immutability`/`refs` —
+  the engine is deliberately imperative; don't "fix" it back into React state.
 
-### 1. Top-level reorder (projects and folders)
-- **Trigger:** Drag an ungrouped project or folder header up/down within the top-level list.
-- **Handler:** `onDragEnd`, same-container branch, `active.data.container === 'toplevel' && over.data.container === 'toplevel'`.
-- **Implementation:** `arrayMove(topLevelIds, oldIndex, newIndex)`, then split folders and projects back out to send the combined order.
-- **API:** `POST /api/project-folders/reorder-toplevel` with `{ items: [{ type, id }] }`.
+## Sidebar.tsx integration
 
-### 2. Within-folder reorder
-- **Trigger:** Drag a project up/down within the same folder.
-- **Handler:** `onDragEnd`, same-container branch, both `container === folderId`.
-- **Implementation:** `arrayMove(folder.projects, oldIndex, newIndex)`.
-- **API:** `POST /api/project-folders/{folderId}/reorder`.
+- Rows register via `registerRow(meta)` (stable callback ref per id) with kinds
+  `project` / `folder-header` / `folder-children`; ids are `projectId`,
+  `folder-${folderId}`, `children-${folderId}` — folder ids match
+  `topLevelItems` ids so `doTopLevelReorder` is reused as-is.
+- Whole row starts a drag on mouse (`onRowPointerDown`); touch/pen require the
+  grip (`[data-drag-grip]`, keeps `touch-none`; rows stay scrollable).
+  `[data-no-drag]` opts out (context-menu "…", share button, rename input).
+  NavLinks carry `draggable={false}` (native anchor drag would eat pointer events).
+- Inbox (`InboxProjectItem`), pinned items, tags, smart lists are never registered —
+  they must not become engine targets.
+- The defensive dedupe of `topLevelItems` / folder children protects React keys —
+  keep it.
 
-### 3. Cross-folder / folder-to-toplevel move
-- **Trigger:** Drag a project from one folder to another, or out to the top level (or from top level into a folder's interior — landing next to a specific project).
-- **Handler:** `onDragEnd`, cross-container branch (`active.data.container !== over.data.container`).
-- **API chain:** (if leaving a folder) `POST /api/project-folders/{srcId}/remove` → (if entering a folder) `POST /api/project-folders/{dstId}/add` → final reorder (`reorder-toplevel` or `/{id}/reorder`). See Invariant 3.
+### Drop dispatch (replaces the old branch-priority rules)
 
-### 4. Merge to create folder
-- **Trigger:** Hover one project over another for **1000ms** (merge intent timer).
-- **Handler:** `onDragEnd`, merge-intent branch (highest priority for project sources).
-- **API:** `POST /api/project-folders` with `{ name: "New Folder", projectIds: [source, target] }`.
-- **Visual:** `mergeTarget` state triggers dashed ring + folder icon overlay.
+The engine resolves every drop to a typed `DropTarget`; `handleDrop` is a plain
+switch calling the commit functions:
 
-### 5. Drop onto folder
-- **Trigger:** Either (a) drop onto a folder's children dropzone (`type: 'folder-dropzone'`) for instant add-at-end, or (b) hover on a folder header for 1000ms (latches merge intent with a folder target) for add-at-top.
-- **Handler:** `onDragEnd`, folder-dropzone branch (instant) OR merge-intent branch with folder target.
-- **API (dropzone):** `POST /api/project-folders/{folderId}/add` (lands at end).
-- **API (header-hover merge):** `POST /api/project-folders/{folderId}/add` → `POST /api/project-folders/{folderId}/reorder` to place at top. Both paths optimistically flip `folderId` + rewrite `folders[].projects` before the round-trip (see Invariant 3).
+| DropTarget | Commit |
+|---|---|
+| `reorder-toplevel` (ungrouped source / folder) | `doTopLevelReorder` (filter-source-then-splice; no-op drops early-return) |
+| `reorder-toplevel` (source inside a folder) | `moveProjectToTopLevel` |
+| `reorder-in-folder`, or `move-to-folder` into the source's own folder | `reorderWithinFolder` |
+| `move-to-folder` | `moveProjectToFolder` (+ `persistExpansion`) |
+| `merge-projects` | `mergeProjects` |
 
-## Critical Invariants — DO NOT REMOVE
+Engine indices are always "position with the source removed" — commit code
+**splices, never `arrayMove`s**. Keep the try/catch around the dispatcher (an
+unhandled throw would blank the page).
 
-### 1. `dragOccurred` module-level flag + document capture-phase preventDefault — click suppression after drag
-```ts
-let dragOccurred = false; // module scope, NOT component state
+### Unchanged data-layer invariants (from the dnd-kit era, still load-bearing)
+
+1. **Cross-container moves chain `remove → add → reorder`** and optimistically flip
+   `project.folderId` AND rewrite affected `folders[].projects` before the round-trip
+   (else the "phantom gray project" bug). `moveProjectToTopLevel` also assigns
+   optimistic `sortOrder = index` so the row lands at its drop position immediately.
+2. **`fetchVersionRef` barrier**: every optimistic mutation bumps it; every fetch
+   snapshots it at entry and discards stale results. Per-kind fetch counters
+   (`projectsFetchRef` etc.) dedupe concurrent same-kind fetches — don't merge them
+   into one counter (`fetchAll` runs all four in parallel).
+3. **Same-container reorders skip the success refetch** (server assigns
+   `sortOrder = index`, identical to the optimistic state — a refetch is just a
+   repaint cascade). Cross-container moves and merges end in `fetchAll()`.
+4. **Drag freeze**: `fetchAll` defers while `dragActiveRef` is set (SignalR mid-drag
+   would reshuffle geometry) and is replayed on release. The engine releases the
+   freeze **at commit**, not after the settle animation — the mutation chain's own
+   `fetchAll` must not be swallowed. Engine activation also bumps `fetchVersionRef`.
+
+### Click suppression
+
+The engine sets a module-level `dragOccurred` flag at **activation** (not
+pointerdown — that would kill plain clicks), cleared a tick after the drag ends;
+read via `sidebarDragJustHappened()`. Two layers consume it:
+- The document capture-phase click listener in `Sidebar` calls `preventDefault()`,
+  which blocks native `<a href>` navigation (full page reload) and makes React
+  Router bail (`defaultPrevented`). This listener is also still required for
+  dnd-kit **task-chip** drags released over sidebar links (dnd-kit's PointerSensor
+  stopPropagation click-eater kills React handlers but not the anchor default).
+- Per-NavLink `onClick` guards (belt-and-suspenders; also skip `onClose()` so the
+  mobile sidebar stays open after a drag).
+Because pointer capture retargets the post-drag synthesized click to the nav,
+NavLink clicks after a real drag are already unlikely — keep all layers anyway.
+The grip span keeps an unconditional `preventDefault` (it sits inside the anchor).
+
+## Backend API Contracts (unchanged)
+
 ```
-Set to `true` in `onDragStart`, cleared `setTimeout(..., 0)` from `onDragEnd` / `onDragCancel`.
-
-The actual *navigation suppression* is a document-level capture-phase click listener mounted in `Sidebar` (search for `onCapturedClick`):
-
-```ts
-useEffect(() => {
-  const onCapturedClick = (e: MouseEvent) => { if (dragOccurred) e.preventDefault(); };
-  document.addEventListener('click', onCapturedClick, true);
-  return () => document.removeEventListener('click', onCapturedClick, true);
-}, []);
+POST /api/project-folders/reorder-toplevel   { items: [{ type: "folder"|"project", id }] }
+POST /api/project-folders/{folderId}/reorder { orderedIds: [...] }
+POST /api/project-folders/{folderId}/add     { projectId }   (appends)
+POST /api/project-folders/{folderId}/remove  { projectId }   (to end of top level)
+POST /api/project-folders                    { name, projectIds }  (merge-create)
+PATCH /api/project-folders/{folderId}/collapse { isCollapsed }
 ```
+`reorder-*` assign `SortOrder = index`. `add`/`remove` always append — position is
+honored by the chained reorder call.
 
-**Why a document capture-phase listener and not the per-NavLink `onClick` guards alone?** `@dnd-kit/core`'s `PointerSensor` adds *its own* document capture-phase click listener on drag start that calls **only `event.stopPropagation()`** — see `node_modules/@dnd-kit/core/dist/core.esm.js`, look for `documentListeners.add(EventName.Click, stopPropagation, { capture: true })`. That listener stays armed for ~50 ms after `pointerup`. By stopping propagation, it kills React's delegated event system before any per-NavLink `onClick={(e) => { if (dragOccurred) e.preventDefault(); }}` handler can run. The native `<a href>` default action then commits as a **full page reload** — visible as the "page flashes/reloads when dragging projects up" symptom.
+## E2E notes (`client/e2e/`)
 
-Our document listener is registered at `Sidebar` mount, so it fires *before* dnd-kit's (capture-phase listeners run in registration order). `preventDefault()` is enough — the only side effect we still need to suppress is the native `<a>` navigation.
-
-**Why module-level and not state/ref?** The post-drag `pointerup` synthesizes a click that fires before React's next render — state updates haven't been applied yet, and a ref kept in the component wouldn't be visible to a top-level document listener. A module-level variable is library-agnostic UI glue.
-
-**Per-NavLink `onClick={(e) => { if (dragOccurred) e.preventDefault(); }}` guards are belt-and-suspenders.** They never actually fire after a real drag (dnd-kit blocks them — see above). Keep them for documentation and as fallback if the document listener is ever removed; do not rely on them.
-
-**Grip handle `onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}`** — the `<span class="cursor-grab">` lives inside the project NavLink's `<a>`. `preventDefault` here is essential for plain (non-drag) clicks on the grip, since the document-level guard only fires when `dragOccurred` is true. Without it, a plain click on the grip would trigger native `<a>` navigation (full page reload).
-
-### 2. Merge intent timer (1000ms) with both refs and state
-The merge system tracks:
-- `mergeTargetIdRef` + `mergeIntentRef` — real-time values read inside `onDragEnd`.
-- `mergeTarget` React state — triggers the dashed-ring visual re-render.
-
-`handleDragOver` arms a 1000ms `setTimeout` the moment `over.id` matches a merge-eligible project or folder header, clears it on any target change (`mergeTargetIdRef.current !== overId`), and sets `mergeIntentRef.current = true` only when the timer expires. `onDragEnd` captures `mergeIntentRef.current` and `mergeTargetIdRef.current` into local vars **before** calling `cancelMerge()`, avoiding a race where the cleanup wipes state mid-branch.
-
-Do not reduce the timer to "first frame" — the product behaviour is deliberate: accidental drops over a neighbour should reorder, not merge.
-
-### 3. Cross-container moves chain `remove → add → reorder` and optimistically flip `folderId` + bump `fetchVersionRef`
-`POST /.../add` and `POST /.../remove` server-side always append. To honour the user's drop position, the client must:
-
-1. Optimistically update both `projects[i].folderId` **and** rewrite the affected `folders[j].projects` arrays before the API round-trip. Without this, the source re-renders in its old container with opacity-50 until `fetchAll` resolves — the "phantom gray project" bug.
-2. Chain `reorderFolderProjects` or `reorderTopLevel` after `add`/`remove` so the server has the final position.
-3. Bump `fetchVersionRef.current++` to stop any concurrent SignalR-triggered `fetchAll` from clobbering the optimistic state mid-flight.
-
-### 4. `onDragEnd` branch priority
-Branches fire in strict priority order with early returns:
-
-0. **Folder-source guard** — `active.data.type === 'sidebar-folder'`. Folders only participate in top-level reorder; never fall into project branches (they have no matching `sourceProject`).
-1. **Merge intent latched** (`mergeIntentRef.current === true`) — highest priority for project sources.
-2. **Folder dropzone** (`over.data.type === 'folder-dropzone'`) — instant add-at-end.
-3. **Same-container reorder** — top-level or within-folder via `arrayMove`.
-4. **Cross-container move** — remove/add/reorder chain per Invariant 3.
-
-Do not reorder these branches — later branches assume earlier ones have returned when applicable.
-
-### 5. `fetchVersionRef` guards every optimistic mutation
-Any optimistic `setProjects`/`setFolders` (reorder, cross-container move, merge) must `fetchVersionRef.current++` before the API call. Every fetch function (`fetchProjects`, `fetchFolders`, `fetchTags`, `fetchAssignedCount`) snapshots `fetchVersionRef` at entry and skips its `setState` if the barrier has since moved — keeping the optimistic state visible until a post-mutation fetch catches up. Dropping a bump here reintroduces the "drag snaps back" class of bugs.
-
-Each fetch function ALSO uses a per-kind counter (`projectsFetchRef`, `foldersFetchRef`, etc.) to dedupe concurrent fetches of the same kind so the latest result wins. Don't replace these with a single shared counter — `fetchAll()` fires all four in parallel, so a shared counter would invalidate all but the last to start.
-
-## Backend API Contracts
-
-### Reorder top-level
-```
-POST /api/project-folders/reorder-toplevel
-Body: { items: [{ type: "folder" | "project", id: "guid" }] }
-```
-Assigns `SortOrder = index` to each folder/project. Projects must be ungrouped (`folderId == null`).
-
-### Reorder within folder
-```
-POST /api/project-folders/{folderId}/reorder
-Body: { orderedIds: ["guid", ...] }
-```
-Assigns `SortOrder = index` to each project within the folder.
-
-### Add project to folder
-```
-POST /api/project-folders/{folderId}/add
-Body: { projectId: "guid" }
-```
-Sets `project.FolderId = folderId`, places at end of folder.
-
-### Remove project from folder
-```
-POST /api/project-folders/{folderId}/remove
-Body: { projectId: "guid" }
-```
-Sets `project.FolderId = null`, places at end of top-level list.
-
-### Create folder (from merge)
-```
-POST /api/project-folders
-Body: { name: "New Folder", projectIds: ["guid", "guid"] }
-```
-Creates folder with `SortOrder = min(constituent project sort orders)`.
-
-### Collapse/expand folder
-```
-PATCH /api/project-folders/{folderId}/collapse
-Body: { isCollapsed: true/false }
-```
-
-## Optimistic Update Pattern
-
-All reorder operations follow this pattern:
-
-1. Compute the intended order from `arrayMove(current, oldIndex, newIndex)` where indices come from `active.id`/`over.id`.
-2. Optimistically update React state (`setProjects`/`setFolders`). For cross-container moves this MUST flip `project.folderId` AND rewrite both affected `folder.projects` arrays (Invariant 3).
-3. Bump `fetchVersionRef.current++` to protect the optimistic state from in-flight `fetchAll`s (Invariant 5).
-4. Fire the API call chain (for cross-container: `remove?` → `add?` → `reorder`).
-5. On success:
-   - **Same-container reorder (top-level or within-folder):** do NOT call `fetchAll()`. The optimistic `sortOrder = index` assignment exactly matches what the backend computes, so a success-path refetch only produces a visible re-paint cascade (four endpoints, six requests — the original "everything re-flashes" bug).
-   - **Cross-container move / merge / folder-dropzone add:** call `fetchAll()` to reconcile, since `add`/`remove` semantics and folder membership can diverge from the client's optimistic view.
-6. On failure: `toast.error(...)` + `fetchAll()` (or `fetchFolders()`) to revert.
-
-No forced remount is needed — `@dnd-kit/core`'s `SortableContext` rebuilds its index from the `items` prop, so a simple re-render is enough.
+- `performDrag` in both drag specs **re-aims mid-drag**: coarse move with pre-drag
+  coordinates, 250 ms settle, fresh `boundingBox()` (includes transforms), short
+  final move. Fixed pre-measured coordinates are inherently flaky against a
+  live-reordering list. `reAim: false` exists for tests that must release without
+  dwelling (fast-drag-through-must-not-merge).
+- Into/merge drops need `holdMs: 400` (250 ms latch + margin); `targetYRatio` maps
+  to zones (≤0.3 / ≥0.7 = insert, 0.5 = into).
+- Project-creation helpers must wait for the name to appear in the sidebar — the
+  URL assertion alone passes vacuously after the first creation.
+- Mid-drag assertions use `page.getByTestId('drag-ghost')`, not opacity classes.
+- Folder wrappers expose `data-drag-id="folder-{id}"`, project rows
+  `data-drag-id="{projectId}"`; the header strip is the wrapper's first `> div`.
 
 ## Testing Checklist
 
-After ANY modification to drag-drop code, verify all of these manually:
+After ANY modification to drag-drop code, verify:
 
-- [ ] **Reorder top-level:** Drag project A below project B → order persists after refresh
-- [ ] **Reorder folders:** Drag folder X below folder Y → order persists
-- [ ] **Reorder within folder:** Drag project inside a folder → order persists
-- [ ] **Move to folder (dropzone):** Drag project into an expanded folder's empty area → project appears in folder
-- [ ] **Move to folder (hover):** Hover project over folder header for 1s → dashed ring appears → drop → project moves to folder
-- [ ] **Create folder (merge):** Hover project A over project B for 1s → drop → new folder created with both
-- [ ] **Remove from folder:** Drag project out of folder to top-level area → project becomes ungrouped
-- [ ] **Cross-folder move:** Drag project from folder A to folder B → project moves
-- [ ] **Cancel mid-drag:** Start drag, press Escape → no state changes, no API calls
-- [ ] **Click still works:** After a completed drag, click a project name → navigates correctly (no swallowed click)
-- [ ] **Inbox immovable:** Inbox project cannot be dragged, only receives task drops
-- [ ] **Shared/household projects:** Cannot create folders with or merge non-owned projects
-- [ ] **Rapid consecutive drags:** Reorder, then immediately reorder again → both operations persist correctly
-- [ ] **Task → sidebar:** Drag a task from `ProjectTaskList` / `SmartListView` onto any sidebar project (including Inbox) → task moves (AppShell's `onDragEnd` dispatcher)
+- [ ] Reorder top-level (both directions, exact slot) → persists after refresh
+- [ ] Reorder folders → persists
+- [ ] Reorder within folder → persists
+- [ ] Into folder via header middle + dwell → lands at index 0
+- [ ] Into folder via bottom-half of expanded header → index 0; via children area → exact slot
+- [ ] Merge two projects (middle + dwell) → new folder; tint at once, ring at ~250 ms
+- [ ] Fast drag-through a middle zone → reorders, never merges
+- [ ] Drag out of folder → exact root slot
+- [ ] Cross-folder move → exact slot (including last slot of the last folder)
+- [ ] Collapsed folder auto-expands after 500 ms dwell; persists only if dropped inside
+- [ ] Auto-scroll at nav edges (both directions); merging near the edge still works
+- [ ] Escape / window blur cancels: no API calls, ghost fades, layout restores
+- [ ] Post-drag click doesn't navigate; plain click does; no full-page reload ever
+- [ ] Inbox not draggable, not a merge target
+- [ ] Shared/household projects: reorder ok, never merge
+- [ ] Rapid consecutive drags both persist
+- [ ] Task chip → sidebar project & Inbox still works (ring visual + move)
+- [ ] No scroll jump at grab when scrolled to the bottom
+- [ ] Dark mode: ghost, tint, ring, indicator all styled

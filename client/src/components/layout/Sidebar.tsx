@@ -11,16 +11,10 @@ import { getSmartList } from '../../api/tasks';
 import { ProjectFormModal } from '../projects/ProjectFormModal';
 import { TagFormModal } from '../tags/TagFormModal';
 import type { ProjectResponse, ProjectFolderResponse, TagFull } from '../../types/api';
-import {
-  useDroppable,
-  useDndMonitor,
-  useDndContext,
-  type DragStartEvent,
-  type DragOverEvent,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDroppable, useDndContext } from '@dnd-kit/core';
+import { useSidebarDrag, sidebarDragJustHappened, type IntoTarget } from './sidebarDrag/useSidebarDrag';
+import { DragGhost } from './sidebarDrag/DragGhost';
+import type { DragSource, DropTarget, RowMeta } from './sidebarDrag/types';
 import {
   Sun,
   Sunrise,
@@ -55,10 +49,6 @@ interface SidebarProps {
   desktopVisible?: boolean;
 }
 
-// Set in onDragStart, cleared after onDragEnd — prevents the post-drag click from
-// triggering NavLink navigation when the pointer releases over a project item.
-let dragOccurred = false;
-
 const smartLists = [
   { to: '/app/today', label: 'Today', icon: Sun, key: 'today' },
   { to: '/app/tomorrow', label: 'Tomorrow', icon: Sunrise, key: 'tomorrow' },
@@ -72,9 +62,9 @@ type SidebarTopLevelItem =
   | { type: 'folder'; id: string; sortOrder: number; folder: ProjectFolderResponse }
   | { type: 'project'; id: string; sortOrder: number; project: ProjectResponse };
 
-// ─── SortableProjectItem ─────────────────────────────────────────────────────
+// ─── SidebarProjectItem ──────────────────────────────────────────────────────
 
-interface SortableProjectItemProps {
+interface SidebarProjectItemProps {
   project: ProjectResponse;
   container: string; // 'toplevel' or folderId
   userId: string | undefined;
@@ -84,10 +74,12 @@ interface SortableProjectItemProps {
   contextMenuProjectId: string | null;
   taskCount: number;
   onShareClick: (project: ProjectResponse) => void;
-  mergeTarget: string | null;
+  intoTarget: IntoTarget | null;
+  registerRow: (meta: RowMeta) => (el: HTMLElement | null) => void;
+  onRowPointerDown: (e: React.PointerEvent, source: DragSource, blockEl?: HTMLElement) => void;
 }
 
-function SortableProjectItem({
+function SidebarProjectItem({
   project,
   container,
   userId,
@@ -97,44 +89,56 @@ function SortableProjectItem({
   contextMenuProjectId,
   taskCount,
   onShareClick,
-  mergeTarget,
-}: SortableProjectItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-    isOver,
-  } = useSortable({
+  intoTarget,
+  registerRow,
+  onRowPointerDown,
+}: SidebarProjectItemProps) {
+  // Droppable only — task chips dragged by dnd-kit land here (AppShell's onDragEnd
+  // reads projectId/projectName from this data). Sidebar project drags themselves
+  // run on the custom engine, not dnd-kit.
+  const { setNodeRef, isOver } = useDroppable({
     id: project.id,
     data: {
       type: 'sidebar-project',
-      container,
       projectId: project.id,
       projectName: project.name,
-      folderId: project.folderId,
     },
   });
   const { active } = useDndContext();
   const activeType = active?.data.current?.type;
   const isTaskHovering = isOver && activeType === 'task-item';
-  const isMergeTarget = mergeTarget === project.id;
+  const isIntoTarget = intoTarget?.id === project.id;
+  const intoLatched = isIntoTarget && intoTarget.latched;
+
+  const engineRef = registerRow({
+    id: project.id,
+    kind: 'project',
+    container,
+    intoEligible: !project.isInbox && project.ownerId === userId,
+  });
+  const setRefs = useCallback((el: HTMLElement | null) => {
+    setNodeRef(el);
+    engineRef(el);
+  }, [setNodeRef, engineRef]);
 
   return (
     <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 50 : undefined,
-      }}
-      className={`rounded-md ${isTaskHovering ? 'ring-2 ring-blue-400 ring-inset' : ''} ${isDragging ? 'opacity-50' : ''}`}
+      ref={setRefs}
+      data-drag-id={project.id}
+      onPointerDown={(e) => onRowPointerDown(e, {
+        id: project.id,
+        kind: 'project',
+        container,
+        canMerge: !project.isInbox && project.ownerId === userId,
+        name: project.name,
+        color: project.color,
+      })}
+      className={`rounded-md ${isTaskHovering ? 'ring-2 ring-blue-400 ring-inset' : ''} ${
+        isIntoTarget ? 'bg-blue-50/60 dark:bg-blue-900/25' : ''
+      }`}
     >
       <div className="relative group">
-        {isMergeTarget && (
+        {intoLatched && (
           <div className="absolute inset-0 rounded-md ring-2 ring-dashed ring-blue-400 bg-blue-50/40 dark:bg-blue-900/20 pointer-events-none z-10 flex items-center justify-center">
             <FolderPlus size={14} className="text-blue-500" />
           </div>
@@ -142,20 +146,15 @@ function SortableProjectItem({
         <NavLink
           to={`/app/projects/${project.id}`}
           className={navLinkClass}
-          onClick={(e) => { if (dragOccurred) { e.preventDefault(); return; } onClose(); }}
+          draggable={false}
+          onClick={(e) => { if (sidebarDragJustHappened()) { e.preventDefault(); return; } onClose(); }}
         >
           <span
-            ref={setActivatorNodeRef}
-            {...listeners}
-            {...attributes}
+            data-drag-grip
             className="cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
             // preventDefault is essential: this span sits inside the NavLink's <a>.
-            // After a drag, the browser synthesizes a click on whatever element is
-            // under the pointer; if that element is an icon inside the grip span,
-            // stopPropagation alone keeps React Router's onClick from running but
-            // the native <a href> still navigates — which the browser commits as a
-            // FULL PAGE RELOAD. preventDefault suppresses the native navigation.
-            // The same applies to plain (non-drag) clicks on the grip handle.
+            // A plain (non-drag) click on the grip must not trigger the native
+            // <a href> navigation (which the browser commits as a full page reload).
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             <GripVertical size={16} className="hidden group-hover:block text-gray-400" />
@@ -165,6 +164,7 @@ function SortableProjectItem({
           {project.householdId && <Users size={12} className="text-gray-400 flex-shrink-0" />}
           {!project.householdId && project.shareCount > 0 && (
             <button
+              data-no-drag
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShareClick(project); }}
               className="text-gray-400 hover:text-blue-500 flex-shrink-0 transition-colors"
               title="Shared project"
@@ -178,6 +178,7 @@ function SortableProjectItem({
         </NavLink>
         {project.ownerId === userId && (
           <button
+            data-no-drag
             onClick={(e) => {
               e.preventDefault();
               const rect = e.currentTarget.getBoundingClientRect();
@@ -195,11 +196,11 @@ function SortableProjectItem({
   );
 }
 
-// ─── SortableFolderItem ──────────────────────────────────────────────────────
+// ─── SidebarFolderItem ───────────────────────────────────────────────────────
 
-interface SortableFolderItemProps {
+interface SidebarFolderItemProps {
   folder: ProjectFolderResponse;
-  mergeTarget: string | null;
+  intoTarget: IntoTarget | null;
   userId: string | undefined;
   navLinkClass: (props: { isActive: boolean }) => string;
   onClose: () => void;
@@ -212,11 +213,15 @@ interface SortableFolderItemProps {
   onCollapseToggle: (folderId: string, isCollapsed: boolean) => void;
   externalRenameRequest: boolean;
   onExternalRenameHandled: () => void;
+  registerRow: (meta: RowMeta) => (el: HTMLElement | null) => void;
+  onRowPointerDown: (e: React.PointerEvent, source: DragSource, blockEl?: HTMLElement) => void;
+  /** Rendered expanded for the duration of a drag (auto-expand), without persisting. */
+  dragExpanded: boolean;
 }
 
-function SortableFolderItem({
+function SidebarFolderItem({
   folder,
-  mergeTarget,
+  intoTarget,
   userId,
   navLinkClass,
   onClose,
@@ -229,36 +234,32 @@ function SortableFolderItem({
   onCollapseToggle,
   externalRenameRequest,
   onExternalRenameHandled,
-}: SortableFolderItemProps) {
+  registerRow,
+  onRowPointerDown,
+  dragExpanded,
+}: SidebarFolderItemProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(folder.name);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const folderSortableId = `folder-${folder.id}`;
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const folderRowId = `folder-${folder.id}`;
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: folderSortableId,
-    data: {
-      type: 'sidebar-folder',
-      container: 'toplevel',
-      folderId: folder.id,
-    },
+  const headerRef = registerRow({
+    id: folderRowId,
+    kind: 'folder-header',
+    container: 'toplevel',
+    intoEligible: true,
+  });
+  const childrenRef = registerRow({
+    id: `children-${folder.id}`,
+    kind: 'folder-children',
+    container: folder.id,
+    intoEligible: false,
   });
 
-  // Separate droppable for the folder's children area — accepts projects being added to this folder.
-  const { setNodeRef: childrenDropRef, isOver: isChildrenDropTarget } = useDroppable({
-    id: `folder-dropzone-${folder.id}`,
-    data: { type: 'folder-dropzone', folderId: folder.id },
-  });
-
-  const isMergeTarget = mergeTarget === folderSortableId;
+  const showChildren = !folder.isCollapsed || dragExpanded;
+  const isMergeTarget = intoTarget?.id === folderRowId && intoTarget.latched;
+  const isIntoTinted = intoTarget?.id === folderRowId;
 
   useEffect(() => {
     if (isRenaming && renameInputRef.current) {
@@ -294,24 +295,28 @@ function SortableFolderItem({
   );
 
   return (
-    <div
-      ref={setNodeRef}
-      data-drag-id={folderSortableId}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 50 : undefined,
-      }}
-      className={`${isDragging ? 'opacity-50' : ''}`}
-    >
+    <div ref={wrapperRef} data-drag-id={folderRowId}>
       {/* Folder header */}
-      <div className={`relative group/folder rounded-md ${isMergeTarget ? 'ring-2 ring-blue-400 ring-inset bg-blue-50/40 dark:bg-blue-900/20' : ''}`}>
+      <div
+        ref={headerRef}
+        onPointerDown={(e) => onRowPointerDown(e, {
+          id: folderRowId,
+          kind: 'folder',
+          container: 'toplevel',
+          canMerge: false,
+          name: folder.name,
+          childCount: folder.projects.length,
+        }, wrapperRef.current ?? undefined)}
+        className={`relative group/folder rounded-md ${
+          isMergeTarget
+            ? 'ring-2 ring-blue-400 ring-inset bg-blue-50/40 dark:bg-blue-900/20'
+            : isIntoTinted ? 'bg-blue-50/60 dark:bg-blue-900/25' : ''
+        }`}
+      >
         <div className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 cursor-default select-none">
           {/* Drag handle */}
           <span
-            ref={setActivatorNodeRef}
-            {...listeners}
-            {...attributes}
+            data-drag-grip
             className="cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
             onClick={(e) => e.stopPropagation()}
           >
@@ -326,12 +331,14 @@ function SortableFolderItem({
           <button
             className="flex items-center gap-1 flex-1 min-w-0 text-left"
             onClick={() => {
+              if (sidebarDragJustHappened()) return;
               if (!isRenaming) onCollapseToggle(folder.id, !folder.isCollapsed);
             }}
           >
             {isRenaming ? (
               <input
                 ref={renameInputRef}
+                data-no-drag
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onBlur={commitRename}
@@ -366,6 +373,7 @@ function SortableFolderItem({
 
         {/* Context menu button */}
         <button
+          data-no-drag
           onClick={(e) => {
             e.stopPropagation();
             const rect = e.currentTarget.getBoundingClientRect();
@@ -380,45 +388,38 @@ function SortableFolderItem({
       </div>
 
       {/* Folder contents */}
-      {!folder.isCollapsed && (
+      {showChildren && (
         <div
-          ref={childrenDropRef}
-          className={`ml-3 border-l border-gray-200 dark:border-gray-700 pl-1 mt-0.5 space-y-0.5 min-h-[8px] rounded-md ${
-            isChildrenDropTarget && folder.projects.length === 0 ? 'ring-2 ring-dashed ring-blue-400 bg-blue-50/40 dark:bg-blue-900/20' : ''
-          }`}
+          ref={childrenRef}
+          className="ml-3 border-l border-gray-200 dark:border-gray-700 pl-1 mt-0.5 space-y-0.5 min-h-[8px] rounded-md"
         >
           {(() => {
             // Dedupe defensively — a stale optimistic write that left the same
             // project in two folders would otherwise produce duplicate React keys
-            // inside the SortableContext and blank the sidebar.
+            // and blank the sidebar.
             const seen = new Set<string>();
             const uniqueProjects = folder.projects.filter(p => {
               if (seen.has(p.id)) return false;
               seen.add(p.id);
               return true;
             });
-            return (
-              <SortableContext
-                items={uniqueProjects.map(p => p.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {uniqueProjects.map(project => (
-                  <SortableProjectItem
-                    key={project.id}
-                    project={project}
-                    container={folder.id}
-                    userId={userId}
-                    navLinkClass={navLinkClass}
-                    onClose={onClose}
-                    onContextMenu={onProjectContextMenu}
-                    contextMenuProjectId={projectContextMenuId}
-                    taskCount={project.taskCount - project.completedTaskCount}
-                    onShareClick={onShareClick}
-                    mergeTarget={mergeTarget}
-                  />
-                ))}
-              </SortableContext>
-            );
+            return uniqueProjects.map(project => (
+              <SidebarProjectItem
+                key={project.id}
+                project={project}
+                container={folder.id}
+                userId={userId}
+                navLinkClass={navLinkClass}
+                onClose={onClose}
+                onContextMenu={onProjectContextMenu}
+                contextMenuProjectId={projectContextMenuId}
+                taskCount={project.taskCount - project.completedTaskCount}
+                onShareClick={onShareClick}
+                intoTarget={intoTarget}
+                registerRow={registerRow}
+                onRowPointerDown={onRowPointerDown}
+              />
+            ));
           })()}
         </div>
       )}
@@ -494,8 +495,6 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const toggleSmartLists = () => setSmartListsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_smartlists_collapsed', String(n)); return n; });
   const toggleProjects = () => setProjectsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_projects_collapsed', String(n)); return n; });
   const toggleTags = () => setTagsCollapsed(v => { const n = !v; localStorage.setItem('sidebar_tags_collapsed', String(n)); return n; });
-  // Merge intent state for drag-to-create folder / drag-onto-folder-header
-  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
   const [folderRenaming, setFolderRenaming] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
   // Shared barrier: bumped by optimistic mutations to invalidate in-flight fetches
@@ -509,6 +508,10 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const foldersFetchRef = useRef(0);
   const tagsFetchRef = useRef(0);
   const assignedFetchRef = useRef(0);
+  // Drag freeze: SignalR-triggered fetchAll is deferred while a sidebar drag is
+  // active so row geometry stays stable for the whole drag; replayed at drag end.
+  const dragActiveRef = useRef(false);
+  const pendingFetchAllRef = useRef(false);
 
   const checkNavOverflow = useCallback(() => {
     const el = navRef.current;
@@ -600,29 +603,32 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   useEffect(() => { fetchAssignedCount(); }, [fetchAssignedCount]);
   useEffect(() => { checkNavOverflow(); }, [projects, folders, tags, checkNavOverflow]);
 
-  // Suppress the post-drag synthesized click at the document level.
+  // Suppress the post-sidebar-drag synthesized click at the document level.
   //
-  // Why this exists: @dnd-kit/core's PointerSensor adds its own document-level
-  // capture-phase click listener at drag start that calls *only* event.stopPropagation()
-  // (see node_modules/@dnd-kit/core/dist/core.esm.js — `stopPropagation` is added on
-  // EventName.Click with { capture: true }, and removed 50ms after pointerup). Stopping
-  // propagation prevents React's delegated onClick from ever firing — so the per-NavLink
-  // `if (dragOccurred) e.preventDefault()` guards never run after a real drag. The native
-  // <a href> default action then commits as a *full page reload*, which is what the user
-  // sees as "the page reloads when dragging projects up".
+  // After a drag, the browser synthesizes a click on the common ancestor of the
+  // pointerdown/up targets. preventDefault here blocks the native <a href>
+  // navigation (a full page reload) AND makes React Router's <Link> bail (it
+  // checks event.defaultPrevented). The per-NavLink guards are belt-and-suspenders.
   //
-  // Registering at Sidebar mount means our capture-phase listener runs *before* dnd-kit's
-  // (capture-phase listeners fire in registration order). preventDefault here is enough —
-  // the native <a> navigation is the only side effect we still need to suppress.
+  // This listener also matters for dnd-kit *task-chip* drags released over sidebar
+  // links: dnd-kit's PointerSensor arms a capture-phase stopPropagation click-eater
+  // that kills React's delegated onClick but NOT the native <a> default action.
+  // Our listener registers first (capture-phase listeners fire in registration
+  // order), so preventDefault still lands. (Task drags don't set the sidebar flag,
+  // but dnd-kit hides those synthesized clicks itself; the flag covers engine drags.)
   useEffect(() => {
     const onCapturedClick = (e: MouseEvent) => {
-      if (dragOccurred) e.preventDefault();
+      if (sidebarDragJustHappened()) e.preventDefault();
     };
     document.addEventListener('click', onCapturedClick, true);
     return () => document.removeEventListener('click', onCapturedClick, true);
   }, []);
 
   const fetchAll = useCallback(() => {
+    if (dragActiveRef.current) {
+      pendingFetchAllRef.current = true;
+      return;
+    }
     fetchProjects();
     fetchFolders();
     fetchTags();
@@ -775,75 +781,6 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   const topLevelItemsRef = useRef(topLevelItems);
   topLevelItemsRef.current = topLevelItems;
 
-  // Merge-intent state: 1000ms hover on a project or folder header arms a latch
-  // that upgrades the drop into "create folder" (project→project) or "add to folder"
-  // (project→folder-header). Kept in refs for use inside drag callbacks + a state
-  // mirror to trigger the visual dashed-ring re-render.
-  const mergeTargetIdRef = useRef<string | null>(null);
-  const mergeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mergeIntentRef = useRef(false);
-
-  const cancelMerge = useCallback(() => {
-    if (mergeTimerRef.current) {
-      clearTimeout(mergeTimerRef.current);
-      mergeTimerRef.current = null;
-    }
-    mergeTargetIdRef.current = null;
-    mergeIntentRef.current = false;
-    setMergeTarget(prev => prev === null ? prev : null);
-  }, []);
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const activeType = event.active.data.current?.type;
-    if (activeType !== 'sidebar-project' && activeType !== 'sidebar-folder') return;
-    dragOccurred = true;
-    cancelMerge();
-  }, [cancelMerge]);
-
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { active, over } = event;
-    const activeType = active.data.current?.type;
-    if (activeType !== 'sidebar-project') { cancelMerge(); return; }
-    if (!over || active.id === over.id) { cancelMerge(); return; }
-
-    const sourceProject = projectsRef.current.find(p => p.id === active.id);
-    if (!sourceProject || sourceProject.isInbox || sourceProject.ownerId !== user?.id) {
-      cancelMerge();
-      return;
-    }
-
-    const overType = over.data.current?.type;
-    const overId = String(over.id);
-
-    // Merge eligibility: project hovering another project, or project hovering a folder header.
-    // Folder dropzone → instant add on drop, no merge timer.
-    if (overType === 'sidebar-folder') {
-      // ok
-    } else if (overType === 'sidebar-project') {
-      const target = projectsRef.current.find(p => p.id === overId);
-      if (!target || target.isInbox || target.ownerId !== user?.id) { cancelMerge(); return; }
-    } else {
-      cancelMerge();
-      return;
-    }
-
-    // Same target as before — leave the timer running.
-    if (mergeTargetIdRef.current === overId) return;
-
-    // Target changed — reset timer.
-    if (mergeTimerRef.current) {
-      clearTimeout(mergeTimerRef.current);
-      mergeTimerRef.current = null;
-    }
-    mergeIntentRef.current = false;
-    setMergeTarget(null);
-    mergeTargetIdRef.current = overId;
-    mergeTimerRef.current = setTimeout(() => {
-      mergeIntentRef.current = true;
-      setMergeTarget(overId);
-    }, 1000);
-  }, [cancelMerge, user?.id]);
-
   const doTopLevelReorder = useCallback((newOrder: SidebarTopLevelItem[]) => {
     fetchVersionRef.current++;
     setFolders(prev => {
@@ -877,260 +814,214 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
       .catch(() => { toast.error('Failed to save order'); fetchAll(); });
   }, [fetchAll]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setTimeout(() => { dragOccurred = false; }, 0);
+  // ── Commit functions ─────────────────────────────────────────────────────
+  // Bodies preserved from the pre-engine dnd-kit branches. All follow the same
+  // pattern: optimistic setState + fetchVersionRef bump, then the API chain.
+  // Same-container reorders skip the success refetch (server assigns
+  // sortOrder = index, identical to the optimistic state); cross-container
+  // moves reconcile with fetchAll().
 
-    const { active, over } = event;
-    const activeType = active.data.current?.type;
-    if (activeType !== 'sidebar-project' && activeType !== 'sidebar-folder') return;
+  const reorderWithinFolder = useCallback((folderId: string, orderedProjects: ProjectResponse[]) => {
+    fetchVersionRef.current++;
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, projects: orderedProjects } : f));
+    reorderFolderProjects(folderId, orderedProjects.map(p => p.id))
+      .catch(() => { toast.error('Failed to save order'); fetchFolders(); });
+  }, [fetchFolders]);
 
-    // Capture merge state BEFORE clearing — fixes race where the 1000ms timer fires
-    // between the last onDragOver and onDragEnd.
-    const mergeLatched = mergeIntentRef.current;
-    const capturedMergeTarget = mergeTargetIdRef.current;
-    cancelMerge();
+  const moveProjectToTopLevel = useCallback((sourceProject: ProjectResponse, index: number) => {
+    const origFolderId = sourceProject.folderId;
+    if (!origFolderId) return;
+    const items = topLevelItemsRef.current;
+    const movedProject: ProjectResponse = { ...sourceProject, folderId: null };
+    const movedItem: SidebarTopLevelItem = {
+      type: 'project',
+      id: movedProject.id,
+      sortOrder: 0,
+      project: movedProject,
+    };
+    const newTopLevel = [...items];
+    newTopLevel.splice(Math.min(index, newTopLevel.length), 0, movedItem);
 
-    if (!over) return;
+    fetchVersionRef.current++;
+    // Flip folderId AND assign the new sortOrders so the row lands at its drop
+    // position immediately (not at the end until fetchAll resolves).
+    setProjects(prev => {
+      const updated = prev.map(p => p.id === sourceProject.id ? { ...p, folderId: null } : p);
+      newTopLevel.forEach((item, i) => {
+        if (item.type === 'project') {
+          const idx = updated.findIndex(p => p.id === item.project.id);
+          if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+        }
+      });
+      return updated;
+    });
+    setFolders(prev => {
+      const updated = prev.map(f => f.id === origFolderId
+        ? { ...f, projects: f.projects.filter(p => p.id !== sourceProject.id) }
+        : f);
+      newTopLevel.forEach((item, i) => {
+        if (item.type === 'folder') {
+          const idx = updated.findIndex(f => f.id === item.folder.id);
+          if (idx !== -1) updated[idx] = { ...updated[idx], sortOrder: i };
+        }
+      });
+      return updated;
+    });
 
+    removeProjectFromFolder(origFolderId, sourceProject.id)
+      .then(() => reorderTopLevel(newTopLevel.map(it => ({
+        type: it.type,
+        id: it.type === 'folder' ? it.folder.id : it.project.id,
+      }))))
+      .then(() => fetchAll())
+      .catch(() => { toast.error('Failed to remove from folder'); fetchAll(); });
+  }, [fetchAll]);
+
+  const moveProjectToFolder = useCallback((sourceProject: ProjectResponse, folderId: string, index: number) => {
+    const origFolderId = sourceProject.folderId ?? null;
+    const targetFolder = foldersRef.current.find(f => f.id === folderId);
+    if (!targetFolder) return;
+    const movedProject: ProjectResponse = { ...sourceProject, folderId };
+    const rest = targetFolder.projects.filter(p => p.id !== sourceProject.id);
+    const newOrderInFolder = [...rest];
+    newOrderInFolder.splice(Math.min(index, rest.length), 0, movedProject);
+
+    fetchVersionRef.current++;
+    setProjects(prev => prev.map(p => p.id === sourceProject.id ? { ...p, folderId } : p));
+    setFolders(prev => prev.map(f => {
+      if (f.id === folderId) return { ...f, projects: newOrderInFolder };
+      if (origFolderId && f.id === origFolderId) {
+        return { ...f, projects: f.projects.filter(p => p.id !== sourceProject.id) };
+      }
+      return f;
+    }));
+
+    const doRemove = origFolderId
+      ? removeProjectFromFolder(origFolderId, sourceProject.id)
+      : Promise.resolve();
+    doRemove
+      .then(() => addProjectToFolder(folderId, sourceProject.id))
+      .then(() => reorderFolderProjects(folderId, newOrderInFolder.map(p => p.id)))
+      .then(() => fetchAll())
+      .catch(() => { toast.error('Failed to move to folder'); fetchAll(); });
+  }, [fetchAll]);
+
+  const mergeProjects = useCallback((sourceProject: ProjectResponse, targetProjectId: string) => {
+    const origFolderId = sourceProject.folderId ?? null;
+    fetchVersionRef.current++;
+    const doRemove = origFolderId
+      ? removeProjectFromFolder(origFolderId, sourceProject.id)
+      : Promise.resolve();
+    doRemove
+      .then(() => createFolder('New Folder', [sourceProject.id, targetProjectId]))
+      .then(() => fetchAll())
+      .catch(() => { toast.error('Failed to create folder'); fetchAll(); });
+  }, [fetchAll]);
+
+  // ── Drop dispatcher ──────────────────────────────────────────────────────
+  // The engine resolves every drop to a typed target (spatial zones replaced the
+  // old branch-priority ordering), so this is a plain switch. The try/catch is
+  // the "blank page" safety net.
+
+  const handleDrop = useCallback((source: DragSource, target: DropTarget, dragExpandedIds: string[]) => {
     try {
-      const activeId = String(active.id);
-      const overId = String(over.id);
-      const overType = over.data.current?.type;
-      const overContainer = over.data.current?.container as string | undefined;
+      if (target.kind === 'none') return;
 
-      // ── Folder source ──────────────────────────────────────────────────────
-      // Folders only participate in top-level reorder.
-      if (activeType === 'sidebar-folder') {
-        if (activeId === overId) return;
-        if (overContainer !== 'toplevel') return;
+      const reorderTopLevelTo = (index: number) => {
         const items = topLevelItemsRef.current;
-        const oldIdx = items.findIndex(it => it.id === activeId);
-        const newIdx = items.findIndex(it => it.id === overId);
-        if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
-        const reordered = [...items];
-        const [moved] = reordered.splice(oldIdx, 1);
-        reordered.splice(newIdx, 0, moved);
+        const srcItem = items.find(it => it.id === source.id);
+        if (!srcItem) return;
+        const rest = items.filter(it => it.id !== source.id);
+        const reordered = [...rest];
+        reordered.splice(Math.min(index, rest.length), 0, srcItem);
+        if (reordered.every((it, i) => it.id === items[i].id)) return; // no-op drop
         doTopLevelReorder(reordered);
+      };
+
+      // A drop inside a folder that was auto-expanded during this drag makes the
+      // expansion permanent.
+      const persistExpansion = (folderId: string) => {
+        if (!dragExpandedIds.includes(folderId)) return;
+        setFolders(prev => prev.map(f => f.id === folderId ? { ...f, isCollapsed: false } : f));
+        setFolderCollapsed(folderId, false).catch(() => {});
+      };
+
+      if (source.kind === 'folder') {
+        if (target.kind !== 'reorder-toplevel') return; // folders never nest
+        reorderTopLevelTo(target.index);
         return;
       }
 
-      // ── Project source ────────────────────────────────────────────────────
-      const sourceProject = projectsRef.current.find(p => p.id === activeId);
-      if (!sourceProject) return;
-      const origFolderId = sourceProject.folderId ?? null;
+      const sourceProject = projectsRef.current.find(p => p.id === source.id);
+      if (!sourceProject || sourceProject.isInbox) return;
 
-      // Branch 1: Merge intent latched (1000ms hover over a project or folder header)
-      if (mergeLatched && capturedMergeTarget) {
-        const doRemoveFromOrig = origFolderId
-          ? removeProjectFromFolder(origFolderId, activeId)
-          : Promise.resolve();
-
-        if (capturedMergeTarget.startsWith('folder-')) {
-          // Merge into existing folder — place at TOP since the user explicitly hovered.
-          const targetFolderId = capturedMergeTarget.replace('folder-', '');
-          if (targetFolderId === origFolderId) { fetchAll(); return; }
-
-          const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
-          if (!targetFolder) {
-            doRemoveFromOrig
-              .then(() => addProjectToFolder(targetFolderId, activeId))
-              .then(() => fetchAll())
-              .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
-            return;
+      switch (target.kind) {
+        case 'reorder-toplevel': {
+          if (sourceProject.folderId) {
+            moveProjectToTopLevel(sourceProject, target.index);
+          } else {
+            reorderTopLevelTo(target.index);
           }
-
-          const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolderId };
-          const newOrderInFolder = [movedProject, ...targetFolder.projects];
-
-          fetchVersionRef.current++;
-          setProjects(prev => prev.map(p =>
-            p.id === activeId ? { ...p, folderId: targetFolderId } : p
-          ));
-          setFolders(prev => prev.map(f => {
-            if (f.id === targetFolderId) return { ...f, projects: newOrderInFolder };
-            if (origFolderId && f.id === origFolderId) {
-              return { ...f, projects: f.projects.filter(p => p.id !== activeId) };
-            }
-            return f;
-          }));
-
-          doRemoveFromOrig
-            .then(() => addProjectToFolder(targetFolderId, activeId))
-            .then(() => reorderFolderProjects(targetFolderId, newOrderInFolder.map(p => p.id)))
-            .then(() => fetchAll())
-            .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
           return;
         }
-
-        // Project → project: create a new folder containing both.
-        doRemoveFromOrig
-          .then(() => createFolder('New Folder', [activeId, capturedMergeTarget]))
-          .then(() => fetchAll())
-          .catch(() => { toast.error('Failed to create folder'); fetchAll(); });
-        return;
-      }
-
-      // Branch 2: Dropped onto a folder's children dropzone — add to end of that folder.
-      if (overType === 'folder-dropzone') {
-        const targetFolderId = over.data.current?.folderId as string;
-        if (!targetFolderId || targetFolderId === origFolderId) return;
-        const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
-        if (!targetFolder) return;
-
-        const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolderId };
-        const newOrderInFolder = [...targetFolder.projects, movedProject];
-
-        fetchVersionRef.current++;
-        setProjects(prev => prev.map(p =>
-          p.id === activeId ? { ...p, folderId: targetFolderId } : p
-        ));
-        setFolders(prev => prev.map(f => {
-          if (f.id === targetFolderId) return { ...f, projects: newOrderInFolder };
-          if (origFolderId && f.id === origFolderId) {
-            return { ...f, projects: f.projects.filter(p => p.id !== activeId) };
+        case 'reorder-in-folder':
+        case 'move-to-folder': {
+          // An into-latch on the header of the folder the project is already in
+          // arrives as move-to-folder — treat it as a within-folder reorder.
+          if (target.folderId === (sourceProject.folderId ?? null)) {
+            const folder = foldersRef.current.find(f => f.id === target.folderId);
+            if (!folder) return;
+            const rest = folder.projects.filter(p => p.id !== sourceProject.id);
+            const reordered = [...rest];
+            reordered.splice(Math.min(target.index, rest.length), 0, sourceProject);
+            if (reordered.every((p, i) => p.id === folder.projects[i]?.id)) return;
+            reorderWithinFolder(target.folderId, reordered);
+          } else {
+            moveProjectToFolder(sourceProject, target.folderId, target.index);
+            persistExpansion(target.folderId);
           }
-          return f;
-        }));
-
-        const doRemove = origFolderId
-          ? removeProjectFromFolder(origFolderId, activeId)
-          : Promise.resolve();
-        doRemove
-          .then(() => addProjectToFolder(targetFolderId, activeId))
-          .then(() => fetchAll())
-          .catch(() => { toast.error('Failed to add to folder'); fetchAll(); });
-        return;
-      }
-
-      // Determine destination container from over.
-      // If over is a sidebar-folder (header, no merge latched), treat as top-level reorder
-      // at the folder's position.
-      const destContainer = overContainer;
-
-      // Branch 3: Same-container reorder (top-level or within the same folder)
-      const sourceContainer = origFolderId ?? 'toplevel';
-      if (destContainer === sourceContainer) {
-        if (sourceContainer === 'toplevel') {
-          if (activeId === overId) return;
-          const items = topLevelItemsRef.current;
-          const oldIdx = items.findIndex(it => it.id === activeId);
-          const newIdx = items.findIndex(it => it.id === overId);
-          if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
-          const reordered = [...items];
-          const [moved] = reordered.splice(oldIdx, 1);
-          reordered.splice(newIdx, 0, moved);
-          doTopLevelReorder(reordered);
           return;
         }
-        // Within a folder
-        const folderId = sourceContainer;
-        const folder = foldersRef.current.find(f => f.id === folderId);
-        if (!folder) return;
-        const oldIdx = folder.projects.findIndex(p => p.id === activeId);
-        const newIdx = folder.projects.findIndex(p => p.id === overId);
-        if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
-        const reordered = [...folder.projects];
-        const [moved] = reordered.splice(oldIdx, 1);
-        reordered.splice(newIdx, 0, moved);
-        fetchVersionRef.current++;
-        setFolders(prev => prev.map(f => f.id === folderId ? { ...f, projects: reordered } : f));
-        // Same-container reorder: server assigns sortOrder = index, matching the
-        // optimistic update. Skip the success refetch to avoid re-paint cascade.
-        reorderFolderProjects(folderId, reordered.map(p => p.id))
-          .catch(() => { toast.error('Failed to save order'); fetchFolders(); });
-        return;
-      }
-
-      // Branch 4: Cross-container — move project to a different container at over's position.
-      // Reject drops on a folder *header* without a latched merge intent: that's the
-      // "accidentally drifted over Folder A while reordering inside Folder B" case
-      // and was the source of the long-standing "popped out of folder" bug. Cross-
-      // folder moves are only allowed via folder-dropzone (Branch 2) or merge
-      // intent (Branch 1).
-      if (overType === 'sidebar-folder') return;
-
-      if (destContainer === 'toplevel') {
-        // Move from folder to top level at over's position.
-        if (!origFolderId) return;
-        const items = topLevelItemsRef.current;
-        const overIdx = items.findIndex(it => it.id === overId);
-        if (overIdx < 0) return;
-
-        const movedProject: ProjectResponse = { ...sourceProject, folderId: null };
-        const movedItem: SidebarTopLevelItem = {
-          type: 'project',
-          id: movedProject.id,
-          sortOrder: 0,
-          project: movedProject,
-        };
-        const newTopLevel = [...items];
-        newTopLevel.splice(overIdx, 0, movedItem);
-
-        fetchVersionRef.current++;
-        setProjects(prev => prev.map(p => p.id === activeId ? { ...p, folderId: null } : p));
-        setFolders(prev => prev.map(f => f.id === origFolderId
-          ? { ...f, projects: f.projects.filter(p => p.id !== activeId) }
-          : f));
-
-        removeProjectFromFolder(origFolderId, activeId)
-          .then(() => reorderTopLevel(newTopLevel.map(it => ({
-            type: it.type,
-            id: it.type === 'folder' ? it.folder.id : it.project.id,
-          }))))
-          .then(() => fetchAll())
-          .catch(() => { toast.error('Failed to remove from folder'); fetchAll(); });
-        return;
-      }
-
-      if (typeof destContainer === 'string' && destContainer !== 'toplevel') {
-        // Move into another folder at over's position.
-        const targetFolderId = destContainer;
-        // Same-folder is Branch 3's job. Falling into this branch with
-        // origFolderId === targetFolderId would insert a duplicate copy of the
-        // moved project into the folder's children → duplicate React keys.
-        if (targetFolderId === origFolderId) return;
-        const targetFolder = foldersRef.current.find(f => f.id === targetFolderId);
-        if (!targetFolder) return;
-        const overIdx = targetFolder.projects.findIndex(p => p.id === overId);
-        if (overIdx < 0) return;
-
-        const movedProject: ProjectResponse = { ...sourceProject, folderId: targetFolderId };
-        const newOrderInFolder = [...targetFolder.projects];
-        newOrderInFolder.splice(overIdx, 0, movedProject);
-
-        fetchVersionRef.current++;
-        setProjects(prev => prev.map(p => p.id === activeId ? { ...p, folderId: targetFolderId } : p));
-        setFolders(prev => prev.map(f => {
-          if (f.id === targetFolderId) return { ...f, projects: newOrderInFolder };
-          if (origFolderId && f.id === origFolderId) {
-            return { ...f, projects: f.projects.filter(p => p.id !== activeId) };
-          }
-          return f;
-        }));
-
-        const doRemove = origFolderId
-          ? removeProjectFromFolder(origFolderId, activeId)
-          : Promise.resolve();
-        doRemove
-          .then(() => addProjectToFolder(targetFolderId, activeId))
-          .then(() => reorderFolderProjects(targetFolderId, newOrderInFolder.map(p => p.id)))
-          .then(() => fetchAll())
-          .catch(() => { toast.error('Failed to move between folders'); fetchAll(); });
-        return;
+        case 'merge-projects': {
+          mergeProjects(sourceProject, target.targetProjectId);
+          return;
+        }
       }
     } catch (err) {
-      // Safety net: any unhandled throw in a drag branch would otherwise blank the page.
-      console.error('[Sidebar DnD] onDragEnd crashed', err);
+      // Safety net: any unhandled throw here would otherwise blank the page.
+      console.error('[Sidebar DnD] drop handler crashed', err);
       toast.error('Something went wrong during drag. Reloading list...');
       fetchAll();
     }
-  }, [cancelMerge, doTopLevelReorder, fetchAll, fetchFolders]);
+  }, [doTopLevelReorder, fetchAll, mergeProjects, moveProjectToFolder, moveProjectToTopLevel, reorderWithinFolder]);
 
-  useDndMonitor({
-    onDragStart: handleDragStart,
-    onDragOver: handleDragOver,
-    onDragEnd: handleDragEnd,
-    onDragCancel: () => { setTimeout(() => { dragOccurred = false; }, 0); cancelMerge(); },
+  const handleDragActiveChange = useCallback((active: boolean) => {
+    if (active) {
+      dragActiveRef.current = true;
+      // Kill fetches already in flight so a late response can't reshuffle rows mid-drag.
+      fetchVersionRef.current++;
+    } else {
+      dragActiveRef.current = false;
+      if (pendingFetchAllRef.current) {
+        // A fetchAll was requested mid-drag — replay it now that geometry is free.
+        pendingFetchAllRef.current = false;
+        fetchAll();
+      }
+    }
+  }, [fetchAll]);
+
+  const {
+    registerRow,
+    handleRowPointerDown,
+    dragState,
+    intoTarget,
+    dragExpandedFolderIds,
+    ghostRef,
+    indicatorRef,
+  } = useSidebarDrag({
+    navRef,
+    onDrop: handleDrop,
+    onDragActiveChange: handleDragActiveChange,
   });
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -1140,7 +1031,7 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
   // this check, dragging a project UP and releasing over a Smart List or the
   // Inbox navigates the route, which looks like a page reload.
   const handleNavClick = useCallback((e: React.MouseEvent) => {
-    if (dragOccurred) { e.preventDefault(); return; }
+    if (sidebarDragJustHappened()) { e.preventDefault(); return; }
     onClose();
   }, [onClose]);
 
@@ -1268,7 +1159,14 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
 
         {/* Navigation */}
         <div className="flex-1 relative min-h-0">
-        <nav ref={navRef} className="h-full overflow-y-auto px-3 py-3 space-y-1">
+        <nav ref={navRef} className="relative h-full overflow-y-auto px-3 py-3 space-y-1">
+          {/* Insertion indicator — positioned imperatively by the drag engine in
+              content-space, so it scrolls with the list. */}
+          <div
+            ref={indicatorRef}
+            className="absolute z-20 h-0.5 rounded-full bg-blue-500 dark:bg-blue-400 pointer-events-none"
+            style={{ opacity: 0, margin: 0 }}
+          />
           <button onClick={toggleSmartLists} className="flex items-center gap-1 px-3 py-1 w-full text-left">
             {smartListsCollapsed
               ? <ChevronRight size={12} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
@@ -1374,54 +1272,54 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
                 />
               )}
 
-              <SortableContext
-                items={topLevelItems.map(it => it.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {topLevelItems.map(item =>
-                  item.type === 'folder' ? (
-                    <SortableFolderItem
-                      key={item.folder.id}
-                      folder={item.folder}
-                      mergeTarget={mergeTarget}
-                      userId={user?.id}
-                      navLinkClass={navLinkClass}
-                      onClose={onClose}
-                      onRename={handleRenameFolder}
-                      onFolderContextMenu={(folderId, rect) =>
-                        setFolderContextMenu(folderContextMenu?.folderId === folderId ? null : { folderId, rect })
-                      }
-                      folderContextMenuId={folderContextMenu?.folderId ?? null}
-                      onProjectContextMenu={(projectId, folderId, rect) => {
-                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
-                        setPinContextMenu(null);
-                      }}
-                      projectContextMenuId={contextMenu?.projectId ?? null}
-                      onShareClick={setSharingProject}
-                      onCollapseToggle={handleCollapseToggle}
-                      externalRenameRequest={folderRenaming === item.folder.id}
-                      onExternalRenameHandled={() => setFolderRenaming(null)}
-                    />
-                  ) : (
-                    <SortableProjectItem
-                      key={item.project.id}
-                      project={item.project}
-                      container="toplevel"
-                      userId={user?.id}
-                      navLinkClass={navLinkClass}
-                      onClose={onClose}
-                      onContextMenu={(projectId, folderId, rect) => {
-                        setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
-                        setPinContextMenu(null);
-                      }}
-                      contextMenuProjectId={contextMenu?.projectId ?? null}
-                      taskCount={item.project.taskCount - item.project.completedTaskCount}
-                      onShareClick={setSharingProject}
-                      mergeTarget={mergeTarget}
-                    />
-                  )
-                )}
-              </SortableContext>
+              {topLevelItems.map(item =>
+                item.type === 'folder' ? (
+                  <SidebarFolderItem
+                    key={item.folder.id}
+                    folder={item.folder}
+                    intoTarget={intoTarget}
+                    userId={user?.id}
+                    navLinkClass={navLinkClass}
+                    onClose={onClose}
+                    onRename={handleRenameFolder}
+                    onFolderContextMenu={(folderId, rect) =>
+                      setFolderContextMenu(folderContextMenu?.folderId === folderId ? null : { folderId, rect })
+                    }
+                    folderContextMenuId={folderContextMenu?.folderId ?? null}
+                    onProjectContextMenu={(projectId, folderId, rect) => {
+                      setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
+                      setPinContextMenu(null);
+                    }}
+                    projectContextMenuId={contextMenu?.projectId ?? null}
+                    onShareClick={setSharingProject}
+                    onCollapseToggle={handleCollapseToggle}
+                    externalRenameRequest={folderRenaming === item.folder.id}
+                    onExternalRenameHandled={() => setFolderRenaming(null)}
+                    registerRow={registerRow}
+                    onRowPointerDown={handleRowPointerDown}
+                    dragExpanded={dragExpandedFolderIds.includes(item.folder.id)}
+                  />
+                ) : (
+                  <SidebarProjectItem
+                    key={item.project.id}
+                    project={item.project}
+                    container="toplevel"
+                    userId={user?.id}
+                    navLinkClass={navLinkClass}
+                    onClose={onClose}
+                    onContextMenu={(projectId, folderId, rect) => {
+                      setContextMenu(contextMenu?.projectId === projectId ? null : { projectId, folderId, rect });
+                      setPinContextMenu(null);
+                    }}
+                    contextMenuProjectId={contextMenu?.projectId ?? null}
+                    taskCount={item.project.taskCount - item.project.completedTaskCount}
+                    onShareClick={setSharingProject}
+                    intoTarget={intoTarget}
+                    registerRow={registerRow}
+                    onRowPointerDown={handleRowPointerDown}
+                  />
+                )
+              )}
             </>
           ))}
 
@@ -1482,6 +1380,11 @@ export function Sidebar({ open, onClose, desktopVisible = true }: SidebarProps) 
         </div>
 
       </aside>
+
+      {/* Floating drag preview (portal to body) */}
+      {dragState && (
+        <DragGhost ref={ghostRef} source={dragState.source} width={dragState.ghostWidth} />
+      )}
 
       {/* Project context menu */}
       {contextMenu && createPortal(

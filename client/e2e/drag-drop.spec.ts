@@ -52,11 +52,19 @@ async function performDrag(page: Page, sourceHandle: Locator, targetLocator: Loc
 
   await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2);
   await page.mouse.down();
-  // Small initial move to trigger drag detection
-  await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2 + 5);
-  // Complete drag with many steps so OptimisticSortingPlugin fires intermediate onDragOver events
-  // Use near-bottom of target (height - 2) to reliably pass the midpoint threshold for swapping
-  await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height - 2, { steps: 30 });
+  // Initial nudge past the 5px activation distance (custom sidebar engine and
+  // dnd-kit PointerSensor both use ~5px)
+  await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2 + 8);
+  // Aim near the bottom of the target: for sidebar rows that's the "insert after"
+  // edge zone; for task drops the whole row is a valid target anyway
+  await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height - 3, { steps: 30 });
+  // Re-aim after the live-reorder transforms settle (rows shift under the pointer
+  // while the gap travels; a human corrects course the same way)
+  await page.waitForTimeout(250);
+  const freshBB = await targetLocator.boundingBox();
+  if (freshBB) {
+    await page.mouse.move(freshBB.x + freshBB.width / 2, freshBB.y + freshBB.height - 3, { steps: 4 });
+  }
   await page.mouse.up();
   // Let React state updates and API call settle
   await page.waitForTimeout(600);
@@ -74,6 +82,9 @@ async function createProject(page: Page, name: string): Promise<string> {
   await sidebar.getByTitle('New project').click();
   await page.getByPlaceholder('Project name').fill(name);
   await page.getByRole('button', { name: 'Create' }).click();
+  // The URL matcher alone can pass vacuously (we're already on a project page after
+  // the previous creation) — wait for the project to actually appear in the sidebar.
+  await expect(sidebar.getByText(name)).toBeVisible({ timeout: 10000 });
   await expect(page).toHaveURL(/\/app\/projects\//, { timeout: 10000 });
   return page.url();
 }
@@ -120,8 +131,7 @@ test.describe('Drag and Drop', () => {
     // Drag P1 below P3
     const p1Link = sidebar.locator('a', { hasText: P1 });
     const p3Link = sidebar.locator('a', { hasText: P3 });
-    // The sortable wrapper (which receives the opacity-50 dragging class) is the
-    // grandparent of the <a>: <div setNodeRef opacity-50> > <div relative group> > <a>
+    // The row wrapper is the grandparent of the <a>: <div data-drag-id> > <div relative group> > <a>
     const p1Item = p1Link.locator('../..');
 
     // Scroll P3 into view first, then P1, ensuring both are visible before the drag
@@ -138,17 +148,21 @@ test.describe('Drag and Drop', () => {
     if (!p1HandleBB) throw new Error('No handle bounding box');
     if (!p3BB) throw new Error('P3 bounding box not available — element may be off-screen');
 
-    // Start drag and verify animation (opacity class on dragging item)
+    // Start drag and verify the floating ghost appears (custom engine: the source
+    // row collapses out of layout and a portal ghost follows the pointer)
     await page.mouse.move(p1HandleBB.x + p1HandleBB.width / 2, p1HandleBB.y + p1HandleBB.height / 2);
     await page.mouse.down();
     await page.mouse.move(p1HandleBB.x + p1HandleBB.width / 2, p1HandleBB.y + p1HandleBB.height / 2 + 10);
+    await expect(page.getByTestId('drag-ghost')).toBeVisible({ timeout: 2000 });
 
-    // Verify animation: the dragging item should get an opacity class
-    // Use .first() because dnd-kit creates a drag overlay clone alongside the placeholder, both having opacity-50
-    await expect(p1Item.first()).toHaveClass(/opacity-/, { timeout: 2000 });
-
-    // Complete the drag to P3's position
-    await page.mouse.move(p3BB.x + p3BB.width / 2, p3BB.y + p3BB.height / 2 + 5, { steps: 30 });
+    // Complete the drag to just below P3's midpoint (bottom half = insert after P3),
+    // re-aiming once after the live-reorder transforms settle
+    await page.mouse.move(p3BB.x + p3BB.width / 2, p3BB.y + p3BB.height * 0.85, { steps: 30 });
+    await page.waitForTimeout(250);
+    const p3Fresh = await p3Link.boundingBox();
+    if (p3Fresh) {
+      await page.mouse.move(p3Fresh.x + p3Fresh.width / 2, p3Fresh.y + p3Fresh.height * 0.85, { steps: 4 });
+    }
     await page.mouse.up();
     await page.waitForTimeout(600);
 

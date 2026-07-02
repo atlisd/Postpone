@@ -31,7 +31,7 @@ Use the `mcp__playwright__*` tools to navigate, interact, and verify behavior di
 
 ## ⚠️ High-Risk Areas
 
-- **Sidebar drag-drop** — `client/src/components/layout/Sidebar.tsx` contains ~400 lines of complex drag-drop logic using @dnd-kit/react v0.3 (pre-1.0). This code has been broken and fixed 18+ times. **Read `client/src/components/layout/CLAUDE.md` before making ANY changes** to drag-drop behavior, sortable groups, or reorder logic.
+- **Sidebar drag-drop** — sidebar project/folder dragging runs on a custom pointer-events engine in `client/src/components/layout/sidebarDrag/` (spatial zones, FLIP-style gap animation, floating ghost); @dnd-kit remains only for task-chip drags (task → sidebar, task reorder, calendar, subtasks). This area has been broken and fixed 18+ times historically. **Read `client/src/components/layout/CLAUDE.md` before making ANY changes** to drag-drop behavior, zones, or reorder logic — it documents the engine's geometry invariants and the dnd-kit boundary.
 
 ## Key Conventions
 

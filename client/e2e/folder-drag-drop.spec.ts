@@ -83,20 +83,25 @@ async function createProjectUI(page: Page, name: string): Promise<void> {
   await sidebar.getByTitle('New project').click();
   await page.getByPlaceholder('Project name').fill(name);
   await page.getByRole('button', { name: 'Create' }).click();
-  await expect(page).toHaveURL(/\/app\/projects\//, { timeout: 10000 });
+  // The URL matcher alone can pass vacuously (we're already on a project page after
+  // the previous creation) — wait for the project to actually appear in the sidebar.
+  await expect(sidebar.getByText(name)).toBeVisible({ timeout: 10000 });
 }
 
 /** Drag `sourceHandle` onto `targetLocator`, optionally holding over the target for
  *  `holdMs` milliseconds before releasing. `targetYRatio` controls where vertically
- *  within the target rect to aim (0 = top, 1 = bottom). `steps` controls how many
+ *  within the target rect to aim (0 = top, 1 = bottom) — with the custom sidebar
+ *  drag engine this maps directly onto its spatial zones: edge ratios (≤0.3 / ≥0.7)
+ *  mean insert-above/below, the middle band means "into folder / merge" and needs
+ *  `holdMs` ≥ ~400 to let the 250 ms into-latch fire. `steps` controls how many
  *  intermediate pointer-move events are emitted during the drag (default 8). */
 async function performDrag(
   page: Page,
   sourceHandle: Locator,
   targetLocator: Locator,
-  opts: { holdMs?: number; targetYRatio?: number; steps?: number } = {},
+  opts: { holdMs?: number; targetYRatio?: number; steps?: number; reAim?: boolean } = {},
 ) {
-  const { holdMs = 0, targetYRatio = 0.5, steps = 8 } = opts;
+  const { holdMs = 0, targetYRatio = 0.5, steps = 8, reAim = true } = opts;
   await targetLocator.scrollIntoViewIfNeeded();
   await sourceHandle.scrollIntoViewIfNeeded();
 
@@ -106,14 +111,25 @@ async function performDrag(
 
   const startX = sourceBB.x + sourceBB.width / 2;
   const startY = sourceBB.y + sourceBB.height / 2;
-  const endX = targetBB.x + targetBB.width / 2;
-  const endY = targetBB.y + targetBB.height * targetYRatio;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  // Small initial nudge — dnd-kit's pointer sensor needs a minimum movement to engage
-  await page.mouse.move(startX, startY + 5);
-  await page.mouse.move(endX, endY, { steps });
+  // Initial nudge past the engine's 5px activation distance
+  await page.mouse.move(startX, startY + 8);
+  // Coarse approach using the pre-drag rect...
+  await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height * targetYRatio, { steps });
+  // ...then re-aim like a human would: rows shift live while the gap travels, so
+  // wait for the transforms to settle and take a fresh measurement of the target
+  // (boundingBox accounts for CSS transforms) before the precise final move.
+  // reAim: false = release immediately at the stale coordinates (for tests that
+  // must NOT dwell, e.g. proving a fast drag-through never merges).
+  if (reAim) {
+    await page.waitForTimeout(250);
+    const freshBB = await targetLocator.boundingBox();
+    if (freshBB) {
+      await page.mouse.move(freshBB.x + freshBB.width / 2, freshBB.y + freshBB.height * targetYRatio, { steps: 4 });
+    }
+  }
   if (holdMs > 0) await page.waitForTimeout(holdMs);
   await page.mouse.up();
   // Settle: allow optimistic-update + API mutation round-trip to complete
@@ -151,9 +167,9 @@ test.describe('Folder drag-and-drop', () => {
     await paLink.hover();
     const handle = projectHandle(page, PA);
 
-    // Drag PA onto the middle of PB and hold past the 1000 ms merge timer
+    // Drag PA onto the middle of PB and dwell past the 250 ms into-latch
     await performDrag(page, handle, projectLink(page, PB), {
-      holdMs: 1200,
+      holdMs: 400,
       targetYRatio: 0.5,
     });
 
@@ -184,15 +200,15 @@ test.describe('Folder drag-and-drop', () => {
     const sb = sidebar(page);
     await expect(sb.getByText(FOLDER_PREFIX)).toBeVisible();
 
-    // Drag PA onto the folder header
+    // Drag PA onto the folder header's middle zone and dwell for the into-latch
     const paLink = projectLink(page, PA);
     await paLink.hover();
     const handle = projectHandle(page, PA);
-    const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"]`);
+    const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
 
     await performDrag(page, handle, folderHeader, {
-      holdMs: 1200,
-      targetYRatio: 0.3, // aim for the header strip, above the children
+      holdMs: 400,
+      targetYRatio: 0.5,
     });
 
     // Assert: folder now contains both PA and PB, with PA at the TOP (header drop)
@@ -228,7 +244,7 @@ test.describe('Folder drag-and-drop', () => {
     const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
 
     await performDrag(page, handle, folderHeader, {
-      holdMs: 1200,
+      holdMs: 400,
       targetYRatio: 0.5,
     });
 
@@ -263,8 +279,8 @@ test.describe('Folder drag-and-drop', () => {
 
     await performDrag(page, handle, projectLink(page, PC), {
       holdMs: 0,
-      targetYRatio: 0.99, // very bottom of PC, so drop is at root level outside folder
-      steps: 4,            // fast drag — don't give the 1000ms merge timer time to fire
+      targetYRatio: 0.99, // very bottom of PC (edge zone) → insert after PC at root
+      steps: 4,           // fast drag — releasing without dwell never merges by design
     });
 
     // Assert: PA is now ungrouped (folderId === null); folder still has PB
@@ -323,12 +339,10 @@ test.describe('Folder drag-and-drop', () => {
     expect(idxB).toBeLessThan(idxC);
   });
 
-  test('quick-drag project onto folder header reorders at root (does not add to folder)', async ({ page, request }) => {
-    // By design, a quick drop on a folder header (no 1000ms merge hold) is a top-level
-    // reorder — the project stays ungrouped. Adding to a folder via the header requires
-    // the merge-intent hold (covered by the "adds it to the folder" / "lands at TOP" tests).
-    // This deliberately rejects header drops without latched merge intent to fix the old
-    // "popped out of folder" bug (Sidebar onDragEnd Branch 4).
+  test('quick-drop on folder header TOP edge reorders at root (does not add to folder)', async ({ page, request }) => {
+    // Spatial semantics: the header's top edge zone means "insert before the folder at
+    // root". Only the middle zone (with the 250ms dwell latch) or the bottom half
+    // (insert at the folder's first slot) put the project inside the folder.
     page.on('dialog', d => d.accept());
     await createProjectUI(page, PA);
     await createProjectUI(page, PB);
@@ -345,17 +359,15 @@ test.describe('Folder drag-and-drop', () => {
     const paLink = projectLink(page, PA);
     await paLink.hover();
     const handle = projectHandle(page, PA);
-    // Quick drag with NO hold — the merge timer (1000ms) must not latch, so this drop
-    // is treated as a top-level reorder rather than a folder add.
     const folderHeader = sb.locator(`[data-drag-id="folder-${folder.id}"] > div`).first();
 
     await performDrag(page, handle, folderHeader, {
       holdMs: 0,
-      targetYRatio: 0.5,
+      targetYRatio: 0.12, // top edge zone → insert before the folder at root
       steps: 8,
     });
 
-    // PA must remain ungrouped — a quick header drop does not add it to the folder.
+    // PA must remain ungrouped — a top-edge header drop is a root reorder.
     const projectsAfter = await apiListProjects(request);
     const paAfter = projectsAfter.find(p => p.name === PA)!;
     expect(paAfter.folderId).toBeNull();
@@ -364,6 +376,72 @@ test.describe('Folder drag-and-drop', () => {
     const foldersAfter = await apiListFolders(request);
     const fAfter = foldersAfter.find(x => x.id === folder.id)!;
     expect(fAfter.projects.map(p => p.name)).toEqual([PB]);
+  });
+
+  test('fast drag-through a project middle does NOT merge', async ({ page, request }) => {
+    // The 250ms into-latch: releasing on a row's middle without dwelling resolves to
+    // the nearest insertion — accidental drops reorder, never merge.
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA);
+    await createProjectUI(page, PB);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(PB)).toBeVisible({ timeout: 5000 });
+
+    const paLink = projectLink(page, PA);
+    await paLink.hover();
+    const handle = projectHandle(page, PA);
+
+    await performDrag(page, handle, projectLink(page, PB), {
+      holdMs: 0,          // no dwell — latch must not fire
+      targetYRatio: 0.5,  // dead-center on PB
+      steps: 6,
+      reAim: false,       // release immediately — this test is about NOT dwelling
+    });
+
+    // No folder was created; both projects remain ungrouped.
+    const folders = await apiListFolders(request);
+    expect(folders.find(f => f.projects.some(p => p.name === PA))).toBeUndefined();
+    const projectsAfter = await apiListProjects(request);
+    expect(projectsAfter.find(p => p.name === PA)!.folderId).toBeNull();
+    expect(projectsAfter.find(p => p.name === PB)!.folderId).toBeNull();
+  });
+
+  test('Escape cancels the drag with no changes', async ({ page, request }) => {
+    page.on('dialog', d => d.accept());
+    await createProjectUI(page, PA);
+    await createProjectUI(page, PB);
+
+    await page.goto('/app/today');
+    const sb = sidebar(page);
+    await expect(sb.getByText(PB)).toBeVisible({ timeout: 5000 });
+
+    const before = await apiListProjects(request);
+
+    const paLink = projectLink(page, PA);
+    await paLink.hover();
+    const handle = projectHandle(page, PA);
+    const sourceBB = (await handle.boundingBox())!;
+    const targetBB = (await projectLink(page, PB).boundingBox())!;
+    await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(sourceBB.x + sourceBB.width / 2, sourceBB.y + sourceBB.height / 2 + 8);
+    await page.mouse.move(targetBB.x + targetBB.width / 2, targetBB.y + targetBB.height * 0.9, { steps: 8 });
+    // Ghost is up mid-drag
+    await expect(page.getByTestId('drag-ghost')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('drag-ghost')).toHaveCount(0);
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // Nothing changed server-side.
+    const after = await apiListProjects(request);
+    const pick = (list: Project[]) => list
+      .filter(p => [PA, PB].includes(p.name))
+      .map(p => `${p.name}:${p.folderId}:${(p as Project & { sortOrder?: number }).sortOrder}`)
+      .sort();
+    expect(pick(after)).toEqual(pick(before));
   });
 
   test('dragging a folder to reorder does not crash the page', async ({ page, request }) => {

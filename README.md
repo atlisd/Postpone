@@ -17,7 +17,7 @@ Multiple user support where each user gets their own account (created by an admi
 
 ### Task Management
 - **Projects** — organize tasks into color-coded projects, each with their own task list
-- **Project Folders** — group projects into collapsible folders; drag one project onto another and hold for 600 ms to create a folder (TickTick-style); drag a project onto a folder header to add it; collapse/expand folders; rename or delete folders via context menu; remove projects from folders via their context menu
+- **Project Folders** — group projects into collapsible folders with Edge-style drag-and-drop: drop a project between rows to reorder (live animation + insertion indicator), or onto a row's middle to group — projects merge into a new folder, folder headers absorb the project at the top; collapsed folders auto-expand while you hover mid-drag; collapse/expand folders; rename or delete folders via context menu; remove projects from folders via their context menu
 - **Smart Lists** — Today (with overdue grouping), Tomorrow, Next 7 Days, All Tasks, Assigned to Me
 - **Calendar View** — month grid with drag-and-drop to reschedule tasks
 - **Subtasks/Checklists** — break tasks into smaller steps with reordering
@@ -70,7 +70,7 @@ Multiple user support where each user gets their own account (created by an admi
 | Logging | Serilog |
 | Validation | FluentValidation |
 | Recurrence | iCal.NET (RRULE parsing) |
-| Drag & Drop | @dnd-kit/react |
+| Drag & Drop | custom pointer-events engine (sidebar) + @dnd-kit/core (tasks, calendar) |
 | HTTP Client | ky |
 | Deployment | Docker Compose, nginx |
 | Tunneling | Cloudflare Tunnel (cloudflared) |
