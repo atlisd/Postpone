@@ -98,6 +98,12 @@ function getViewTitle(view: CalendarViewType, date: Date, locale: Locale): strin
   }
 }
 
+// Compact variant for narrow (mobile) headers — the full day title never fits.
+function getViewTitleShort(view: CalendarViewType, date: Date, locale: Locale): string {
+  if (view === 'day') return format(date, 'EEE, MMM d', { locale });
+  return getViewTitle(view, date, locale);
+}
+
 function navigateDate(view: CalendarViewType, date: Date, delta: 1 | -1): Date {
   switch (view) {
     case 'day': return addDays(date, delta);
@@ -394,15 +400,38 @@ export function CalendarView() {
     <div className="flex h-full">
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-            {getViewTitle(viewType, currentDate, locale)}
-          </h2>
-          <div className="flex items-center gap-1 shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+          {/* Title row — on mobile the chevrons flank the title so it always has room */}
+          <div className="flex items-center gap-1 min-w-0">
             {viewType !== 'agenda' && (
               <button
                 onClick={() => setCurrentDate(navigateDate(viewType, currentDate, -1))}
-                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                aria-label="Previous"
+                className="sm:hidden shrink-0 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            <h2 className="flex-1 min-w-0 text-center sm:text-left text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
+              <span className="sm:hidden">{getViewTitleShort(viewType, currentDate, locale)}</span>
+              <span className="hidden sm:inline">{getViewTitle(viewType, currentDate, locale)}</span>
+            </h2>
+            {viewType !== 'agenda' && (
+              <button
+                onClick={() => setCurrentDate(navigateDate(viewType, currentDate, 1))}
+                aria-label="Next"
+                className="sm:hidden shrink-0 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0 justify-between sm:justify-end">
+            {viewType !== 'agenda' && (
+              <button
+                onClick={() => setCurrentDate(navigateDate(viewType, currentDate, -1))}
+                aria-label="Previous"
+                className="hidden sm:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -422,7 +451,8 @@ export function CalendarView() {
             {viewType !== 'agenda' && (
               <button
                 onClick={() => setCurrentDate(navigateDate(viewType, currentDate, 1))}
-                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                aria-label="Next"
+                className="hidden sm:block p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
               >
                 <ChevronRight size={20} />
               </button>
@@ -430,21 +460,23 @@ export function CalendarView() {
 
             {/* Project filter */}
             {projects.length > 1 && (
-              <div className="relative ml-2">
+              <div className="relative ml-1 sm:ml-2 min-w-0">
                 <button
                   onClick={() => setShowProjectFilter(v => !v)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors font-medium ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border transition-colors font-medium max-w-[45vw] sm:max-w-none ${
                     selectedProjectIds.size > 0
                       ? 'border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
                       : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
-                  {selectedProjectIds.size === 0
-                    ? 'All projects'
-                    : selectedProjectIds.size === 1
-                      ? (projects.find(p => selectedProjectIds.has(p.id))?.name ?? '1 project')
-                      : `${selectedProjectIds.size} projects`}
-                  <ChevronDown size={14} className="text-gray-400" />
+                  <span className="truncate">
+                    {selectedProjectIds.size === 0
+                      ? 'All projects'
+                      : selectedProjectIds.size === 1
+                        ? (projects.find(p => selectedProjectIds.has(p.id))?.name ?? '1 project')
+                        : `${selectedProjectIds.size} projects`}
+                  </span>
+                  <ChevronDown size={14} className="text-gray-400 shrink-0" />
                 </button>
                 {showProjectFilter && (
                   <>
@@ -492,7 +524,7 @@ export function CalendarView() {
             )}
 
             {/* View picker */}
-            <div className="relative ml-2">
+            <div className="relative ml-1 sm:ml-2 shrink-0">
               <button
                 onClick={() => setShowViewPicker(v => !v)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium transition-colors"
