@@ -12,6 +12,7 @@ import { useSignalR } from '../../hooks/useSignalR';
 import { TaskListSkeleton } from '../shared/TaskListSkeleton';
 import { HTTPError } from 'ky';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 export function ProjectTaskList() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -109,7 +110,10 @@ export function ProjectTaskList() {
   const handleAdd = async (title: string, dueDate?: string, dueDateTime?: string) => {
     if (!projectId) return;
     try {
-      await createTask(projectId, { title, dueDate, dueDateTime });
+      // Time-only input (no explicit date) resolves dueDate to today, matching
+      // the date parser's own default when no smart-list context overrides it.
+      const resolvedDueDate = !dueDate && dueDateTime ? format(new Date(), 'yyyy-MM-dd') : dueDate;
+      await createTask(projectId, { title, dueDate: resolvedDueDate, dueDateTime });
       await fetchData();
     } catch {
       toast.error('Failed to create task');
