@@ -93,10 +93,11 @@ test.describe('Calendar', () => {
     await expect(headerTitle).toBeVisible({ timeout: 5000 });
     const titleBefore = await headerTitle.textContent();
 
-    // Scope to main to avoid matching collapsed sidebar icon buttons
-    const navButtons = page.locator('main').locator('button[class*="p-1.5"]');
-    await expect(navButtons.first()).toBeVisible();
-    await navButtons.first().click(); // click prev
+    // The header renders two "Previous" chevrons - one for mobile (sm:hidden) and one
+    // for desktop (hidden sm:block) - so match on aria-label and take the visible one.
+    const prevBtn = page.locator('main button[aria-label="Previous"]:visible').first();
+    await expect(prevBtn).toBeVisible();
+    await prevBtn.click();
     await page.waitForTimeout(300);
     const titleAfter = await headerTitle.textContent();
     expect(titleAfter).not.toBe(titleBefore); // month changed

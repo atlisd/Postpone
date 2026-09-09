@@ -20,10 +20,11 @@ let projectUrl = '';
 
 async function openTaskDetailPanel(page: Page, title: string) {
   const taskRow = page.locator('.group', { hasText: title }).first();
-  const bb = await taskRow.boundingBox();
-  if (bb) {
-    await page.mouse.click(bb.x + bb.width * 0.5, bb.y + bb.height / 2);
-  }
+  // Click the row's centre: far enough from the leading checkbox and the trailing
+  // action buttons to land on the row itself. Locator.click() scrolls the row into
+  // view first, which matters on long lists where the task sits below the fold.
+  await expect(taskRow).toBeVisible({ timeout: 5000 });
+  await taskRow.click();
   await expect(page.getByPlaceholder('Task title')).toBeVisible({ timeout: 5000 });
 }
 
