@@ -121,3 +121,5 @@ public record RescheduleOccurrenceRequest(DateOnly NewDate);
 public record SplitFromOccurrenceRequest(DateOnly NewDate);
 
 public record SplitSeriesResponse(TaskResponse UpdatedTask, TaskResponse NewTask);
+
+public record ToggleOccurrenceSubtaskRequest(bool IsCompleted);

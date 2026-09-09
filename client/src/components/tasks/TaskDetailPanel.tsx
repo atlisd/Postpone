@@ -17,7 +17,7 @@ import { parseNaturalDate } from '../../lib/naturalDate';
 import { formatDueDate } from '../../lib/dates';
 import { X, Trash2, Plus, Check, Flag, UserPlus, FolderOpen, GripVertical, Tag, Eye, EyeOff, CalendarDays } from 'lucide-react';
 import type { TaskResponse, ProjectResponse } from '../../types/api';
-import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence, addTagToTask, removeTagFromTask, updateSeriesTime } from '../../api/tasks';
+import { updateTask, deleteTask, createSubtask, updateSubtask, deleteSubtask, reorderSubtasks, toggleOccurrenceSubtask, setRecurrence, removeRecurrence, moveTask, skipOccurrence, editOccurrence, addTagToTask, removeTagFromTask, updateSeriesTime } from '../../api/tasks';
 import { listTags, createTag } from '../../api/tags';
 import type { TagFull } from '../../types/api';
 import type { SubtaskResponse } from '../../types/api';
@@ -423,7 +423,12 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
 
   const handleToggleSubtask = async (subtaskId: string, isCompleted: boolean) => {
     try {
-      await updateSubtask(subtaskId, { isCompleted: !isCompleted });
+      if (task.occurrenceDate) {
+        // Recurring occurrence: completion is stored per-occurrence, not on the master subtask
+        await toggleOccurrenceSubtask(task.id, task.occurrenceDate, subtaskId, !isCompleted);
+      } else {
+        await updateSubtask(subtaskId, { isCompleted: !isCompleted });
+      }
       onUpdate();
     } catch {
       toast.error('Failed to update subtask');

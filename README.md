@@ -288,6 +288,7 @@ Internet ──▶ Cloudflare Edge ──▶ cloudflared container (outbound tun
 | DELETE | `/api/tasks/{id}/occurrences/{date}` | Skip (delete) a single occurrence |
 | PUT | `/api/tasks/{id}/occurrences/{date}` | Edit a single occurrence |
 | PUT | `/api/tasks/{id}/occurrences/{date}/due-date` | Reschedule a single occurrence |
+| PUT | `/api/tasks/{id}/occurrences/{date}/subtasks/{subtaskId}` | Toggle a subtask for a single occurrence |
 
 ### Subtasks
 | Method | Path | Description |

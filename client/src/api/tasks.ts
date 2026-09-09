@@ -78,6 +78,10 @@ export async function deleteSubtask(id: string): Promise<void> {
   await api.delete(`api/subtasks/${id}`);
 }
 
+export async function toggleOccurrenceSubtask(taskId: string, occurrenceDate: string, subtaskId: string, isCompleted: boolean): Promise<void> {
+  await api.put(`api/tasks/${taskId}/occurrences/${occurrenceDate}/subtasks/${subtaskId}`, { json: { isCompleted } });
+}
+
 export async function reorderSubtasks(taskId: string, items: { id: string; sortOrder: number }[]): Promise<void> {
   await api.put(`api/tasks/${taskId}/subtasks/reorder`, { json: { items } });
 }

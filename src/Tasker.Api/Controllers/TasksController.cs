@@ -403,6 +403,24 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         return NoContent();
     }
 
+    [HttpPut("api/tasks/{id:guid}/occurrences/{date}/subtasks/{subtaskId:guid}")]
+    public async Task<IActionResult> ToggleOccurrenceSubtask(
+        Guid id, DateOnly date, Guid subtaskId, [FromBody] ToggleOccurrenceSubtaskRequest request)
+    {
+        var userId = User.GetUserId();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted && t.Rrule != null);
+        if (task is null) return NotFound();
+        if (!await access.CanEditProjectAsync(userId, task.ProjectId))
+            return Forbid();
+
+        if (!await db.Subtasks.AnyAsync(s => s.Id == subtaskId && s.TaskId == id))
+            return NotFound();
+
+        await recurrenceService.ToggleOccurrenceSubtaskAsync(id, date, subtaskId, request.IsCompleted);
+        await sync.TaskUpdated(task.ProjectId, new { taskId = id, occurrenceDate = date });
+        return NoContent();
+    }
+
     [HttpPost("api/tasks/{id:guid}/occurrences/{date}/split-from")]
     public async Task<IActionResult> SplitSeriesFrom(Guid id, DateOnly date, [FromBody] SplitFromOccurrenceRequest request)
     {
