@@ -21,7 +21,7 @@ Multiple user support where each user gets their own account (created by an admi
 - **Smart Lists** — Today (with overdue grouping), Tomorrow, Next 7 Days, All Tasks, Assigned to Me
 - **Calendar View** — month grid with drag-and-drop to reschedule tasks
 - **Subtasks/Checklists** — break tasks into smaller steps with reordering
-- **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with virtual instances (no database bloat). Skip, reschedule, or edit individual occurrences without affecting the rest of the series
+- **Recurring Tasks** — daily, weekly, monthly, yearly, or custom RRULE patterns with virtual instances (no database bloat). Series can end on a date or after a set number of occurrences. Skip, reschedule, or edit individual occurrences without affecting the rest of the series
 - **Priority Levels** — none, low, medium, high with visual indicators
 - **Due Dates** — with optional time; overdue tasks stay pinned in the Today view under a highlighted Overdue section
 - **Multi-Day Tasks** — optionally set an end date to span a task across multiple days; the task renders as a continuous chip across each day in the calendar week view

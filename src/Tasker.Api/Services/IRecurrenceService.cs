@@ -58,7 +58,8 @@ public interface IRecurrenceService
     /// <summary>
     /// Split the recurring series at the given occurrence: the original series ends just before
     /// <paramref name="fromDate"/> (UNTIL added to RRULE), and a new series is created starting
-    /// at <paramref name="newDate"/> with the same recurrence pattern.
+    /// at <paramref name="newDate"/> with the same recurrence pattern. A bounded series stays bounded:
+    /// UNTIL is shifted by the split offset and COUNT becomes the number of occurrences remaining.
     /// </summary>
     /// <returns>The updated original task and the newly created task.</returns>
     Task<(TodoTask original, TodoTask newTask)> SplitSeriesFromAsync(

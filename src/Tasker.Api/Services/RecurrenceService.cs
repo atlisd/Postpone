@@ -184,16 +184,35 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             .FirstOrDefaultAsync(t => t.Id == taskId && !t.IsDeleted && t.Rrule != null)
             ?? throw new InvalidOperationException($"Recurring task {taskId} not found.");
 
-        // Build UNTIL date (day before fromDate) in RRULE format YYYYMMDD
-        var until = fromDate.AddDays(-1).ToString("yyyyMMdd");
-
-        // Strip any existing UNTIL= or COUNT= parts, then append the new UNTIL
-        var parts = original.Rrule!.Split(';')
+        var originalParts = original.Rrule!.Split(';');
+        var baseParts = originalParts
             .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
                      && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
             .ToList();
-        parts.Add($"UNTIL={until}");
-        original.Rrule = string.Join(';', parts);
+        var cleanRrule = string.Join(';', baseParts);
+
+        // Carry the series' end condition over to the new series so a bounded series stays bounded:
+        // UNTIL shifts by the same number of days as the split, COUNT becomes the occurrences remaining.
+        var newRrule = cleanRrule;
+        var untilPart = originalParts.FirstOrDefault(p => p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase));
+        var countPart = originalParts.FirstOrDefault(p => p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase));
+        if (untilPart is not null
+            && DateOnly.TryParseExact(untilPart[6..Math.Min(untilPart.Length, 14)], "yyyyMMdd", out var oldUntil))
+        {
+            var shiftedUntil = oldUntil.AddDays(newDate.DayNumber - fromDate.DayNumber);
+            newRrule = $"{cleanRrule};UNTIL={shiftedUntil:yyyyMMdd}";
+        }
+        else if (countPart is not null && int.TryParse(countPart[6..], out var totalCount))
+        {
+            var seriesStart = original.DueDate ?? fromDate;
+            var usedCount = fromDate > seriesStart
+                ? GetOccurrences(original.Rrule!, seriesStart, seriesStart, fromDate.AddDays(-1)).Count
+                : 0;
+            newRrule = $"{cleanRrule};COUNT={Math.Max(1, totalCount - usedCount)}";
+        }
+
+        // End the original series the day before fromDate
+        original.Rrule = $"{cleanRrule};UNTIL={fromDate.AddDays(-1):yyyyMMdd}";
 
         // Determine DueDateTime for new series: keep time component, shift date to newDate
         DateTime? newDueDateTime = null;
@@ -205,16 +224,6 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
                 t.Hour, t.Minute, t.Second, t.Millisecond, t.Kind);
         }
 
-        // Strip UNTIL/COUNT from the original RRULE to get a clean recurrence rule for the new series
-        var newRrule = original.Rrule!.Split(';')
-            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
-                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        // Remove the UNTIL we just added (we want the new series to be open-ended)
-        var cleanRrule = string.Join(';', original.Rrule!.Split(';')
-            .Where(p => !p.StartsWith("UNTIL=", StringComparison.OrdinalIgnoreCase)
-                     && !p.StartsWith("COUNT=", StringComparison.OrdinalIgnoreCase)));
-
         var newTask = new TodoTask
         {
             ProjectId = original.ProjectId,
@@ -225,7 +234,7 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             Priority = original.Priority,
             DueDate = newDate,
             DueDateTime = newDueDateTime,
-            Rrule = cleanRrule,
+            Rrule = newRrule,
             SortOrder = original.SortOrder,
         };
 

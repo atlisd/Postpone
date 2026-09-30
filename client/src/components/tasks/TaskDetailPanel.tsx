@@ -706,6 +706,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate, onToggleComplete }: T
           <div className="flex items-center gap-3">
             <RecurrencePicker
               currentRrule={task.rrule}
+              startDate={task.occurrenceDate ? undefined : task.dueDate}
               onSet={async (rrule) => {
                 try {
                   await setRecurrence(task.id, rrule);
