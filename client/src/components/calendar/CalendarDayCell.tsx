@@ -89,6 +89,7 @@ export function CalendarDayCell({
   return (
     <div
       ref={dropRef}
+      data-date={dateKey}
       onMouseDown={() => onCellMouseDown?.(dateKey)}
       onMouseEnter={() => onCellMouseEnter?.(dateKey)}
       onMouseUp={() => onCellMouseUp?.(dateKey)}

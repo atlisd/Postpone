@@ -11,7 +11,7 @@ namespace Tasker.Api.Services;
 public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> logger) : IRecurrenceService
 {
     public async Task<List<TaskResponse>> ExpandOccurrencesAsync(
-        IQueryable<TodoTask> seriesTasks, DateOnly rangeStart, DateOnly rangeEnd)
+        IQueryable<TodoTask> seriesTasks, DateOnly rangeStart, DateOnly rangeEnd, bool includeNextBeyondRange = false)
     {
         var masters = await seriesTasks
             .Where(t => t.Rrule != null && !t.IsDeleted)
@@ -75,6 +75,19 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
                     if (ex.IsSkipped) continue;
                     var response = BuildOccurrenceResponse(master, ex.OriginalDate, ex);
                     result.Add(response);
+                }
+
+                // Long-interval series (quarterly, yearly, …): once every occurrence in range is done,
+                // the next one may lie beyond rangeEnd. Surface it so the series doesn't vanish.
+                if (includeNextBeyondRange
+                    && !result.Any(r => r.Id == master.Id && r.CompletedAt == null))
+                {
+                    var next = FindNextOpenOccurrence(master, rangeEnd, exceptionsByDate);
+                    if (next is { } nextDate)
+                    {
+                        exceptionsByDate.TryGetValue(nextDate, out var nextException);
+                        result.Add(BuildOccurrenceResponse(master, nextDate, nextException));
+                    }
                 }
             }
             catch (Exception ex)
@@ -400,6 +413,39 @@ public class RecurrenceService(TaskerDbContext db, ILogger<RecurrenceService> lo
             && e.OverriddenDueDateTime is null
             && e.AssignedToId is null
             && !e.ClearAssignedTo;
+    }
+
+    /// <summary>
+    /// First occurrence strictly after <paramref name="after"/> that is neither completed nor skipped,
+    /// or null if the series has ended. Bounded scan so a fully-completed infinite series can't loop forever.
+    /// </summary>
+    private static DateOnly? FindNextOpenOccurrence(
+        TodoTask master, DateOnly after, Dictionary<DateOnly, RecurrenceException> exceptionsByDate)
+    {
+        var startDate = master.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var calEvent = new CalendarEvent
+        {
+            DtStart = new CalDateTime(startDate.Year, startDate.Month, startDate.Day),
+        };
+        calEvent.RecurrenceRules.Add(new RecurrencePattern(master.Rrule!));
+
+        var calendar = new Ical.Net.Calendar();
+        calendar.Events.Add(calEvent);
+
+        var searchFrom = after.AddDays(1);
+        var searchStart = new CalDateTime(searchFrom.Year, searchFrom.Month, searchFrom.Day);
+
+        const int maxScan = 1000;
+        foreach (var o in calendar.GetOccurrences(searchStart).Take(maxScan))
+        {
+            var date = DateOnly.FromDateTime(o.Period.StartTime.Value);
+            if (date <= after) continue;
+            if (exceptionsByDate.TryGetValue(date, out var ex) && (ex.IsSkipped || ex.CompletedAt is not null))
+                continue;
+            return date;
+        }
+
+        return null;
     }
 
     internal List<DateOnly> GetOccurrences(string rrule, DateOnly startDate, DateOnly rangeStart, DateOnly rangeEnd)

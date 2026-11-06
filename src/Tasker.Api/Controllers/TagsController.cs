@@ -49,7 +49,7 @@ public class TagsController(TaskerDbContext db, IProjectAccessService access, IS
         var recurringQuery = access.GetAccessibleTasks(userId)
             .Where(t => t.TaskTags.Any(tt => tt.TagId == id) && !t.IsDeleted && t.Rrule != null);
         var allOccurrences = await recurrence.ExpandOccurrencesAsync(
-            recurringQuery, today.AddYears(-1), today.AddDays(90));
+            recurringQuery, today.AddYears(-1), today.AddDays(90), includeNextBeyondRange: true);
         var nextOccurrences = allOccurrences
             .Where(o => o.CompletedAt == null)
             .GroupBy(o => o.Id)

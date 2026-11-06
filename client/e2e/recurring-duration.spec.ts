@@ -1,6 +1,15 @@
 import { test, expect } from './fixtures';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { format, addDays } from 'date-fns';
+import { format, addDays, addMonths } from 'date-fns';
+
+// Month grids include leading/trailing days of adjacent months, so the *next* monthly occurrence
+// can also be visible (e.g. Nov 6 → Dec 6 shows in November's grid). Count only the chips in the
+// day cells of the one occurrence span under test.
+function chipsInSpan(page: Page, title: string, start: Date) {
+  const dateSelectors = Array.from({ length: DURATION_DAYS }, (_, i) =>
+    `[data-date="${format(addDays(start, i), 'yyyy-MM-dd')}"] [title="${title}"]`);
+  return page.locator(dateSelectors.join(', '));
+}
 
 async function loginAndGetPage(browser: Browser): Promise<{ ctx: BrowserContext; pg: Page }> {
   const ctx = await browser.newContext();
@@ -128,7 +137,7 @@ test.describe('Recurring task with duration', () => {
     await page.waitForTimeout(800); // let calendar data load
 
     // Task should appear in DURATION_DAYS day cells (one chip per day of the span)
-    const chips = page.locator(`[title="${TASK_WITH_DURATION}"]`);
+    const chips = chipsInSpan(page, TASK_WITH_DURATION, today);
     await expect(chips.first()).toBeVisible({ timeout: 5000 });
     const count = await chips.count();
     expect(count).toBe(DURATION_DAYS);
@@ -146,7 +155,7 @@ test.describe('Recurring task with duration', () => {
     await page.waitForTimeout(800);
 
     // The next occurrence should also span DURATION_DAYS days
-    const chips = page.locator(`[title="${TASK_WITH_DURATION}"]`);
+    const chips = chipsInSpan(page, TASK_WITH_DURATION, addMonths(today, 1));
     await expect(chips.first()).toBeVisible({ timeout: 5000 });
     const count = await chips.count();
     expect(count).toBe(DURATION_DAYS);
@@ -157,8 +166,8 @@ test.describe('Recurring task with duration', () => {
     await expect(page.locator('h2')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(800);
 
-    // Task without duration should appear exactly once (single chip)
-    const chips = page.locator(`[title="${TASK_WITHOUT_DURATION}"]`);
+    // Task without duration should appear exactly once (single chip) across what would be the span
+    const chips = chipsInSpan(page, TASK_WITHOUT_DURATION, today);
     await expect(chips.first()).toBeVisible({ timeout: 5000 });
     const count = await chips.count();
     expect(count).toBe(1);

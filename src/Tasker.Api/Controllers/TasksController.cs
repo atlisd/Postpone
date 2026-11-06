@@ -41,7 +41,7 @@ public class TasksController(TaskerDbContext db, IProjectAccessService access, I
         var recurringQuery = db.Tasks
             .Where(t => t.ProjectId == projectId && !t.IsDeleted && t.Rrule != null);
         var allOccurrences = await recurrenceService.ExpandOccurrencesAsync(
-            recurringQuery, today.AddYears(-1), today.AddDays(90));
+            recurringQuery, today.AddYears(-1), today.AddDays(90), includeNextBeyondRange: true);
 
         // Pick one incomplete occurrence per series: prefer earliest overdue, then earliest future.
         var nextOccurrences = allOccurrences

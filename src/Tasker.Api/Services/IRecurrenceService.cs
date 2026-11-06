@@ -8,9 +8,11 @@ public interface IRecurrenceService
     /// <summary>
     /// Expand virtual occurrences for recurring series tasks within a date range.
     /// Merges with RecurrenceExceptions for per-occurrence modifications.
+    /// When <paramref name="includeNextBeyondRange"/> is true, a series with no open occurrence in range
+    /// also yields its next open occurrence after <paramref name="rangeEnd"/> (for "next occurrence" lists).
     /// </summary>
     Task<List<TaskResponse>> ExpandOccurrencesAsync(
-        IQueryable<TodoTask> seriesTasks, DateOnly rangeStart, DateOnly rangeEnd);
+        IQueryable<TodoTask> seriesTasks, DateOnly rangeStart, DateOnly rangeEnd, bool includeNextBeyondRange = false);
 
     /// <summary>
     /// Set or update recurrence on a task.
