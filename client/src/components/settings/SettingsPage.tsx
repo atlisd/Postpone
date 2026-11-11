@@ -6,7 +6,7 @@ import { updateProfile, setPushoverKey, changePassword, setNotificationPreferenc
 import { Settings, Bell, Lock, Monitor, Sun, Moon, Users, Home } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocale, SUPPORTED_LOCALES } from '../../contexts/LocaleContext';
-import { formatCountdown, DEFAULT_COUNTDOWN_PRECISION } from '../../lib/dates';
+import { formatCountdown, DEFAULT_COUNTDOWN_PRECISION, COUNTDOWN_OFF } from '../../lib/dates';
 
 const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -24,7 +24,7 @@ const countdownSamples: { title: string; end: Date; timed: boolean }[] = [
   { title: 'Renew car insurance', end: new Date(2026, 2, 19), timed: false },
   { title: 'Renew passport', end: new Date(2027, 1, 12), timed: false },
 ];
-const precisionOptions = [1, 2, 3] as const;
+const precisionOptions = [1, 2, 3, COUNTDOWN_OFF] as const;
 
 export function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
@@ -296,10 +296,14 @@ export function SettingsPage() {
                     : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
-                <span>{value} {value === 1 ? 'unit' : 'units'}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-300">
-                  {formatCountdown(PREVIEW_TODAY, new Date(2027, 1, 12), value, false)}
-                </span>
+                <span>{value === COUNTDOWN_OFF ? 'Off' : `${value} ${value === 1 ? 'unit' : 'units'}`}</span>
+                {value === COUNTDOWN_OFF ? (
+                  <span className="text-xs py-0.5 text-gray-400 dark:text-gray-500">No badge</span>
+                ) : (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-300">
+                    {formatCountdown(PREVIEW_TODAY, new Date(2027, 1, 12), value, false)}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -309,9 +313,11 @@ export function SettingsPage() {
             {countdownSamples.map((sample) => (
               <div key={sample.title} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{sample.title}</span>
-                <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  {formatCountdown(sample.timed ? PREVIEW_NOW : PREVIEW_TODAY, sample.end, countdownPrecision, sample.timed)}
-                </span>
+                {countdownPrecision !== COUNTDOWN_OFF && (
+                  <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                    {formatCountdown(sample.timed ? PREVIEW_NOW : PREVIEW_TODAY, sample.end, countdownPrecision, sample.timed)}
+                  </span>
+                )}
               </div>
             ))}
           </div>

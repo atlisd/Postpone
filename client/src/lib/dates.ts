@@ -27,6 +27,8 @@ export function formatDueTime(dueDateTimeUtc: string | null, locale: Locale): st
 }
 
 export const DEFAULT_COUNTDOWN_PRECISION = 2;
+/** Precision value meaning the countdown badge is hidden entirely. */
+export const COUNTDOWN_OFF = 0;
 
 const COUNTDOWN_UNITS = [
   { key: 'years',   label: (n: number) => ` yr${n !== 1 ? 's' : ''}` },
@@ -65,7 +67,7 @@ export function formatTimeUntilDue(
   dueDateTime: string | null,
   precision: number = DEFAULT_COUNTDOWN_PRECISION,
 ): string | null {
-  if (!dueDate) return null;
+  if (!dueDate || precision === COUNTDOWN_OFF) return null;
 
   if (dueDateTime) {
     const normalized = /[Z+\-]\d*$/.test(dueDateTime) ? dueDateTime : dueDateTime + 'Z';
