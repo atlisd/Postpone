@@ -30,6 +30,7 @@ export interface UserProfile {
   pinnedTagIds: string[];
   hideCompletedInCalendar: boolean;
   appName: string | null;
+  countdownPrecision: number;
 }
 
 export interface AdminUser {

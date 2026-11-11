@@ -8,7 +8,7 @@ public record RefreshRequest(string RefreshToken);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale, bool? UseGravatar, bool? ShowAllTasksList, bool? ShowPriorityTasksList, Guid[]? PinnedProjectIds, Guid[]? PinnedTagIds, bool? HideCompletedInCalendar, string? AppName);
+public record UpdateProfileRequest(string? DisplayName, string? Timezone, string? AvatarUrl, string? Locale, bool? UseGravatar, bool? ShowAllTasksList, bool? ShowPriorityTasksList, Guid[]? PinnedProjectIds, Guid[]? PinnedTagIds, bool? HideCompletedInCalendar, string? AppName, int? CountdownPrecision = null);
 
 public record SetPushoverKeyRequest(string? UserKey);
 
@@ -58,4 +58,5 @@ public record UserProfileResponse(
     Guid[] PinnedProjectIds,
     Guid[] PinnedTagIds,
     bool HideCompletedInCalendar,
-    string? AppName);
+    string? AppName,
+    int CountdownPrecision);

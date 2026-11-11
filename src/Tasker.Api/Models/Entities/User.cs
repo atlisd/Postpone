@@ -24,6 +24,7 @@ public class User
     public bool ShowAllTasksList { get; set; } = true;
     public bool ShowPriorityTasksList { get; set; } = false;
     public bool HideCompletedInCalendar { get; set; } = false;
+    public int CountdownPrecision { get; set; } = 2;
     public string? AppName { get; set; }
     public Guid[] PinnedProjectIds { get; set; } = [];
     public Guid[] PinnedTagIds { get; set; } = [];

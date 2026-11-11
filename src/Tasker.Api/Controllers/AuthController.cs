@@ -153,7 +153,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList,
-            user.PinnedProjectIds, user.PinnedTagIds, user.HideCompletedInCalendar, user.AppName));
+            user.PinnedProjectIds, user.PinnedTagIds, user.HideCompletedInCalendar, user.AppName, user.CountdownPrecision));
     }
 
     [Authorize]
@@ -174,6 +174,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         if (request.PinnedProjectIds is not null) user.PinnedProjectIds = request.PinnedProjectIds;
         if (request.PinnedTagIds is not null) user.PinnedTagIds = request.PinnedTagIds;
         if (request.HideCompletedInCalendar is not null) user.HideCompletedInCalendar = request.HideCompletedInCalendar.Value;
+        if (request.CountdownPrecision is not null) user.CountdownPrecision = request.CountdownPrecision.Value;
         user.AppName = request.AppName;
 
         await db.SaveChangesAsync();
@@ -186,7 +187,7 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             user.TodayNotificationWeekendHour, user.TodayNotificationWeekendMinute, user.TodayNotificationsGrouped,
             user.UseGravatar, user.IsAdmin, user.MustChangePassword,
             user.ShowAllTasksList, user.ShowPriorityTasksList,
-            user.PinnedProjectIds, user.PinnedTagIds, user.HideCompletedInCalendar, user.AppName));
+            user.PinnedProjectIds, user.PinnedTagIds, user.HideCompletedInCalendar, user.AppName, user.CountdownPrecision));
     }
 
     [Authorize]

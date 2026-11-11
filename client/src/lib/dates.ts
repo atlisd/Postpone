@@ -1,4 +1,4 @@
-import { format, isToday, isTomorrow, isYesterday, parseISO, type Locale } from 'date-fns';
+import { format, intervalToDuration, isToday, isTomorrow, isYesterday, parseISO, type Locale } from 'date-fns';
 
 export function formatDueDate(dateStr: string | null, locale: Locale): string {
   if (!dateStr) return '';
@@ -26,32 +26,55 @@ export function formatDueTime(dueDateTimeUtc: string | null, locale: Locale): st
   return format(new Date(normalized), 'p', { locale });
 }
 
-export function formatTimeUntilDue(dueDate: string | null, dueDateTime: string | null): string | null {
-  if (!dueDate) return null;
+export const DEFAULT_COUNTDOWN_PRECISION = 2;
 
-  const now = new Date();
+const COUNTDOWN_UNITS = [
+  { key: 'years',   label: (n: number) => ` yr${n !== 1 ? 's' : ''}` },
+  { key: 'months',  label: (n: number) => ` mo${n !== 1 ? 's' : ''}` },
+  { key: 'weeks',   label: (n: number) => ` wk${n !== 1 ? 's' : ''}` },
+  { key: 'days',    label: (n: number) => ` day${n !== 1 ? 's' : ''}` },
+  { key: 'hours',   label: () => 'h' },
+  { key: 'minutes', label: () => 'm' },
+] as const;
+
+/**
+ * Formats the gap between two instants as "in X unit Y unit", showing the
+ * `precision` largest non-zero units. Uses calendar math (date-fns), so months
+ * and years respect real month lengths. Weeks are carved out of the day remainder.
+ */
+export function formatCountdown(start: Date, end: Date, precision: number, includeTime: boolean): string {
+  const d = intervalToDuration({ start, end });
+  const days = d.days ?? 0;
+  const values: Record<(typeof COUNTDOWN_UNITS)[number]['key'], number> = {
+    years: d.years ?? 0,
+    months: d.months ?? 0,
+    weeks: Math.floor(days / 7),
+    days: days % 7,
+    hours: includeTime ? d.hours ?? 0 : 0,
+    minutes: includeTime ? d.minutes ?? 0 : 0,
+  };
+  const parts = COUNTDOWN_UNITS
+    .filter(u => values[u.key] > 0)
+    .slice(0, Math.max(1, precision))
+    .map(u => `${values[u.key]}${u.label(values[u.key])}`);
+  return parts.length ? `in ${parts.join(' ')}` : 'in 0m';
+}
+
+export function formatTimeUntilDue(
+  dueDate: string | null,
+  dueDateTime: string | null,
+  precision: number = DEFAULT_COUNTDOWN_PRECISION,
+): string | null {
+  if (!dueDate) return null;
 
   if (dueDateTime) {
     const normalized = /[Z+\-]\d*$/.test(dueDateTime) ? dueDateTime : dueDateTime + 'Z';
     const target = new Date(normalized);
+    const now = new Date();
     const diffMs = target.getTime() - now.getTime();
     if (diffMs < 0) return 'Overdue';
     if (diffMs === 0) return 'Today';
-    const diffMins = Math.floor(diffMs / 60_000);
-    const diffHrs  = Math.floor(diffMs / 3_600_000);
-    const diffDays = Math.floor(diffMs / 86_400_000);
-    const diffWks  = Math.floor(diffDays / 7);
-    const diffMos  = Math.floor(diffDays / 30);
-    const diffYrs  = Math.floor(diffMos / 12);
-    if (diffMins < 60) return `in ${diffMins}m`;
-    if (diffHrs  < 24) return `in ${diffHrs}h`;
-    if (diffDays <  7) return `in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-    if (diffDays < 30) return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
-    if (diffMos  < 12) return `in ${diffMos} mo${diffMos !== 1 ? 's' : ''}`;
-    const remMos = diffMos % 12;
-    return remMos === 0
-      ? `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''}`
-      : `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''} ${remMos} mo${remMos !== 1 ? 's' : ''}`;
+    return formatCountdown(now, target, precision, true);
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -59,16 +82,7 @@ export function formatTimeUntilDue(dueDate: string | null, dueDateTime: string |
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
   if (diffDays < 0)  return 'Overdue';
   if (diffDays === 0) return 'Today';
-  if (diffDays < 7)  return `in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-  const diffWks = Math.floor(diffDays / 7);
-  if (diffDays < 30) return `in ${diffWks} wk${diffWks !== 1 ? 's' : ''}`;
-  const diffMos = Math.floor(diffDays / 30);
-  if (diffMos < 12) return `in ${diffMos} mo${diffMos !== 1 ? 's' : ''}`;
-  const diffYrs = Math.floor(diffMos / 12);
-  const remMos  = diffMos % 12;
-  return remMos === 0
-    ? `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''}`
-    : `in ${diffYrs} yr${diffYrs !== 1 ? 's' : ''} ${remMos} mo${remMos !== 1 ? 's' : ''}`;
+  return formatCountdown(today, target, precision, false);
 }
 
 export function groupByDate(dateStr: string, locale: Locale): string {

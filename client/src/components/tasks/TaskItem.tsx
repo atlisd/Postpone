@@ -3,6 +3,7 @@ import type { TaskResponse } from '../../types/api';
 import { formatDueDate, formatDueTime, dueDateColor, formatTimeUntilDue } from '../../lib/dates';
 import { getPriority } from '../../lib/priorities';
 import { useLocale } from '../../contexts/LocaleContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -16,6 +17,7 @@ interface TaskItemProps {
 
 export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showProject }: TaskItemProps) {
   const { locale } = useLocale();
+  const { user } = useAuth();
   const isCompleted = !!task.completedAt;
   const priority = getPriority(task.priority);
   const subtaskTotal = task.subtasks.length;
@@ -37,7 +39,7 @@ export function TaskItem({ task, onToggleComplete, onSelect, isSelected, showPro
   const dueLabel = task.dueDate
     ? `${formatDueDate(task.dueDate, locale)}${formatDueTime(task.dueDateTime, locale) ? ` ${formatDueTime(task.dueDateTime, locale)}` : ''}`
     : null;
-  const timeUntil = formatTimeUntilDue(task.dueDate, task.dueDateTime);
+  const timeUntil = formatTimeUntilDue(task.dueDate, task.dueDateTime, user?.countdownPrecision);
 
   return (
     <div

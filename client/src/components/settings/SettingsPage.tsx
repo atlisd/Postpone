@@ -6,12 +6,25 @@ import { updateProfile, setPushoverKey, changePassword, setNotificationPreferenc
 import { Settings, Bell, Lock, Monitor, Sun, Moon, Users, Home } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocale, SUPPORTED_LOCALES } from '../../contexts/LocaleContext';
+import { formatCountdown, DEFAULT_COUNTDOWN_PRECISION } from '../../lib/dates';
 
 const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'auto', label: 'Auto', icon: Monitor },
 ];
+
+// Fixed reference points so the preview is deterministic. All-day tasks count
+// from midnight (matching formatTimeUntilDue); timed tasks count from "now".
+const PREVIEW_TODAY = new Date(2026, 0, 1);
+const PREVIEW_NOW = new Date(2026, 0, 1, 9, 0);
+const countdownSamples: { title: string; end: Date; timed: boolean }[] = [
+  { title: 'Water the plants', end: new Date(2026, 0, 10), timed: false },
+  { title: 'Dentist appointment', end: new Date(2026, 0, 3, 14, 30), timed: true },
+  { title: 'Renew car insurance', end: new Date(2026, 2, 19), timed: false },
+  { title: 'Renew passport', end: new Date(2027, 1, 12), timed: false },
+];
+const precisionOptions = [1, 2, 3] as const;
 
 export function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
@@ -40,6 +53,20 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [countdownPrecision, setCountdownPrecision] = useState(user?.countdownPrecision ?? DEFAULT_COUNTDOWN_PRECISION);
+
+  const handleCountdownPrecision = async (value: number) => {
+    const previous = countdownPrecision;
+    setCountdownPrecision(value);
+    try {
+      // appName is always overwritten by the API, so send the saved value along.
+      await updateProfile({ countdownPrecision: value, appName: user?.appName ?? null });
+      await refreshUser();
+    } catch {
+      setCountdownPrecision(previous);
+      toast.error('Failed to update countdown precision');
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +274,48 @@ export function SettingsPage() {
         <p className="text-xs text-gray-500">
           {theme === 'auto' ? 'Theme follows your system preference.' : `Using ${theme} theme.`}
         </p>
+
+        <div className="space-y-3 pt-2">
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Countdown precision</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              How many units the "time until due" badge on tasks shows.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            {precisionOptions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => handleCountdownPrecision(value)}
+                aria-pressed={countdownPrecision === value}
+                className={`flex flex-col items-start gap-1 px-3 py-2 text-sm rounded-md border transition-colors ${
+                  countdownPrecision === value
+                    ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-400'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <span>{value} {value === 1 ? 'unit' : 'units'}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-300">
+                  {formatCountdown(PREVIEW_TODAY, new Date(2027, 1, 12), value, false)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700" data-testid="countdown-preview">
+            <p className="px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500">Preview</p>
+            {countdownSamples.map((sample) => (
+              <div key={sample.title} className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{sample.title}</span>
+                <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                  {formatCountdown(sample.timed ? PREVIEW_NOW : PREVIEW_TODAY, sample.end, countdownPrecision, sample.timed)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
 
       </div>
 

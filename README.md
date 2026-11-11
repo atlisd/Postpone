@@ -29,6 +29,7 @@ Multiple user support where each user gets their own account (created by an admi
 - **Task Assignment** — assign tasks to household members
 - **Tags** — color-coded tags to categorize tasks across projects; create and assign tags from the task detail panel; navigate to a tag to see all tagged tasks; manage tags (create, rename, recolor, delete) from the sidebar
 - **Dark mode** - Light or Dark mode, or Auto
+- **Countdown badges** - Tasks show a "time until due" badge (e.g. "in 1 wk 2 days"); choose 1–3 units of precision in **Settings → Appearance**
 
 ### Collaboration
 - **Households** — create a group and invite others via an 8-character invite code
