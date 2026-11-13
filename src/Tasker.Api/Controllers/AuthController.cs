@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Tasker.Api.Data;
@@ -75,15 +76,27 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
             return Unauthorized(new { message = "Invalid email or password" });
         }
 
+        if (request.ReturnRefreshToken)
+            return Ok(new NativeTokenResponse(result.AccessToken, result.RefreshToken, result.ExpiresIn, result.MustChangePassword));
+
         SetRefreshTokenCookie(result.RefreshToken);
         return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
     }
 
+    /// <summary>
+    /// Web clients: refresh token is read from the HttpOnly cookie, rotated token is set as a cookie.
+    /// Native clients: send <c>{ "refreshToken": "..." }</c> in the body; the rotated token is returned
+    /// in the body and no cookie is set.
+    /// </summary>
     [AllowAnonymous]
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh()
+    public async Task<IActionResult> Refresh(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshRequest? request)
     {
-        var refreshToken = Request.Cookies["refreshToken"];
+        var bodyToken = request?.RefreshToken;
+        var isNative = !string.IsNullOrEmpty(bodyToken);
+        var refreshToken = isNative ? bodyToken : Request.Cookies["refreshToken"];
+
         if (refreshToken is null)
         {
             DeleteRefreshTokenCookie();
@@ -93,19 +106,26 @@ public class AuthController(IAuthService authService, TaskerDbContext db, IWebHo
         var result = await authService.RefreshAsync(refreshToken);
         if (result is null)
         {
-            DeleteRefreshTokenCookie();
+            if (!isNative) DeleteRefreshTokenCookie();
             return Unauthorized(new { message = "Invalid or expired refresh token" });
         }
+
+        if (isNative)
+            return Ok(new NativeTokenResponse(result.AccessToken, result.RefreshToken, result.ExpiresIn, result.MustChangePassword));
 
         SetRefreshTokenCookie(result.RefreshToken);
         return Ok(new { result.AccessToken, result.ExpiresIn, result.MustChangePassword });
     }
 
+    /// <summary>Revokes the refresh token from the body (native) or the cookie (web).</summary>
     [AllowAnonymous]
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout()
+    public async Task<IActionResult> Logout(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshRequest? request)
     {
-        var refreshToken = Request.Cookies["refreshToken"];
+        var refreshToken = !string.IsNullOrEmpty(request?.RefreshToken)
+            ? request.RefreshToken
+            : Request.Cookies["refreshToken"];
         if (refreshToken is not null)
             await authService.RevokeRefreshTokenAsync(refreshToken);
 

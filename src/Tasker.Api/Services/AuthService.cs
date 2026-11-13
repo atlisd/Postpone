@@ -17,7 +17,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         if (user is null || user.PasswordHash is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
 
-        return await GenerateTokensAsync(user);
+        return await GenerateTokensAsync(user, request.DeviceName);
     }
 
     public async Task<AuthResponse?> RefreshAsync(string refreshToken)
@@ -42,7 +42,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
 
         // Rotate: revoke old, issue new
         stored.RevokedAt = DateTime.UtcNow;
-        var response = await GenerateTokensAsync(stored.User);
+        var response = await GenerateTokensAsync(stored.User, stored.DeviceName);
         await db.SaveChangesAsync();
 
         return response;
@@ -160,7 +160,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         return (true, user.Email, user.DisplayName);
     }
 
-    private async Task<AuthResponse> GenerateTokensAsync(User user)
+    private async Task<AuthResponse> GenerateTokensAsync(User user, string? deviceName)
     {
         var accessToken = tokenService.GenerateAccessToken(user);
         var (refreshToken, refreshHash) = tokenService.GenerateRefreshToken();
@@ -169,6 +169,7 @@ public class AuthService(TaskerDbContext db, ITokenService tokenService) : IAuth
         {
             UserId = user.Id,
             TokenHash = refreshHash,
+            DeviceName = string.IsNullOrWhiteSpace(deviceName) ? null : deviceName.Trim(),
             ExpiresAt = DateTime.UtcNow.AddDays(RefreshTokenExpirationDays)
         });
 

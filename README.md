@@ -57,6 +57,7 @@ Multiple user support where each user gets their own account (created by an admi
 ### Mobile & PWA
 - **Mobile-First Design** — responsive layout with hamburger sidebar and full-screen modals on mobile
 - **PWA Ready** — installable as a home screen app with offline caching via service worker
+- **Native Client Support** — bearer-token auth with body-delivered refresh tokens and per-device session labels, so native iOS/iPadOS apps can use the same API
 
 ## Tech Stack
 
@@ -222,9 +223,9 @@ Internet ──▶ Cloudflare Edge ──▶ cloudflared container (outbound tun
 |--------|------|-------------|
 | GET | `/api/auth/setup-status` | Check if first-run setup is needed |
 | POST | `/api/auth/setup` | Create initial admin account |
-| POST | `/api/auth/login` | Login (rate limited) |
-| POST | `/api/auth/refresh` | Refresh tokens (rate limited) |
-| POST | `/api/auth/logout` | Revoke refresh token |
+| POST | `/api/auth/login` | Login (rate limited). Optional `deviceName`; `returnRefreshToken: true` returns the refresh token in the body instead of a cookie (native clients) |
+| POST | `/api/auth/refresh` | Rotate tokens. Web: reads the HttpOnly cookie. Native: send `{ "refreshToken": "..." }` in the body |
+| POST | `/api/auth/logout` | Revoke refresh token (cookie, or `{ "refreshToken": "..." }` body) |
 | GET | `/api/auth/me` | Get current user profile |
 | PUT | `/api/auth/me` | Update profile (name, timezone) |
 | PUT | `/api/auth/me/password` | Change password |
@@ -343,6 +344,7 @@ Internet ──▶ Cloudflare Edge ──▶ cloudflared container (outbound tun
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check (DB connectivity) |
+| GET | `/api/server-info` | Unauthenticated probe: product name, `apiVersion`, server version (used by native clients to validate a server URL) |
 
 ## Households & Sharing
 

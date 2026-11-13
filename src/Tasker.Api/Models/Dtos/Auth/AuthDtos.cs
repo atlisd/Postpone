@@ -1,10 +1,18 @@
 namespace Tasker.Api.Models.Dtos.Auth;
 
-public record LoginRequest(string Email, string Password);
+/// <param name="DeviceName">Optional label stored with the session (e.g. "Atli's iPad").</param>
+/// <param name="ReturnRefreshToken">
+/// Native clients set this to true to receive the refresh token in the response body instead of
+/// an HttpOnly cookie. They must then send it back in the body of /refresh and /logout.
+/// </param>
+public record LoginRequest(string Email, string Password, string? DeviceName = null, bool ReturnRefreshToken = false);
+
+/// <summary>Token response for native clients (refresh token delivered in the body).</summary>
+public record NativeTokenResponse(string AccessToken, string RefreshToken, int ExpiresIn, bool MustChangePassword);
 
 public record AuthResponse(string AccessToken, string RefreshToken, int ExpiresIn, bool MustChangePassword);
 
-public record RefreshRequest(string RefreshToken);
+public record RefreshRequest(string? RefreshToken);
 
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 

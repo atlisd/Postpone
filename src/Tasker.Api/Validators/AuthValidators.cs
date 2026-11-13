@@ -15,6 +15,8 @@ public class LoginRequestValidator : AbstractValidator<LoginRequest>
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required")
             .MaximumLength(128);
+
+        RuleFor(x => x.DeviceName).MaximumLength(100);
     }
 }
 
